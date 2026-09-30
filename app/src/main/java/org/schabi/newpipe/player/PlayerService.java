@@ -32,16 +32,19 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ServiceCompat;
 import androidx.media.MediaBrowserServiceCompat;
+import androidx.preference.PreferenceManager;
 
 import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
 
 import org.schabi.newpipe.ktx.BundleKt;
+import org.schabi.newpipe.player.helper.LastPlaybackSessionStore;
 import org.schabi.newpipe.player.mediabrowser.MediaBrowserImpl;
 import org.schabi.newpipe.player.mediabrowser.MediaBrowserPlaybackPreparer;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationUtil;
 import org.schabi.newpipe.util.ThemeHelper;
+import org.schabi.newpipe.util.NavigationHelper;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -57,6 +60,7 @@ public final class PlayerService extends MediaBrowserServiceCompat {
 
     public static final String SHOULD_START_FOREGROUND_EXTRA = "should_start_foreground_extra";
     public static final String BIND_PLAYER_HOLDER_ACTION = "bind_player_holder_action";
+    public static final String ACTION_RESTORE_LAST_SESSION = "restore_last_session";
 
     // These objects are used to cleanly separate the Service implementation (in this file) and the
     // media browser and playback preparer implementations. At the moment the playback preparer is
@@ -133,28 +137,7 @@ public final class PlayerService extends MediaBrowserServiceCompat {
         // PlayerService using startForegroundService(), will have SHOULD_START_FOREGROUND_EXTRA,
         // to ensure startForeground() is called (otherwise Android will force-crash the app).
         if (intent.getBooleanExtra(SHOULD_START_FOREGROUND_EXTRA, false)) {
-            final boolean playerWasNull = (player == null);
-            if (playerWasNull) {
-                // make sure the player exists, in case the service was resumed
-                player = new Player(this, mediaSession, sessionConnector);
-            }
-
-            // Be sure that the player notification is set and the service is started in foreground,
-            // otherwise, the app may crash on Android 8+ as the service would never be put in the
-            // foreground while we said to the system we would do so. The service is always
-            // requested to be started in foreground, so always creating a notification if there is
-            // no one already and starting the service in foreground should not create any issues.
-            // If the service is already started in foreground, requesting it to be started
-            // shouldn't do anything.
-            player.UIs().get(NotificationPlayerUi.class)
-                    .ifPresent(NotificationPlayerUi::createNotificationAndStartForeground);
-
-            if (playerWasNull && onPlayerStartedOrStopped != null) {
-                // notify that a new player was created (but do it after creating the foreground
-                // notification just to make sure we don't incur, due to slowness, in
-                // "Context.startForegroundService() did not then call Service.startForeground()")
-                onPlayerStartedOrStopped.accept(player);
-            }
+            startForegroundPlayer();
         }
 
         if (player == null) {
@@ -170,6 +153,12 @@ public final class PlayerService extends MediaBrowserServiceCompat {
             return START_NOT_STICKY;
         }
 
+        if (ACTION_RESTORE_LAST_SESSION.equals(intent.getAction())) {
+            if (!restoreLastSession()) {
+                destroyPlayerAndStopService();
+            }
+            return START_NOT_STICKY;
+        }
         final PlayerType oldPlayerType = player.getPlayerType();
         player.handleIntent(intent);
         player.handleIntentPost(oldPlayerType);
@@ -177,6 +166,54 @@ public final class PlayerService extends MediaBrowserServiceCompat {
                 .ifPresent(ui -> ui.handleMediaButtonIntent(intent));
 
         return START_NOT_STICKY;
+    }
+
+    private void startForegroundPlayer() {
+        final boolean playerWasNull = (player == null);
+        if (playerWasNull) {
+            // make sure the player exists, in case the service was resumed
+            player = new Player(this, mediaSession, sessionConnector);
+        }
+
+        // Be sure that the player notification is set and the service is started in foreground,
+        // otherwise, the app may crash on Android 8+ as the service would never be put in the
+        // foreground while we said to the system we would do so. The service is always
+        // requested to be started in foreground, so always creating a notification if there is
+        // no one already and starting the service in foreground should not create any issues.
+        // If the service is already started in foreground, requesting it to be started
+        // shouldn't do anything.
+        player.UIs().get(NotificationPlayerUi.class)
+                .ifPresent(NotificationPlayerUi::createNotificationAndStartForeground);
+
+        if (playerWasNull && onPlayerStartedOrStopped != null) {
+            // notify that a new player was created (but do it after creating the foreground
+            // notification just to make sure we don't incur, due to slowness, in
+            // "Context.startForegroundService() did not then call Service.startForeground()")
+            onPlayerStartedOrStopped.accept(player);
+        }
+    }
+
+    // Also called after binding, since start-command and binder callbacks may race.
+    public boolean restoreLastSession() {
+        if (player != null && player.getPlayQueue() != null
+                && !player.getPlayQueue().isEmpty() && !player.exoPlayerIsNull()) {
+            return true;
+        }
+        final var saved = new LastPlaybackSessionStore(
+                PreferenceManager.getDefaultSharedPreferences(this)).load();
+        if (saved == null) {
+            return false;
+        }
+        startForegroundPlayer();
+        final PlayerType oldPlayerType = player.getPlayerType();
+        player.handleIntent(NavigationHelper.getPlayerIntent(this, PlayerService.class,
+                        saved.getQueue(), PlayerIntentType.AllOthers)
+                .putExtra(Player.PLAYER_TYPE, PlayerType.AUDIO)
+                .putExtra(Player.PLAY_WHEN_READY, false)
+                .putExtra(Player.RESUME_PLAYBACK, false));
+        player.getExoPlayer().setRepeatMode(saved.getRepeatMode());
+        player.handleIntentPost(oldPlayerType);
+        return true;
     }
 
     public void stopForImmediateReusing() {

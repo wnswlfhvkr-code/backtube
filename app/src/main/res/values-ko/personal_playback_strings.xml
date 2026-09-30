@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_no_recommendation">새로운 추천 영상이 없습니다.</string>
+    <string name="personal_recommendation_failed">추천 영상을 불러오지 못했습니다.</string>
+    <string name="personal_recommendation_next">다음 추천</string>
+    <string name="personal_recommendation_loading">불러오는 중…</string>
+    <string name="personal_recommendation_load">불러오기</string>
+    <string name="personal_recommendation_retry">다시 시도</string>
+    <string name="personal_recommendation_replace">바꾸기</string>
+    <string name="personal_recommendation_queued">대기열에 있음</string>
+    <string name="personal_auto_queue">자동 이어듣기</string>
+    <string name="personal_previous_item">이전 항목</string>
+    <string name="personal_next_item">다음 항목</string>
+    <string name="personal_restart_current">현재 항목 처음부터</string>
+    <string name="personal_repeat_off">끔</string>
+    <string name="personal_repeat_one">한 곡</string>
+    <string name="personal_repeat_all">전체</string>
+    <string name="personal_repeat_mode">반복: %s</string>
+    <string name="personal_repeat_mode_off">반복: 끔</string>
+    <string name="personal_sleep_timer_title">취침 타이머</string>
+    <string name="personal_sleep_timer_off">타이머: 끔</string>
+    <string name="personal_sleep_timer_remaining">타이머: %d분</string>
+    <string name="personal_sleep_timer_end_of_item">끝나면 정지</string>
+    <string name="personal_sleep_timer_minutes">%d분</string>
+    <string name="personal_sleep_timer_custom">직접 설정 (분)</string>
+    <string name="personal_sleep_timer_end_current_item">현재 항목 끝나면 종료</string>
+    <string name="personal_sleep_timer_extend">15분 추가</string>
+    <string name="personal_sleep_timer_fade">종료 전 음량 줄이기</string>
+    <string name="personal_sleep_timer_cancel_timer">타이머 취소</string>
+</resources>

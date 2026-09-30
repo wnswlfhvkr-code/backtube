@@ -6,8 +6,10 @@
 package org.schabi.newpipe.util.image
 
 import kotlin.math.abs
+import org.schabi.newpipe.App
 import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.Image.ResolutionLevel
+import org.schabi.newpipe.util.DataSaver
 
 object ImageStrategy {
     // when preferredImageQuality is LOW or MEDIUM, images are sorted by how close their preferred
@@ -140,11 +142,31 @@ object ImageStrategy {
      */
     @JvmStatic
     fun choosePreferredImage(images: List<Image>): String? {
+        val meteredSavingsActive = try {
+            DataSaver.isMeteredSavingsActive(App.instance)
+        } catch (_: UninitializedPropertyAccessException) {
+            false
+        }
+
+        return choosePreferredImage(images, meteredSavingsActive)
+    }
+
+    /**
+     * Chooses an image using the current preference, reduced to low quality while metered savings
+     * are active. The explicit state keeps the selection logic usable without an Android context.
+     */
+    @JvmStatic
+    fun choosePreferredImage(images: List<Image>, meteredSavingsActive: Boolean): String? {
         if (preferredImageQuality == PreferredImageQuality.NONE) {
             return null // do not load images
         }
 
-        return choosePreferredImage(images, preferredImageQuality)
+        val quality = if (meteredSavingsActive) {
+            PreferredImageQuality.LOW
+        } else {
+            preferredImageQuality
+        }
+        return choosePreferredImage(images, quality)
     }
 
     /**

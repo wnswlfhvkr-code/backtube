@@ -7,7 +7,9 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
@@ -15,16 +17,26 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.NumberPicker;
 import android.widget.SeekBar;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.material.snackbar.Snackbar;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.ActivityPlayerQueueControlBinding;
@@ -42,10 +54,12 @@ import org.schabi.newpipe.player.playqueue.PlayQueueItemBuilder;
 import org.schabi.newpipe.player.playqueue.PlayQueueItemHolder;
 import org.schabi.newpipe.player.playqueue.PlayQueueItemTouchCallback;
 import org.schabi.newpipe.util.Localization;
+import org.schabi.newpipe.util.DataSaver;
 import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.PermissionHelper;
 import org.schabi.newpipe.util.ServiceHelper;
 import org.schabi.newpipe.util.ThemeHelper;
+import org.schabi.newpipe.util.image.CoilHelper;
 
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +80,21 @@ public final class PlayQueueActivity extends AppCompatActivity
     private ServiceConnection serviceConnection;
 
     private boolean seeking;
+
+    private final Handler playbackOptionsHandler = new Handler(Looper.getMainLooper());
+    private boolean playbackOptionsUpdatesActive;
+    private boolean updatingAutoQueueControl;
+    @Nullable
+    private String recommendationThumbnailUrl;
+    private final Runnable playbackOptionsUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updatePlaybackOptions();
+            if (playbackOptionsUpdatesActive && player != null) {
+                playbackOptionsHandler.postDelayed(this, 1000);
+            }
+        }
+    };
 
     ////////////////////////////////////////////////////////////////////////////
     // Views
@@ -122,6 +151,11 @@ public final class PlayQueueActivity extends AppCompatActivity
             menu.findItem(R.id.action_switch_background)
                     .setVisible(!player.audioPlayerSelected());
         }
+        m.findItem(R.id.action_clear_recommendation_exclusions)
+                .setEnabled(player != null && player.hasRecommendationExclusions());
+        m.findItem(R.id.action_data_saver).setChecked(DataSaver.isEnabled(this));
+        m.findItem(R.id.action_audio_quality).setTitle(getString(R.string.audio_quality_current,
+                getString(DataSaver.getQualityLabel(this))));
         return super.onPrepareOptionsMenu(m);
     }
 
@@ -133,6 +167,39 @@ public final class PlayQueueActivity extends AppCompatActivity
             return true;
         } else if (itemId == R.id.action_settings) {
             NavigationHelper.openSettings(this);
+            return true;
+        } else if (player == null) {
+            return super.onOptionsItemSelected(item);
+        } else if (itemId == R.id.action_data_saver) {
+            player.getPrefs().edit().putBoolean(getString(R.string.data_saver_key),
+                    !DataSaver.isEnabled(this)).apply();
+            updatePlaybackOptions();
+            return true;
+        } else if (itemId == R.id.action_audio_quality) {
+            final String[] values = getResources().getStringArray(R.array.audio_quality_values);
+            final String selected = player.getPrefs().getString(
+                    getString(R.string.audio_quality_key), DataSaver.BALANCED);
+            int selectedIndex = 1;
+            for (int i = 0; i < values.length; i++) {
+                if (values[i].equals(selected)) {
+                    selectedIndex = i;
+                }
+            }
+            new AlertDialog.Builder(this).setTitle(R.string.audio_quality_title)
+                    .setSingleChoiceItems(R.array.audio_quality_labels, selectedIndex,
+                            (dialog, which) -> {
+                                player.getPrefs().edit().putString(
+                                        getString(R.string.audio_quality_key), values[which])
+                                        .apply();
+                                dialog.dismiss();
+                                updatePlaybackOptions();
+                            }).setNegativeButton(R.string.cancel, null).show();
+            return true;
+        } else if (itemId == R.id.action_clear_recommendation_exclusions) {
+            player.clearRecommendationExclusions();
+            Snackbar.make(queueControlBinding.getRoot(),
+                    R.string.personal_exclusions_cleared, Snackbar.LENGTH_SHORT).show();
+            updatePlaybackOptions();
             return true;
         } else if (itemId == R.id.action_append_playlist) {
             PlaylistDialog.showForPlayQueue(player, getSupportFragmentManager());
@@ -172,8 +239,23 @@ public final class PlayQueueActivity extends AppCompatActivity
 
     @Override
     protected void onDestroy() {
+        playbackOptionsHandler.removeCallbacks(playbackOptionsUpdater);
         super.onDestroy();
         unbind();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        playbackOptionsUpdatesActive = true;
+        updatePlaybackOptionsUpdates();
+    }
+
+    @Override
+    protected void onPause() {
+        playbackOptionsUpdatesActive = false;
+        playbackOptionsHandler.removeCallbacks(playbackOptionsUpdater);
+        super.onPause();
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -181,6 +263,9 @@ public final class PlayQueueActivity extends AppCompatActivity
     ////////////////////////////////////////////////////////////////////////////
 
     private void bind() {
+        ContextCompat.startForegroundService(this, new Intent(this, PlayerService.class)
+                .setAction(PlayerService.ACTION_RESTORE_LAST_SESSION)
+                .putExtra(PlayerService.SHOULD_START_FOREGROUND_EXTRA, true));
         // Note: this code should not really exist, and PlayerHolder should be used instead, but
         // it will be rewritten when NewPlayer will replace the current player.
         final Intent bindIntent = new Intent(this, PlayerService.class);
@@ -222,14 +307,23 @@ public final class PlayQueueActivity extends AppCompatActivity
                 Log.d(TAG, "Player service is connected");
 
                 if (service instanceof PlayerService.LocalBinder) {
-                    player = ((PlayerService.LocalBinder) service).getService().getPlayer();
+                    final PlayerService playerService =
+                            ((PlayerService.LocalBinder) service).getService();
+                    if (playerService.restoreLastSession()) {
+                        player = playerService.getPlayer();
+                    }
                 }
 
                 if (player == null || player.getPlayQueue() == null || player.exoPlayerIsNull()) {
                     unbind();
+                    Toast.makeText(PlayQueueActivity.this, R.string.personal_no_saved_session,
+                            Toast.LENGTH_SHORT).show();
+                    finish();
                 } else {
                     onQueueUpdate(player.getPlayQueue());
                     buildComponents();
+                    updatePlaybackOptions();
+                    updatePlaybackOptionsUpdates();
                     if (player != null) {
                         player.setActivityListener(PlayQueueActivity.this);
                     }
@@ -272,13 +366,24 @@ public final class PlayQueueActivity extends AppCompatActivity
     }
 
     private void buildControls() {
+        queueControlBinding.controlRecommendationOptions
+                .setOnClickListener(view -> showRecommendationOptions());
         queueControlBinding.controlRepeat.setOnClickListener(this);
         queueControlBinding.controlBackward.setOnClickListener(this);
         queueControlBinding.controlFastRewind.setOnClickListener(this);
         queueControlBinding.controlPlayPause.setOnClickListener(this);
         queueControlBinding.controlFastForward.setOnClickListener(this);
         queueControlBinding.controlForward.setOnClickListener(this);
+        queueControlBinding.controlRestart.setOnClickListener(this);
         queueControlBinding.controlShuffle.setOnClickListener(this);
+        queueControlBinding.controlRecommendation.setOnClickListener(this);
+        queueControlBinding.controlSleepTimer.setOnClickListener(this);
+        queueControlBinding.controlAutoQueue.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (!updatingAutoQueueControl && player != null) {
+                player.setAutoQueueEnabled(isChecked);
+                updatePlaybackOptions();
+            }
+        });
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -380,6 +485,8 @@ public final class PlayQueueActivity extends AppCompatActivity
             player.cycleNextRepeatMode();
         } else if (view.getId() == queueControlBinding.controlBackward.getId()) {
             player.playPrevious();
+        } else if (view.getId() == queueControlBinding.controlRestart.getId()) {
+            player.restartCurrent();
         } else if (view.getId() == queueControlBinding.controlFastRewind.getId()) {
             player.fastRewind();
         } else if (view.getId() == queueControlBinding.controlPlayPause.getId()) {
@@ -390,6 +497,10 @@ public final class PlayQueueActivity extends AppCompatActivity
             player.playNext();
         } else if (view.getId() == queueControlBinding.controlShuffle.getId()) {
             player.toggleShuffleModeEnabled();
+        } else if (view.getId() == queueControlBinding.controlRecommendation.getId()) {
+            onRecommendationClick();
+        } else if (view.getId() == queueControlBinding.controlSleepTimer.getId()) {
+            showSleepTimerDialog();
         } else if (view.getId() == queueControlBinding.metadata.getId()) {
             scrollToSelected();
         } else if (view.getId() == queueControlBinding.liveSync.getId()) {
@@ -460,6 +571,7 @@ public final class PlayQueueActivity extends AppCompatActivity
             adapter.setSelectedListener(getOnSelectedListener());
             queueControlBinding.playQueue.setAdapter(adapter);
         }
+        updatePlaybackOptions();
     }
 
     @Override
@@ -469,6 +581,7 @@ public final class PlayQueueActivity extends AppCompatActivity
         onPlayModeChanged(repeatMode, shuffled);
         onPlaybackParameterChanged(parameters);
         onMaybeMuteChanged();
+        updatePlaybackOptions();
     }
 
     @Override
@@ -496,7 +609,8 @@ public final class PlayQueueActivity extends AppCompatActivity
         // this will make sure progressCurrentTime has the same width as progressEndTime
         final ViewGroup.LayoutParams currentTimeParams =
                 queueControlBinding.currentTime.getLayoutParams();
-        currentTimeParams.width = queueControlBinding.endTime.getWidth();
+        currentTimeParams.width = Math.max(queueControlBinding.endTime.getWidth(),
+                queueControlBinding.endTime.getMinimumWidth());
         queueControlBinding.currentTime.setLayoutParams(currentTimeParams);
     }
 
@@ -520,6 +634,7 @@ public final class PlayQueueActivity extends AppCompatActivity
 
             scrollToSelected();
         }
+        updatePlaybackOptions();
     }
 
     @Override
@@ -570,18 +685,19 @@ public final class PlayQueueActivity extends AppCompatActivity
     private void onPlayModeChanged(final int repeatMode, final boolean shuffled) {
         switch (repeatMode) {
             case com.google.android.exoplayer2.Player.REPEAT_MODE_OFF:
-                queueControlBinding.controlRepeat.setImageResource(
-                        com.google.android.exoplayer2.ui.R.drawable.exo_controls_repeat_off);
+                queueControlBinding.controlRepeat.setText(R.string.personal_repeat_off);
                 break;
             case com.google.android.exoplayer2.Player.REPEAT_MODE_ONE:
-                queueControlBinding.controlRepeat.setImageResource(
-                        com.google.android.exoplayer2.ui.R.drawable.exo_controls_repeat_one);
+                queueControlBinding.controlRepeat.setText(R.string.personal_repeat_one);
                 break;
             case com.google.android.exoplayer2.Player.REPEAT_MODE_ALL:
-                queueControlBinding.controlRepeat.setImageResource(
-                        com.google.android.exoplayer2.ui.R.drawable.exo_controls_repeat_all);
+                queueControlBinding.controlRepeat.setText(R.string.personal_repeat_all);
                 break;
         }
+        queueControlBinding.controlRepeat.setText(getString(
+                R.string.personal_repeat_mode, queueControlBinding.controlRepeat.getText()));
+        queueControlBinding.controlRepeat.setContentDescription(
+                queueControlBinding.controlRepeat.getText());
 
         final int shuffleAlpha = shuffled ? 255 : 77;
         queueControlBinding.controlShuffle.setImageAlpha(shuffleAlpha);
@@ -606,6 +722,276 @@ public final class PlayQueueActivity extends AppCompatActivity
             // using rootView.getContext() because getApplicationContext() didn't work
             item.setIcon(player.isMuted() ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
         }
+    }
+
+    private void updatePlaybackOptionsUpdates() {
+        playbackOptionsHandler.removeCallbacks(playbackOptionsUpdater);
+        if (playbackOptionsUpdatesActive && player != null) {
+            playbackOptionsHandler.post(playbackOptionsUpdater);
+        }
+    }
+
+    private void updatePlaybackOptions() {
+        if (player == null) {
+            return;
+        }
+
+        if (getSupportActionBar() != null) {
+            final int status = player.audioPlayerSelected()
+                    ? (DataSaver.isEnabled(this) ? R.string.audio_only_status
+                    : R.string.background_audio_status) : R.string.video_playback_status;
+            getSupportActionBar().setSubtitle(getString(status,
+                    getString(DataSaver.getQualityLabel(this))));
+        }
+
+        updatingAutoQueueControl = true;
+        queueControlBinding.controlAutoQueue.setChecked(player.isAutoQueueEnabled());
+        updatingAutoQueueControl = false;
+
+        if (player.isSleepTimerAtEndOfItem()) {
+            queueControlBinding.controlSleepTimer.setText(
+                    R.string.personal_sleep_timer_end_of_item);
+        } else {
+            final long remainingMillis = player.getSleepTimerRemainingMillis();
+            if (remainingMillis <= 0) {
+                queueControlBinding.controlSleepTimer.setText(R.string.personal_sleep_timer_off);
+            } else {
+                final long remainingMinutes = (remainingMillis + 59999) / 60000;
+                queueControlBinding.controlSleepTimer.setText(getString(
+                        R.string.personal_sleep_timer_remaining, remainingMinutes));
+            }
+        }
+        queueControlBinding.controlSleepTimer.setContentDescription(getString(
+                R.string.personal_sleep_timer_title) + ", "
+                + queueControlBinding.controlSleepTimer.getText());
+
+        updateRecommendationPreview();
+    }
+
+    private void updateRecommendationPreview() {
+        final Player.RecommendationStatus status = player.getRecommendationStatus();
+        final PlayQueueItem nextItem = player.getNextRecommendation();
+        final ImageView thumbnail = queueControlBinding.recommendationThumbnail;
+        final String title;
+        final int buttonText;
+        boolean buttonEnabled = true;
+
+        switch (status) {
+            case LOADING:
+                title = getString(R.string.personal_recommendation_loading);
+                buttonText = R.string.personal_recommendation_loading;
+                buttonEnabled = false;
+                clearRecommendationThumbnail(thumbnail);
+                break;
+            case READY:
+                title = nextItem == null ? getString(R.string.personal_no_recommendation)
+                        : getString(R.string.personal_next_item) + ": " + nextItem.getTitle();
+                if (nextItem != null) {
+                    if (!nextItem.getUrl().equals(recommendationThumbnailUrl)) {
+                        CoilHelper.INSTANCE.loadThumbnail(thumbnail, nextItem.getThumbnails());
+                        recommendationThumbnailUrl = nextItem.getUrl();
+                    }
+                } else {
+                    clearRecommendationThumbnail(thumbnail);
+                }
+                if (player.canReplaceNextRecommendation()) {
+                    buttonText = R.string.personal_recommendation_replace;
+                } else {
+                    buttonText = R.string.personal_recommendation_queued;
+                    buttonEnabled = false;
+                }
+                break;
+            case ERROR:
+                title = getString(R.string.personal_recommendation_failed);
+                buttonText = R.string.personal_recommendation_retry;
+                clearRecommendationThumbnail(thumbnail);
+                break;
+            case EMPTY:
+            case IDLE:
+            default:
+                title = getString(R.string.personal_no_recommendation);
+                buttonText = R.string.personal_recommendation_load;
+                clearRecommendationThumbnail(thumbnail);
+                break;
+        }
+
+        queueControlBinding.recommendationTitle.setText(title);
+        queueControlBinding.controlRecommendation.setText(buttonText);
+        queueControlBinding.controlRecommendation.setContentDescription(getString(buttonText));
+        queueControlBinding.controlRecommendation.setEnabled(buttonEnabled);
+        queueControlBinding.controlRecommendationOptions.setVisibility(
+                status == Player.RecommendationStatus.READY && nextItem != null
+                        && player.canReplaceNextRecommendation() ? View.VISIBLE : View.GONE);
+        queueControlBinding.recommendationPreview.setContentDescription(getString(
+                R.string.personal_recommendation_next) + ": " + title);
+    }
+
+    private void clearRecommendationThumbnail(final ImageView thumbnail) {
+        if (recommendationThumbnailUrl != null || thumbnail.getDrawable() == null) {
+            thumbnail.setImageResource(R.drawable.placeholder_thumbnail_video);
+            recommendationThumbnailUrl = null;
+        }
+    }
+
+    private void onRecommendationClick() {
+        switch (player.getRecommendationStatus()) {
+            case READY:
+                if (player.canReplaceNextRecommendation()) {
+                    player.replaceNextRecommendation();
+                }
+                break;
+            case IDLE:
+            case EMPTY:
+            case ERROR:
+                player.loadNextRecommendation();
+                break;
+            case LOADING:
+            default:
+                return;
+        }
+        updatePlaybackOptions();
+    }
+
+    private void showRecommendationOptions() {
+        if (player == null || !player.canReplaceNextRecommendation()) {
+            return;
+        }
+        final PlayQueueItem candidate = player.getNextRecommendation();
+        if (candidate == null) {
+            return;
+        }
+        final PopupMenu options = new PopupMenu(this,
+                queueControlBinding.controlRecommendationOptions);
+        options.getMenu().add(0, 0, 0, R.string.personal_exclude_video);
+        options.getMenu().add(0, 1, 1, R.string.personal_exclude_channel)
+                .setEnabled(candidate.getUploaderUrl() != null
+                        && !candidate.getUploaderUrl().isBlank());
+        options.setOnMenuItemClickListener(choice -> {
+            final boolean channel = choice.getItemId() == 1;
+            if (player != null && player.getNextRecommendation() == candidate
+                    && player.excludeNextRecommendation(channel)) {
+                Snackbar.make(queueControlBinding.getRoot(), channel
+                                ? R.string.personal_channel_excluded
+                                : R.string.personal_video_excluded, Snackbar.LENGTH_LONG)
+                        .setAction(R.string.personal_exclusion_undo, view -> {
+                            if (player != null) {
+                                player.undoRecommendationExclusion(candidate, channel);
+                                updatePlaybackOptions();
+                            }
+                        }).show();
+                updatePlaybackOptions();
+            }
+            return true;
+        });
+        options.show();
+    }
+
+    private void showSleepTimerDialog() {
+        if (player == null) {
+            return;
+        }
+
+        final int[] minutes = {15, 30, 60, 90, 120};
+        final CharSequence[] options = new CharSequence[minutes.length + 4];
+        for (int index = 0; index < minutes.length; index++) {
+            options[index] = getString(R.string.personal_sleep_timer_minutes, minutes[index]);
+        }
+        final int customIndex = minutes.length;
+        final int endOfItemIndex = customIndex + 1;
+        final int extendIndex = endOfItemIndex + 1;
+        final int cancelIndex = extendIndex + 1;
+        options[customIndex] = getString(R.string.personal_sleep_timer_custom);
+        options[endOfItemIndex] = getString(R.string.personal_sleep_timer_end_current_item);
+        options[extendIndex] = getString(R.string.personal_sleep_timer_extend);
+        options[cancelIndex] = getString(R.string.personal_sleep_timer_cancel_timer);
+
+        final CheckBox fadeToggle = new CheckBox(this);
+        fadeToggle.setText(R.string.personal_sleep_timer_fade);
+        fadeToggle.setContentDescription(getString(R.string.personal_sleep_timer_fade));
+        fadeToggle.setChecked(player.isSleepTimerFadeEnabled());
+        fadeToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (player != null) {
+                player.setSleepTimerFadeEnabled(isChecked);
+            }
+        });
+
+        final ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this,
+                android.R.layout.select_dialog_item, options) {
+            @Override
+            public boolean isEnabled(final int position) {
+                return position != endOfItemIndex || player == null
+                        || player.canSetSleepTimerAtEndOfItem();
+            }
+        };
+        final AlertDialog sleepTimerDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.personal_sleep_timer_title)
+                .setView(fadeToggle)
+                .setAdapter(adapter, (dialog, which) -> {
+                    if (player == null) {
+                        dialog.dismiss();
+                        return;
+                    } else if (which < minutes.length) {
+                        player.setSleepTimer(minutes[which] * 60_000L);
+                    } else if (which == customIndex) {
+                        showCustomSleepTimerDialog();
+                    } else if (which == endOfItemIndex) {
+                        if (!player.canSetSleepTimerAtEndOfItem()) {
+                            return;
+                        }
+                        player.setSleepTimerAtEndOfItem();
+                    } else if (which == extendIndex) {
+                        player.extendSleepTimer();
+                    } else {
+                        player.cancelSleepTimer();
+                    }
+                    updatePlaybackOptions();
+                    updatePlaybackOptionsUpdates();
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .create();
+        sleepTimerDialog.setOnShowListener(ignored -> limitSleepTimerListHeight(sleepTimerDialog));
+        sleepTimerDialog.show();
+    }
+
+    private void limitSleepTimerListHeight(final AlertDialog dialog) {
+        final ListView list = dialog.getListView();
+        if (list == null) {
+            return;
+        }
+
+        final ViewGroup.LayoutParams parameters = list.getLayoutParams();
+        final var metrics = getResources().getDisplayMetrics();
+        // Leave room for the title, fade checkbox, buttons and system bars on short screens.
+        final int maximumHeight = Math.max((int) (64 * metrics.density), Math.min(
+                (int) (metrics.heightPixels * 0.45f),
+                metrics.heightPixels - (int) (272 * metrics.density)));
+        final int currentHeight = list.getHeight() > 0 ? list.getHeight() : maximumHeight;
+        parameters.height = Math.min(currentHeight, maximumHeight);
+        list.setLayoutParams(parameters);
+        list.requestLayout();
+    }
+
+    private void showCustomSleepTimerDialog() {
+        final NumberPicker minutesPicker = new NumberPicker(this);
+        minutesPicker.setMinValue(1);
+        minutesPicker.setMaxValue(1440);
+        minutesPicker.setValue(30);
+        minutesPicker.setWrapSelectorWheel(false);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.personal_sleep_timer_custom)
+                .setView(minutesPicker)
+                .setPositiveButton(R.string.ok, (dialog, which) -> {
+                    if (player != null) {
+                        minutesPicker.clearFocus();
+                        player.setSleepTimer(minutesPicker.getValue() * 60_000L);
+                        updatePlaybackOptions();
+                        updatePlaybackOptionsUpdates();
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     @Override

@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_resume_listening"
+        android:orderInCategory="0"
+        android:title="@string/resume_listening"
+        app:showAsAction="ifRoom" />
+
+    <item
         android:id="@+id/action_search"
         android:icon="@drawable/ic_search"
         android:orderInCategory="1"

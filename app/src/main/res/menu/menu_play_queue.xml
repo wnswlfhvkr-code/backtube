@@ -50,4 +50,22 @@
         android:orderInCategory="3"
         android:title="@string/switch_to_main"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_data_saver"
+        android:checkable="true"
+        android:title="@string/data_saver_title"
+        android:orderInCategory="0"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_audio_quality"
+        android:title="@string/audio_quality_title"
+        android:orderInCategory="0"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_clear_recommendation_exclusions"
+        android:orderInCategory="4"
+        android:title="@string/personal_clear_exclusions"
+        app:showAsAction="never" />
 </menu>

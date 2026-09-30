@@ -47,13 +47,12 @@ import java.lang.annotation.Retention;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public final class PlayerHelper {
@@ -161,10 +160,8 @@ public final class PlayerHelper {
      * if a candidate next video's url already exists in the existing items.
      * </p>
      * <p>
-     * The first item in {@link StreamInfo#getRelatedItems()} is checked first.
-     * If it is non-null and is not part of the existing items, it will be used as the next stream.
-     * Otherwise, a random stream with non-repeating url will be selected
-     * from the {@link StreamInfo#getRelatedItems()}. Non-stream items are ignored.
+     * Keeps the service's related-item order, skipping the current stream and queued URLs.
+     * Non-stream items are ignored.
      * </p>
      *
      * @param info          currently playing stream
@@ -174,6 +171,14 @@ public final class PlayerHelper {
     @Nullable
     public static PlayQueue autoQueueOf(@NonNull final StreamInfo info,
                                         @NonNull final List<PlayQueueItem> existingItems) {
+        return autoQueueOf(info, existingItems, item -> true);
+    }
+
+    // Keeps related-item order while applying the caller's persistent recommendation filters.
+    @Nullable
+    public static PlayQueue autoQueueOf(@NonNull final StreamInfo info,
+                                        @NonNull final List<PlayQueueItem> existingItems,
+                                        @NonNull final Predicate<StreamInfoItem> allowed) {
         final Set<String> urls = existingItems.stream()
                 .map(PlayQueueItem::getUrl)
                 .collect(Collectors.toUnmodifiableSet());
@@ -183,21 +188,14 @@ public final class PlayerHelper {
             return null;
         }
 
-        if (relatedItems.get(0) instanceof StreamInfoItem
-                && !urls.contains(relatedItems.get(0).getUrl())) {
-            return getAutoQueuedSinglePlayQueue((StreamInfoItem) relatedItems.get(0));
-        }
-
-        final List<StreamInfoItem> autoQueueItems = new ArrayList<>();
         for (final InfoItem item : relatedItems) {
-            if (item instanceof StreamInfoItem && !urls.contains(item.getUrl())) {
-                autoQueueItems.add((StreamInfoItem) item);
+            if (item instanceof StreamInfoItem && !urls.contains(item.getUrl())
+                    && !info.getUrl().equals(item.getUrl()) && !item.getUrl().isEmpty()
+                    && allowed.test((StreamInfoItem) item)) {
+                return getAutoQueuedSinglePlayQueue((StreamInfoItem) item);
             }
         }
-
-        Collections.shuffle(autoQueueItems);
-        return autoQueueItems.isEmpty()
-                ? null : getAutoQueuedSinglePlayQueue(autoQueueItems.get(0));
+        return null;
     }
 
     // endregion
@@ -227,7 +225,7 @@ public final class PlayerHelper {
 
     public static boolean isAutoQueueEnabled(@NonNull final Context context) {
         return getPreferences(context)
-                .getBoolean(context.getString(R.string.auto_queue_key), false);
+                .getBoolean(context.getString(R.string.auto_queue_key), true);
     }
 
     public static boolean isClearingQueueConfirmationRequired(@NonNull final Context context) {

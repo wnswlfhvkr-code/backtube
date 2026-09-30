@@ -34,6 +34,15 @@ public class TabsJsonHelperTest {
     }
 
     @Test
+    public void testDefaultTabsStartWithHistoryAndPlaylistBookmarks() {
+        final List<Tab> defaultTabs = TabsJsonHelper.getDefaultTabs();
+
+        assertEquals(2, defaultTabs.size());
+        assertTrue(defaultTabs.get(0) instanceof Tab.HistoryTab);
+        assertTrue(defaultTabs.get(1) instanceof Tab.BookmarksTab);
+    }
+
+    @Test
     public void testInvalidIdRead() throws TabsJsonHelper.InvalidJsonException {
         final int blankTabId = Tab.Type.BLANK.getTabId();
         final String emptyTabsJson = "{\"" + JSON_TABS_ARRAY_KEY + "\":["

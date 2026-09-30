@@ -169,7 +169,10 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
 
     @Override
     public boolean onOptionsItemSelected(final MenuItem item) {
-        if (item.getItemId() == R.id.action_search) {
+        if (item.getItemId() == R.id.action_resume_listening) {
+            NavigationHelper.openPlayQueue(requireContext());
+            return true;
+        } else if (item.getItemId() == R.id.action_search) {
             try {
                 NavigationHelper.openSearchFragment(getFM(),
                         ServiceHelper.getSelectedServiceId(activity), "");

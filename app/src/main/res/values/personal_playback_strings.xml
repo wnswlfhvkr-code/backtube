@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_no_recommendation">No new recommended videos available.</string>
+    <string name="personal_recommendation_failed">Could not load recommendations.</string>
+    <string name="personal_recommendation_next">Up next</string>
+    <string name="personal_recommendation_loading">Loading…</string>
+    <string name="personal_recommendation_load">Load</string>
+    <string name="personal_recommendation_retry">Retry</string>
+    <string name="personal_recommendation_replace">Replace</string>
+    <string name="personal_recommendation_queued">Queued</string>
+    <string name="personal_auto_queue">Auto queue</string>
+    <string name="personal_previous_item">Previous item</string>
+    <string name="personal_next_item">Next item</string>
+    <string name="personal_restart_current">Restart current item</string>
+    <string name="personal_repeat_off">OFF</string>
+    <string name="personal_repeat_one">ONE</string>
+    <string name="personal_repeat_all">ALL</string>
+    <string name="personal_repeat_mode">Repeat: %s</string>
+    <string name="personal_repeat_mode_off">Repeat: OFF</string>
+    <string name="personal_sleep_timer_title">Sleep timer</string>
+    <string name="personal_sleep_timer_off">Sleep: Off</string>
+    <string name="personal_sleep_timer_remaining">Sleep: %d min</string>
+    <string name="personal_sleep_timer_end_of_item">Stop after item</string>
+    <string name="personal_sleep_timer_minutes">%d minutes</string>
+    <string name="personal_sleep_timer_custom">Custom (minutes)</string>
+    <string name="personal_sleep_timer_end_current_item">End of current item</string>
+    <string name="personal_sleep_timer_extend">Add 15 minutes</string>
+    <string name="personal_sleep_timer_fade">Fade audio before stopping</string>
+    <string name="personal_sleep_timer_cancel_timer">Cancel timer</string>
+</resources>

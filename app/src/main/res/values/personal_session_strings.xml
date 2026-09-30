@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_recommendation_options">Recommendation options</string>
+    <string name="personal_exclude_video">Not interested</string>
+    <string name="personal_exclude_channel">Do not recommend this channel</string>
+    <string name="personal_video_excluded">Video excluded from recommendations</string>
+    <string name="personal_channel_excluded">Channel excluded from recommendations</string>
+    <string name="personal_exclusion_undo">Undo</string>
+    <string name="personal_clear_exclusions">Reset recommendation exclusions</string>
+    <string name="personal_exclusions_cleared">Recommendation exclusions reset</string>
+    <string name="personal_no_saved_session">Nothing to resume. Play something first.</string>
+</resources>

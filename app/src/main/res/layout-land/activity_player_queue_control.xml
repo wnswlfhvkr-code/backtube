@@ -41,7 +41,7 @@
 
     <RelativeLayout
         android:id="@+id/control_pane"
-        android:layout_width="200dp"
+        android:layout_width="260dp"
         android:layout_height="match_parent"
         android:layout_above="@id/progress_bar"
         android:layout_below="@id/appbar"
@@ -104,36 +104,44 @@
         <RelativeLayout
             android:id="@+id/playback_controls_top"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="64dp"
             android:layout_above="@+id/playback_controls_bottom"
             android:orientation="horizontal"
-            android:paddingTop="10dp"
             tools:ignore="RtlHardcoded">
 
-            <ImageButton
-                android:id="@+id/control_fast_rewind"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/control_backward"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
-                android:layout_toLeftOf="@+id/control_play_pause"
+                android:layout_alignParentStart="true"
+                android:layout_marginStart="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:focusable="true"
                 android:scaleType="fitCenter"
-                android:src="@drawable/exo_controls_rewind"
-                android:contentDescription="@string/rewind"
+                android:src="@drawable/ic_previous"
+                android:contentDescription="@string/personal_previous_item"
+                android:tint="?attr/colorAccent" />
+
+            <ImageButton
+                android:id="@+id/control_restart"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_centerVertical="true"
+                android:layout_toEndOf="@id/control_backward"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/personal_restart_current"
+                android:src="@drawable/ic_replay"
                 app:tint="?attr/colorAccent" />
 
             <ImageButton
                 android:id="@+id/control_play_pause"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:layout_centerInParent="true"
                 android:layout_centerHorizontal="true"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:focusable="true"
@@ -145,13 +153,11 @@
             <ProgressBar
                 android:id="@+id/control_progress_bar"
                 style="?android:attr/progressBarStyleLargeInverse"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:layout_centerInParent="true"
                 android:layout_centerHorizontal="true"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
                 android:background="#00000000"
                 android:clickable="false"
                 android:indeterminate="true"
@@ -160,63 +166,54 @@
                 android:tint="?attr/colorAccent"
                 android:visibility="invisible" />
 
-            <ImageButton
-                android:id="@+id/control_fast_forward"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/control_forward"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginRight="5dp"
-                android:layout_toRightOf="@+id/control_play_pause"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:focusable="true"
                 android:scaleType="fitCenter"
-                android:src="@drawable/exo_controls_fastforward"
-                android:contentDescription="@string/forward"
-                app:tint="?attr/colorAccent" />
+                android:src="@drawable/ic_next"
+                android:contentDescription="@string/personal_next_item"
+                android:tint="?attr/colorAccent" />
         </RelativeLayout>
 
         <RelativeLayout
             android:id="@+id/playback_controls_bottom"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_alignParentBottom="true"
+            android:layout_height="48dp"
+            android:layout_above="@+id/recommendation_preview"
             android:orientation="horizontal"
-            android:paddingTop="10dp"
             tools:ignore="RtlHardcoded">
 
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/control_backward"
-                android:layout_width="wrap_content"
-                android:layout_height="35dp"
+            <ImageButton
+                android:id="@+id/control_fast_rewind"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginStart="4dp"
                 android:layout_toLeftOf="@+id/control_repeat"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:minWidth="50dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_previous"
-                android:tint="?attr/colorAccent"
-                android:contentDescription="@string/previous_stream" />
+                android:src="@drawable/exo_controls_rewind"
+                android:contentDescription="@string/rewind"
+                app:tint="?attr/colorAccent" />
 
-            <ImageButton
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/control_repeat"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
+                android:layout_width="64dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
                 android:layout_toLeftOf="@+id/anchor"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:scaleType="fitXY"
-                android:src="@drawable/ic_repeat"
-                android:contentDescription="@string/notification_action_repeat"
-                app:tint="?attr/colorAccent" />
+                android:contentDescription="@string/personal_repeat_mode_off"
+                android:minWidth="0dp"
+                android:text="@string/personal_repeat_off"
+                android:textColor="?attr/colorAccent" />
 
             <View
                 android:id="@+id/anchor"
@@ -226,37 +223,116 @@
 
             <ImageButton
                 android:id="@+id/control_shuffle"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginRight="5dp"
                 android:layout_toRightOf="@+id/anchor"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
                 android:scaleType="fitXY"
                 android:src="@drawable/ic_shuffle"
                 android:contentDescription="@string/notification_action_shuffle"
                 app:tint="?attr/colorAccent" />
 
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/control_forward"
-                android:layout_width="wrap_content"
-                android:layout_height="35dp"
+            <ImageButton
+                android:id="@+id/control_fast_forward"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_centerVertical="true"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
                 android:layout_toRightOf="@+id/control_shuffle"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:minWidth="50dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_next"
-                android:tint="?attr/colorAccent"
-                android:contentDescription="@string/next_stream" />
+                android:src="@drawable/exo_controls_fastforward"
+                app:tint="?attr/colorAccent"
+                android:contentDescription="@string/forward" />
         </RelativeLayout>
+
+        <LinearLayout
+            android:id="@+id/recommendation_preview"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_above="@id/playback_options"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/recommendation_thumbnail"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:contentDescription="@string/personal_recommendation_next"
+                android:scaleType="centerCrop"
+                tools:src="@drawable/placeholder_thumbnail_video" />
+
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/recommendation_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:text="@string/personal_no_recommendation"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/control_recommendation"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackground"
+                android:contentDescription="@string/personal_recommendation_load"
+                android:minWidth="0dp"
+                android:text="@string/personal_recommendation_load"
+                android:textColor="?attr/colorAccent" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/control_recommendation_options"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/personal_recommendation_options"
+                android:src="@drawable/ic_more_vert"
+                app:tint="?attr/colorAccent" />
+
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:id="@+id/playback_options"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_alignParentBottom="true"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/control_auto_queue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:minWidth="160dp"
+                    android:contentDescription="@string/personal_auto_queue"
+                    android:text="@string/personal_auto_queue" />
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/control_sleep_timer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:contentDescription="@string/personal_sleep_timer_title"
+                    android:minWidth="0dp"
+                    android:text="@string/personal_sleep_timer_off"
+                    android:textColor="?attr/colorAccent" />
+
+            </LinearLayout>
+        </HorizontalScrollView>
     </RelativeLayout>
 
     <LinearLayout
@@ -275,6 +351,8 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:minHeight="40dp"
+            android:minWidth="64dp"
+            android:singleLine="true"
             android:text="-:--:--"
             android:textColor="?attr/colorAccent"
             tools:ignore="HardcodedText"
@@ -296,6 +374,8 @@
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:gravity="center"
+            android:minWidth="64dp"
+            android:singleLine="true"
             android:text="-:--:--"
             android:textColor="?attr/colorAccent"
             tools:ignore="HardcodedText"

@@ -10,6 +10,7 @@ import android.media.audiofx.AudioEffect;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.media.AudioFocusRequestCompat;
 import androidx.media.AudioManagerCompat;
@@ -32,6 +33,10 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     private final AudioManager audioManager;
 
     private final AudioFocusRequestCompat request;
+    private float focusGain = 1.0f;
+    private float playbackGain = 1.0f;
+    @Nullable
+    private ValueAnimator focusAnimator;
 
     public AudioReactor(@NonNull final Context context,
                         @NonNull final ExoPlayer player) {
@@ -48,6 +53,7 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     }
 
     public void dispose() {
+        cancelFocusAnimation();
         abandonAudioFocus();
         player.removeAnalyticsListener(this);
         notifyAudioSessionUpdate(false, player.getAudioSessionId());
@@ -77,6 +83,11 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
         return AudioManagerCompat.getStreamMaxVolume(audioManager, STREAM_TYPE);
     }
 
+    public void setPlaybackGain(final float multiplier) {
+        playbackGain = Math.max(0.0f, Math.min(1.0f, multiplier));
+        applyVolume();
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
     // AudioFocus
     //////////////////////////////////////////////////////////////////////////*/
@@ -100,8 +111,7 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private void onAudioFocusGain() {
         Log.d(TAG, "onAudioFocusGain() called");
-        player.setVolume(DUCK_AUDIO_TO);
-        animateAudio(DUCK_AUDIO_TO, 1.0f);
+        animateFocusGain(DUCK_AUDIO_TO, 1.0f);
 
         if (PlayerHelper.isResumeAfterAudioFocusGain(context)) {
             player.play();
@@ -110,38 +120,55 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private void onAudioFocusLoss() {
         Log.d(TAG, "onAudioFocusLoss() called");
+        cancelFocusAnimation();
         player.pause();
     }
 
     private void onAudioFocusLossCanDuck() {
         Log.d(TAG, "onAudioFocusLossCanDuck() called");
         // Set the volume to 1/10 on ducking
-        player.setVolume(DUCK_AUDIO_TO);
+        cancelFocusAnimation();
+        focusGain = DUCK_AUDIO_TO;
+        applyVolume();
     }
 
-    private void animateAudio(final float from, final float to) {
-        final ValueAnimator valueAnimator = new ValueAnimator();
-        valueAnimator.setFloatValues(from, to);
-        valueAnimator.setDuration(AudioReactor.DUCK_DURATION);
-        valueAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(final Animator animation) {
-                player.setVolume(from);
-            }
+    private void animateFocusGain(final float from, final float to) {
+        cancelFocusAnimation();
+        focusGain = from;
+        applyVolume();
 
-            @Override
-            public void onAnimationCancel(final Animator animation) {
-                player.setVolume(to);
-            }
-
+        final ValueAnimator animator = ValueAnimator.ofFloat(from, to);
+        focusAnimator = animator;
+        animator.setDuration(AudioReactor.DUCK_DURATION);
+        animator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(final Animator animation) {
-                player.setVolume(to);
+                if (focusAnimator == animator) {
+                    focusGain = to;
+                    focusAnimator = null;
+                    applyVolume();
+                }
             }
         });
-        valueAnimator.addUpdateListener(animation ->
-                player.setVolume(((float) animation.getAnimatedValue())));
-        valueAnimator.start();
+        animator.addUpdateListener(animation -> {
+            if (focusAnimator == animator) {
+                focusGain = (float) animation.getAnimatedValue();
+                applyVolume();
+            }
+        });
+        animator.start();
+    }
+
+    private void cancelFocusAnimation() {
+        final ValueAnimator animator = focusAnimator;
+        focusAnimator = null;
+        if (animator != null) {
+            animator.cancel();
+        }
+    }
+
+    private void applyVolume() {
+        player.setVolume(focusGain * playbackGain);
     }
 
     /*//////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>backtube 데이터 절약 아이디어</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#18222d;font-family:system-ui,"Malgun Gothic",sans-serif;font-size:16px;line-height:1.75}main{max-width:1000px;margin:auto;padding:48px 32px}header,section{margin-bottom:36px}h1{font-size:34px;line-height:1.3;margin:8px 0 20px}h2{font-size:23px;margin:0 0 14px}h3{font-size:19px;margin:0 0 10px}p{margin:8px 0}.muted,footer{color:#536274;font-size:14px}.lead{font-size:20px}.callout,article{background:white;padding:24px;border:1px solid #dbe2e9;border-radius:12px}.callout{background:#e8f1fc}article{margin:16px 0}nav{display:flex;flex-wrap:wrap;gap:8px 18px}a{color:#174e92;text-underline-offset:3px}dl{margin:12px 0 0;display:grid;grid-template-columns:90px 1fr;gap:8px 14px}dt{font-weight:600}dd{margin:0}code{font-size:13px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;text-align:left;border-bottom:1px solid #dbe2e9;vertical-align:top}.bar-row{display:grid;grid-template-columns:90px 1fr 110px;gap:12px;align-items:center;margin:10px 0}.bar{height:18px;background:#245fab;border-radius:3px}.bar-track{background:#dbe6f4;border-radius:3px}footer{border-top:1px solid #ccd7e2;padding-top:18px}@media(max-width:600px){main{padding:28px 18px}h1{font-size:28px}.lead{font-size:18px}article,.callout{padding:18px}dl{grid-template-columns:1fr;gap:3px}dd{margin-bottom:9px}.bar-row{grid-template-columns:70px 1fr 95px;font-size:13px}th,td{padding:8px;font-size:14px}}@media print{body{background:white}main{padding:0}article{break-inside:avoid}a{color:inherit}}
+</style>
+</head>
+<body><main>
+<header>
+<p class="muted">2026-09-30 · backtube · 데이터·배터리·메모리 절약 검토</p>
+<h1>소리만 듣는 재생을 더 가볍게</h1>
+<p class="lead">오디오 전용 재생의 기반은 이미 있다. 추가 절약은 낮은 비트레이트 선택과 불필요한 다운로드 억제에서 찾는 것이 좋다.</p>
+<p class="muted">현재 앱 소스를 확인한 아이디어 검토다. 앱 코드와 APK는 변경하지 않았으며, 실제 통신량·배터리 절감률은 측정하지 않았다.</p>
+</header>
+<section id="context">
+<h2>Codebase Context · 현재 확인된 동작</h2>
+<div class="callout">
+<p>백그라운드 플레이어는 일반적으로 별도의 오디오 스트림을 선택한다. 다만 오디오 스트림이 없으면 영상 스트림을 대신 쓰며, 생방송은 별도의 처리 경로를 거친다. 따라서 화면에 영상이 없다는 사실만으로 영상 데이터가 전혀 없다고 보장할 수는 없다.</p>
+<p>데이터 제한 설정에는 낮은 비트레이트를 우선하는 로직이 이미 있다. 현재는 영상 해상도 제한과 묶여 있고, 기본 오디오 형식 선호가 비트레이트보다 먼저 적용된다.</p>
+<p>이미지 품질 설정과 64 MiB 미디어 캐시도 존재한다. 새 엔진이나 새 캐시를 만들기보다 이 기능들을 재사용하는 편이 작고 확실한 변경이다.</p>
+</div>
+<p class="muted">근거: <code>AudioPlaybackResolver.java:50–84</code>, <code>Player.java:2469–2489,2653–2700</code>, <code>ListHelper.java:698–779</code>, <code>PlayerHelper.java:279</code>, <code>ImageStrategy.kt:143–147</code>. 파일은 <code>app/src/main/java/org/schabi/newpipe/</code> 아래에 있다.</p>
+</section>
+<section id="axes">
+<h2>Topic Axes · 세 가지 절약 방향</h2>
+<p>① 받는 미디어의 종류와 품질　② 이미지·추천 등 부가 요청　③ 이미 받은 데이터의 재사용</p>
+</section>
+<section id="ranked">
+<h2>Ranked Ideas · 우선순위</h2>
+<nav aria-label="아이디어 바로가기"><a href="#i1">1. 오디오 전용</a><a href="#i2">2. 음질 선택</a><a href="#i3">3. 이미지 절약</a><a href="#i4">4. 캐시 재사용</a><a href="#i5">5. 미리 저장</a><a href="#i6">6. 불필요한 연속 재생 제한</a></nav>
+<article id="i1"><h3>1. 눈에 보이는 ‘오디오 전용’ 모드</h3>
+<p>재생 화면에서 소리만 듣는 모드를 분명하게 표시하고, 영상은 사용자가 켤 때 재생한다. 엄격한 절약 옵션에서는 오디오가 없는 콘텐츠를 영상으로 자동 대체하지 않는다.</p>
+<dl><dt>근거</dt><dd>direct: <code>AudioPlaybackResolver.java:63–76</code>의 오디오 선택·영상 대체 분기와 <code>Player.java:2699–2700</code>의 영상 트랙 비활성화.</dd><dt>효과</dt><dd>영상 재생 경로로 들어가는 실수를 줄인다. 영상 디코딩·그리기를 생략하면 CPU·GPU 부담도 줄일 수 있다. 이미 오디오만 받던 재생의 추가 절감은 제한적이다.</dd><dt>단점</dt><dd>엄격 모드에서는 일부 콘텐츠·생방송을 재생하지 못할 수 있다. 생방송의 실제 영상 요청 여부는 별도 검증이 필요하다.</dd><dt>평가</dt><dd>축 ① · 근거 신뢰도 95% · 복잡도 중간</dd></dl></article>
+<article id="i2"><h3>2. ‘절약 / 균형 / 고음질’ 오디오 선택</h3>
+<p>실제로 제공되는 오디오 중 낮은 비트레이트를 선택한다. 모바일 데이터에서는 절약, 비과금 네트워크에서는 균형을 기본으로 삼는 설정을 검토한다.</p>
+<dl><dt>근거</dt><dd>direct: <code>ListHelper.java:745–779</code>에 낮은 비트레이트 선택 로직이 이미 있다. 현재 영상 해상도 제한과 연결된 부분을 오디오 설정에서 쉽게 접근하게 만들 수 있다.</dd><dt>효과</dt><dd>이미 오디오만 듣는 사용자에게 가장 직접적인 추가 데이터 절약 후보다.</dd><dt>단점</dt><dd>낮은 음질이 제공되지 않는 콘텐츠도 있다. 특정 64 kbps 트랙이 항상 존재한다고 약속하면 안 된다. 언어 선택과 재생 호환성도 유지해야 한다.</dd><dt>평가</dt><dd>축 ① · 근거 신뢰도 95% · 복잡도 중간</dd></dl></article>
+<article id="i3"><h3>3. 모바일 데이터에서 썸네일을 작게</h3>
+<p>과금 네트워크에서는 이미지 품질을 LOW로 낮추고, 극단적인 절약 옵션에서만 이미지를 끈다. 영상 탐색 미리보기도 별도로 줄일 수 있다.</p>
+<dl><dt>근거</dt><dd>direct: <code>content_settings.xml:95–103</code>의 이미지 품질 설정과 <code>ImageStrategy.kt:143–147</code>의 NONE 처리. 이 설정은 지금도 수동으로 사용할 수 있다.</dd><dt>효과</dt><dd>검색·추천 목록을 많이 넘길 때 이미지 전송량과 디코딩 비용을 줄인다. 자동 네트워크별 전환은 추가 기능이다.</dd><dt>단점</dt><dd>썸네일 가독성이 낮아진다. NONE은 아바타와 배너에도 영향을 준다. 실제 절감량은 탐색 패턴에 따라 달라진다.</dd><dt>평가</dt><dd>축 ② · 근거 신뢰도 95% · 복잡도 낮음~중간</dd></dl></article>
+<article id="i4"><h3>4. 반복 청취용 캐시 보존</h3>
+<p>현재 캐시를 유지하고, 같은 곡을 자주 듣는 경우 캐시 용량 선택지를 제공한다. 128~256 MiB 등은 시작 후보이며 저장공간에 맞춰 정한다.</p>
+<dl><dt>근거</dt><dd>direct: <code>PlayerHelper.java:279–281</code>의 64 MiB 용량과 <code>PlayerDataSource.java:208–220</code>의 LRU 캐시. 캐시 키 생성도 이미 존재한다.</dd><dt>효과</dt><dd>동일한 스트림의 캐시가 남아 있을 때 미디어 재다운로드를 줄일 수 있다.</dd><dt>단점</dt><dd>저장공간 사용량이 증가한다. 캐시는 영구 다운로드가 아니며, 메타데이터·주소 갱신 요청까지 사라지는 것은 아니다.</dd><dt>평가</dt><dd>축 ③ · 근거 신뢰도 90% · 복잡도 낮음</dd></dl></article>
+<article id="i5"><h3>5. Wi-Fi에서 오디오를 미리 저장</h3>
+<p>자주 듣는 콘텐츠를 비과금 네트워크에서 저장해 두고, 이동 중에는 저장된 파일을 재생한다. 기존 오디오 다운로드 기능을 우선 활용한다.</p>
+<dl><dt>근거</dt><dd>direct: <code>download/DownloadDialog.java</code>의 오디오 스트림 선택. reasoned: 로컬 파일의 미디어 바이트는 모바일 스트리밍으로 다시 받을 필요가 없다.</dd><dt>효과</dt><dd>반복해서 듣는 정해진 콘텐츠에는 가장 예측 가능한 모바일 데이터 절약 방법이다.</dd><dt>단점</dt><dd>저장공간과 사전 준비가 필요하다. 자동 추천이나 생방송에는 같은 방식으로 적용하기 어렵다.</dd><dt>평가</dt><dd>축 ③ · 근거 신뢰도 95% · 복잡도 낮음(기존 기능 이용)</dd></dl></article>
+<article id="i6"><h3>6. 원하지 않는 연속 재생만 제한</h3>
+<p>현재 재생목록은 유지하되, 모바일 데이터에서 추천곡을 끝없이 추가하는 동작을 선택적으로 제한한다. 기존 취침 타이머도 함께 활용한다.</p>
+<dl><dt>근거</dt><dd>direct: <code>video_audio_settings.xml:175–181</code>의 자동 큐 설정과 현재 앱의 <code>player/helper/SleepTimer.java</code>.</dd><dt>효과</dt><dd>듣지 않는 동안 계속 재생해 쓰는 데이터와 배터리를 줄인다.</dd><dt>단점</dt><dd>연속 감상을 원하는 사용자에게는 불편하므로 강제로 끄지 않는다. 추천 항목을 준비한다는 사실만으로 오디오 전체를 미리 받는다고 단정하지 않는다.</dd><dt>평가</dt><dd>축 ② · 근거 신뢰도 90% · 복잡도 낮음~중간</dd></dl></article>
+</section>
+<section id="estimate"><h2>오디오 데이터 사용량 예시</h2>
+<p>평균 비트레이트 × 3,600초 ÷ 8로 계산한 순수 미디어 크기다. 실제 제공 음질과 실측 사용량을 뜻하지 않는다.</p>
+<div class="bar-row"><span>32 kbps</span><div class="bar-track"><div class="bar" style="width:25%"></div></div><strong>14.4 MB/시간</strong></div>
+<div class="bar-row"><span>64 kbps</span><div class="bar-track"><div class="bar" style="width:50%"></div></div><strong>28.8 MB/시간</strong></div>
+<div class="bar-row"><span>128 kbps</span><div class="bar-track"><div class="bar" style="width:100%"></div></div><strong>57.6 MB/시간</strong></div>
+<p class="muted">MB는 1,000,000바이트 기준. 이미지·메타데이터·재시도·통신 오버헤드는 별도다. 동일 조건에서 128 → 64 kbps로 낮추면 순수 오디오 데이터는 절반이다.</p>
+</section>
+<section id="rejected"><h2>Rejection Summary · 우선 제외한 방법</h2>
+<table><thead><tr><th>방법</th><th>제외·보류 이유</th></tr></thead><tbody>
+<tr><td>새 오디오 엔진 제작</td><td>오디오 전용 경로가 이미 있어 중복이다.</td></tr>
+<tr><td>받은 뒤 휴대폰에서 오디오 압축</td><td>이미 전송된 데이터를 줄이지 못하고 연산·배터리 비용이 든다.</td></tr>
+<tr><td>오디오 대신 144p 영상 재생</td><td>별도 오디오가 제공될 때 영상 바이트까지 받을 이유가 없다.</td></tr>
+<tr><td>캐시를 작게 만들거나 매번 삭제</td><td>저장공간은 줄어도 반복 다운로드가 늘 수 있다.</td></tr>
+<tr><td>버퍼를 무조건 최소로 축소</td><td>연속 청취에 필요한 오디오 총량은 같고 끊김 위험이 커진다. 건너뛰며 버리는 데이터가 많을 때만 측정 후 조정한다.</td></tr>
+<tr><td>다음 곡 준비를 전부 차단</td><td>메타데이터·소스 준비와 실제 미디어 다운로드는 다르다. 바이트 계측 없이 효과를 단정할 수 없다.</td></tr>
+</tbody></table></section>
+<section id="sources"><h2>검토 근거와 검증 범위</h2><p>로컬 소스의 재생 분기, 오디오 정렬, 이미지 설정, 캐시 용량을 확인했다. <a href="https://developer.android.com/media/media3/exoplayer/track-selection">Android 공식 트랙 선택 문서</a>는 영상 트랙 비활성화와 오디오 비트레이트 제약을 설명한다. <a href="https://developer.android.com/develop/connectivity/network-ops/data-saver">Android 공식 데이터 절약 문서</a>는 과금 네트워크와 데이터 절약 설정에 맞춘 동작을 다룬다. 이 자료는 방향 검토용이며, 현재 앱의 ExoPlayer 버전에서 실제 동작은 구현 시 확인해야 한다.</p><p>추천 조합: <strong>오디오 전용 표시·예외 처리 + 절약 음질 + 모바일 저화질 이미지</strong>. 반복 청취가 많으면 캐시·미리 저장을 함께 선택한다.</p></section>
+<footer>작성 2026-09-30 · ce-ideate · 사용자 요청과 현재 backtube 소스에 근거한 검토. 신뢰도는 근거에 대한 판단이며 절감률이나 통계적 확률이 아니다.</footer>
+</main></body></html>

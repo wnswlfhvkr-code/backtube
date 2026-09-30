@@ -1,11 +1,15 @@
 package org.schabi.newpipe.util.image;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.schabi.newpipe.extractor.Image.HEIGHT_UNKNOWN;
 import static org.schabi.newpipe.extractor.Image.WIDTH_UNKNOWN;
 import static org.schabi.newpipe.util.image.ImageStrategy.choosePreferredImage;
 import static org.schabi.newpipe.util.image.ImageStrategy.estimatePixelCount;
+import static org.schabi.newpipe.util.image.ImageStrategy.imageListToDbUrl;
+import static org.schabi.newpipe.util.image.ImageStrategy.setPreferredImageQuality;
 
+import org.junit.After;
 import org.junit.Test;
 import org.schabi.newpipe.extractor.Image;
 import org.schabi.newpipe.extractor.Image.ResolutionLevel;
@@ -39,6 +43,49 @@ public class ImageStrategyTest {
         assertEquals(low, choosePreferredImage(images, PreferredImageQuality.LOW));
         assertEquals(medium, choosePreferredImage(images, PreferredImageQuality.MEDIUM));
         assertEquals(high, choosePreferredImage(images, PreferredImageQuality.HIGH));
+    }
+
+    @After
+    public void resetPreferredImageQuality() {
+        setPreferredImageQuality(PreferredImageQuality.MEDIUM);
+    }
+
+    @Test
+    public void testMeteredSavingsChoosesLowQuality() {
+        setPreferredImageQuality(PreferredImageQuality.HIGH);
+
+        assertEquals("low", choosePreferredImage(List.of(
+                img("low", ResolutionLevel.LOW),
+                img("high", ResolutionLevel.HIGH)
+        ), true));
+    }
+
+    @Test
+    public void testUnmeteredSelectionPreservesPreferenceAndNone() {
+        final List<Image> images = List.of(
+                img("low", ResolutionLevel.LOW),
+                img("medium", ResolutionLevel.MEDIUM),
+                img("high", ResolutionLevel.HIGH)
+        );
+
+        setPreferredImageQuality(PreferredImageQuality.MEDIUM);
+        assertEquals("medium", choosePreferredImage(images, false));
+        setPreferredImageQuality(PreferredImageQuality.HIGH);
+        assertEquals("high", choosePreferredImage(images, false));
+        setPreferredImageQuality(PreferredImageQuality.NONE);
+        assertNull(choosePreferredImage(images, true));
+    }
+
+    @Test
+    public void testMeteredSavingsDoesNotChangeDatabaseSelection() {
+        final List<Image> images = List.of(
+                img("low", ResolutionLevel.LOW),
+                img("high", ResolutionLevel.HIGH)
+        );
+        setPreferredImageQuality(PreferredImageQuality.HIGH);
+
+        assertEquals("low", choosePreferredImage(images, true));
+        assertEquals("high", imageListToDbUrl(images));
     }
 
 

@@ -19,6 +19,28 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 public class ListHelperTest {
+    @Test
+    public void audioQualityRanksBitrateBeforeCodecAndPrefersKnownRates() {
+        final List<AudioStream> streams = List.of(
+                generateAudioStream("unknown", MediaFormat.M4A, -1),
+                generateAudioStream("low", MediaFormat.WEBMA, 48),
+                generateAudioStream("balanced", MediaFormat.M4A, 128),
+                generateAudioStream("high", MediaFormat.WEBMA, 320));
+        assertEquals(1, ListHelper.getAudioIndexByHighestRank(streams,
+                ListHelper.getAudioQualityComparator(MediaFormat.M4A, DataSaver.LOW)));
+        assertEquals(2, ListHelper.getAudioIndexByHighestRank(streams,
+                ListHelper.getAudioQualityComparator(MediaFormat.M4A, DataSaver.BALANCED)));
+        assertEquals(3, ListHelper.getAudioIndexByHighestRank(streams,
+                ListHelper.getAudioQualityComparator(MediaFormat.M4A, DataSaver.HIGH)));
+        final List<AudioStream> tied = List.of(
+                generateAudioStream("above", MediaFormat.M4A, 160),
+                generateAudioStream("below", MediaFormat.WEBMA, 96));
+        assertEquals(1, ListHelper.getAudioIndexByHighestRank(tied,
+                ListHelper.getAudioQualityComparator(MediaFormat.M4A, DataSaver.BALANCED)));
+        assertEquals(0, ListHelper.getAudioIndexByHighestRank(List.of(streams.get(0)),
+                ListHelper.getAudioQualityComparator(MediaFormat.M4A, DataSaver.LOW)));
+    }
+
     private static final String BEST_RESOLUTION_KEY = "best_resolution";
     private static final List<AudioStream> AUDIO_STREAMS_TEST_LIST = List.of(
             generateAudioStream("m4a-128-1", MediaFormat.M4A, 128),

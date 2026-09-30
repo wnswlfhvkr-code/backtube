@@ -184,6 +184,12 @@ public class FailedMediaSource extends BaseMediaSource implements ManagedMediaSo
         }
     }
 
+    public static final class AudioOnlyUnavailableException extends FailedMediaSourceException {
+        public AudioOnlyUnavailableException(final String message) {
+            super(message);
+        }
+    }
+
     public static final class StreamInfoLoadException extends FailedMediaSourceException {
         public StreamInfoLoadException(final Throwable cause) {
             super(cause);

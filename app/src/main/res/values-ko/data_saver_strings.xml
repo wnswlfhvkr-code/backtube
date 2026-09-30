@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="data_saver_title">데이터 절약 · 오디오 전용</string>
+    <string name="data_saver_summary">영상 대신 오디오만 재생합니다. 오디오 전용 소스가 없으면 건너뜁니다. 모바일 데이터 등 요금제 네트워크에서는 낮은 음질과 작은 썸네일을 사용합니다. 소스를 다시 불러올 때 적용됩니다.</string>
+    <string name="data_saver_audio_unavailable">오디오 전용 소스가 없어 건너뜁니다. 영상 대체 재생을 허용하려면 데이터 절약을 꺼 주세요.</string>
+    <string name="audio_quality_title">오디오 품질</string>
+    <string name="audio_quality_current">오디오 품질: %1$s</string>
+    <string name="audio_quality_low">절약</string>
+    <string name="audio_quality_balanced">균형</string>
+    <string name="audio_quality_high">고음질</string>
+    <string name="audio_only_status">오디오 전용 · %1$s</string>
+    <string name="background_audio_status">백그라운드 · %1$s</string>
+    <string name="video_playback_status">영상 재생 · 오디오 %1$s</string>
+</resources>

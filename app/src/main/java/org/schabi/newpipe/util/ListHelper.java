@@ -746,7 +746,28 @@ public final class ListHelper {
             final @NonNull Context context) {
         final MediaFormat defaultFormat = getDefaultFormat(context,
                 R.string.default_audio_format_key, R.string.default_audio_format_value);
-        return getAudioFormatComparator(defaultFormat, isLimitingDataUsage(context));
+        return getAudioQualityComparator(defaultFormat, DataSaver.getAudioQuality(context));
+    }
+
+    static Comparator<AudioStream> getAudioQualityComparator(
+            @Nullable final MediaFormat defaultFormat, final String quality) {
+        final Comparator<AudioStream> bitrateComparator;
+        if (DataSaver.LOW.equals(quality)) {
+            bitrateComparator = Comparator.comparingInt(AudioStream::getAverageBitrate).reversed();
+        } else if (DataSaver.HIGH.equals(quality)) {
+            bitrateComparator = Comparator.comparingInt(AudioStream::getAverageBitrate);
+        } else {
+            // Bitrates are in kbit/s. Prefer the lower rate when equally close to 128.
+            bitrateComparator = Comparator.<AudioStream>comparingInt(
+                    stream -> -Math.abs(stream.getAverageBitrate() - 128))
+                    .thenComparing(Comparator.comparingInt(
+                            AudioStream::getAverageBitrate).reversed());
+        }
+        return Comparator.<AudioStream, Boolean>comparing(
+                stream -> stream.getAverageBitrate() > 0)
+                .thenComparing(bitrateComparator)
+                .thenComparing(getAudioFormatComparator(
+                        defaultFormat, DataSaver.LOW.equals(quality)));
     }
 
     /**

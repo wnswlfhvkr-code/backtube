@@ -21,6 +21,7 @@ import org.schabi.newpipe.settings.tabs.Tab;
 import org.schabi.newpipe.settings.tabs.TabsManager;
 import org.schabi.newpipe.util.DeviceUtils;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -221,6 +222,31 @@ public final class SettingMigrations {
         }
     };
 
+    private static final Migration MIGRATION_8_9 = new Migration(8, 9) {
+        @Override
+        protected void migrate(@NonNull final Context context) {
+            final String savedTabsKey = context.getString(R.string.saved_tabs_key);
+            if (!sp.contains(savedTabsKey)) {
+                return;
+            }
+
+            final TabsManager tabsManager = TabsManager.getManager(context);
+            final List<Tab> tabs = tabsManager.getTabs();
+            if (tabs.isEmpty() || !(tabs.get(0) instanceof Tab.DefaultKioskTab)) {
+                return;
+            }
+
+            // The default kiosk resolves to Live. Keep all other user-selected tabs, but make
+            // history and the existing playlist bookmarks the first two home tabs.
+            final List<Tab> migratedTabs = new ArrayList<>(tabs);
+            migratedTabs.removeIf(tab -> tab instanceof Tab.HistoryTab
+                    || tab instanceof Tab.BookmarksTab);
+            migratedTabs.set(0, new Tab.HistoryTab());
+            migratedTabs.add(1, new Tab.BookmarksTab());
+            tabsManager.saveTabs(migratedTabs);
+        }
+    };
+
     /**
      * List of all implemented migrations.
      * <p>
@@ -236,12 +262,13 @@ public final class SettingMigrations {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
     };
 
     /**
      * Version number for preferences. Must be incremented every time a migration is necessary.
      */
-    private static final int VERSION = 8;
+    private static final int VERSION = 9;
 
 
     static void runMigrationsIfNeeded(@NonNull final Context context) {

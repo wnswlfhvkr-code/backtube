@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="data_saver_key" translatable="false">data_saver</string>
+    <string name="audio_quality_key" translatable="false">audio_quality</string>
+    <string name="data_saver_title">Data saver · audio only</string>
+    <string name="data_saver_summary">Use separate audio only. Skip items without an audio source. On metered networks, use low audio quality and small thumbnails. Applies when a source is loaded again.</string>
+    <string name="data_saver_audio_unavailable">No audio-only source is available. Skipping this item. Turn off data saver to allow video fallback.</string>
+    <string name="audio_quality_title">Audio quality</string>
+    <string name="audio_quality_current">Audio quality: %1$s</string>
+    <string name="audio_quality_low">Low</string>
+    <string name="audio_quality_balanced">Balanced</string>
+    <string name="audio_quality_high">High</string>
+    <string name="audio_only_status">Audio only · %1$s</string>
+    <string name="background_audio_status">Background audio · %1$s</string>
+    <string name="video_playback_status">Video playback · %1$s audio</string>
+    <string-array name="audio_quality_labels">
+        <item>@string/audio_quality_low</item>
+        <item>@string/audio_quality_balanced</item>
+        <item>@string/audio_quality_high</item>
+    </string-array>
+    <string-array name="audio_quality_values" translatable="false">
+        <item>low</item>
+        <item>balanced</item>
+        <item>high</item>
+    </string-array>
+</resources>

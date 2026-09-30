@@ -19,6 +19,7 @@ import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.mediaitem.StreamInfoTag;
 import org.schabi.newpipe.util.ListHelper;
+import org.schabi.newpipe.util.DataSaver;
 
 import java.util.List;
 
@@ -48,9 +49,12 @@ public class AudioPlaybackResolver implements PlaybackResolver {
     @Override
     @Nullable
     public MediaSource resolve(@NonNull final StreamInfo info) {
-        final MediaSource liveSource = PlaybackResolver.maybeBuildLiveMediaSource(dataSource, info);
-        if (liveSource != null) {
-            return liveSource;
+        if (!DataSaver.isEnabled(context)) {
+            final MediaSource liveSource =
+                    PlaybackResolver.maybeBuildLiveMediaSource(dataSource, info);
+            if (liveSource != null) {
+                return liveSource;
+            }
         }
 
         final List<AudioStream> audioStreams =
@@ -63,6 +67,8 @@ public class AudioPlaybackResolver implements PlaybackResolver {
                     ListHelper.getAudioFormatIndex(context, audioStreams, audioTrack);
             stream = getStreamForIndex(audioIndex, audioStreams);
             tag = StreamInfoTag.of(info, audioStreams, audioIndex);
+        } else if (DataSaver.isEnabled(context)) {
+            return null;
         } else {
             final List<VideoStream> videoStreams =
                     getPlayableStreams(info.getVideoStreams(), info.getServiceId());

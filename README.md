@@ -1,3 +1,33 @@
+# backtube
+
+유튜브 공유 링크를 받아 백그라운드에서 오디오를 듣는 개인용 Android 앱입니다. NewPipe 0.29.1을 기반으로 하며 기존 추출기와 재생 엔진을 사용합니다.
+
+- 화면을 꺼도 백그라운드 오디오 재생
+- 추천곡 연속 재생, 추천 영상·채널 제외, 마지막 대기열과 위치 복원
+- 이전 곡·처음부터 분리, 반복, 자동 이어듣기, 취침 타이머
+- **데이터 절약 · 오디오 전용**: 영상 대체 소스와 일반 라이브 영상 매니페스트를 사용하지 않음. 오디오 전용 소스가 없으면 안내 후 건너뜀
+- **절약 / 균형 / 고음질**: 제공된 오디오 중 낮은 비트레이트 / 128 kbit/s에 가까운 값 / 높은 비트레이트 선택
+- 절약 모드의 요금제 네트워크: 낮은 오디오 품질과 작은 썸네일. 이미지 끄기 설정은 유지
+
+재생 화면의 ⋮ 메뉴에서 데이터 절약과 오디오 품질을 바꿉니다. 설정 → 영상 및 오디오에서도 변경할 수 있습니다. 품질 변경은 현재 위치와 일시정지 상태를 유지합니다. 네트워크 변경에 따른 절약은 다음 소스·이미지 선택 시 적용됩니다. 영상 보기를 직접 선택하면 영상이 재생됩니다.
+
+## 빌드
+
+JDK 21, Android SDK가 필요합니다. `ANDROID_HOME`에 SDK 경로를 지정한 뒤 저장소 루트에서 실행합니다.
+
+```powershell
+.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.6' '-DversionCodeOverride=1020' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
+```
+
+결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 배포에는 개인 서명키로 서명해야 합니다. 기존 개인용 설치와 같은 `org.schabi.newpipe.personal` 패키지를 유지했으며 같은 키로 서명하면 앱 삭제 없이 업데이트할 수 있습니다. 개인 키와 암호는 저장소에 포함하지 않습니다.
+
+생성 WAV·합성 메타데이터를 이용해 재생 정책과 회귀 동작을 검증합니다. 실제 YouTube 네트워크 재생, 갤럭시 화면 꺼짐, 데이터 절감량은 별도 실측 대상입니다. 별도 캐시 엔진은 추가하지 않고 기존 미디어 캐시를 사용합니다.
+
+## 기반과 라이선스
+
+[TeamNewPipe/NewPipe](https://github.com/TeamNewPipe/NewPipe) 기반. GPL-3.0-or-later를 따르며 원본 소스와 저작권 표시를 유지합니다. 아래는 업스트림 프로젝트 안내입니다.
+
+---
 <p align="center"><a href="https://newpipe.net"><img src="assets/new_pipe_icon_5.png" width="150"></a></p> 
 <h2 align="center"><b>NewPipe</b></h2>
 <h4 align="center">A libre lightweight streaming front-end for Android.</h4>

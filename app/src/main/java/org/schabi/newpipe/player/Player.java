@@ -55,6 +55,8 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
+import android.os.SystemClock;
+import android.widget.Toast;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -100,8 +102,11 @@ import org.schabi.newpipe.player.event.PlayerServiceEventListener;
 import org.schabi.newpipe.player.helper.AudioReactor;
 import org.schabi.newpipe.player.helper.CustomRenderersFactory;
 import org.schabi.newpipe.player.helper.LoadController;
+import org.schabi.newpipe.player.helper.LastPlaybackSessionStore;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
+import org.schabi.newpipe.player.helper.RecommendationExclusions;
+import org.schabi.newpipe.player.helper.SleepTimer;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationPlayerUi;
@@ -122,11 +127,15 @@ import org.schabi.newpipe.player.ui.VideoPlayerUi;
 import org.schabi.newpipe.util.DependentPreferenceHelper;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.ListHelper;
+import org.schabi.newpipe.util.DataSaver;
+import org.schabi.newpipe.player.mediasource.FailedMediaSource;
+import org.schabi.newpipe.player.mediasource.FailedMediaSource.AudioOnlyUnavailableException;
 import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.SerializedCache;
 import org.schabi.newpipe.util.StreamTypeUtil;
 import org.schabi.newpipe.util.image.CoilHelper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -173,7 +182,6 @@ public final class Player implements PlaybackListener, Listener {
     // Time constants
     //////////////////////////////////////////////////////////////////////////*/
 
-    public static final int PLAY_PREV_ACTIVATION_LIMIT_MILLIS = 5000; // 5 seconds
     public static final int PROGRESS_LOOP_INTERVAL_MILLIS = 1000; // 1 second
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -264,10 +272,34 @@ public final class Player implements PlaybackListener, Listener {
     private final Context context;
     @NonNull
     private final SharedPreferences prefs;
+    private final SharedPreferences.OnSharedPreferenceChangeListener dataSaverListener;
     @NonNull
     private final HistoryRecordManager recordManager;
+    private final RecommendationExclusions recommendationExclusions;
+    private final LastPlaybackSessionStore lastSessionStore;
+    private final SerialDisposable sessionQueueChanges = new SerialDisposable();
+    private long lastSessionSave;
 
     private boolean screenOn = true;
+    private boolean sleepTimerExpired;
+    private boolean userMuted;
+    private static final String SLEEP_FADE_KEY = "personal_sleep_fade";
+    public enum RecommendationStatus { IDLE, LOADING, READY, EMPTY, ERROR }
+    private enum RecommendationAction { NEXT, AUTO_NEXT, PREVIEW, REPLACE }
+    private RecommendationStatus recommendationStatus = RecommendationStatus.IDLE;
+    private PlayQueueItem recommendationAnchor;
+    private PlayQueueItem recommendationPreview;
+    private final List<PlayQueueItem> skippedRecommendations = new ArrayList<>();
+    private final SerialDisposable recommendationRequest = new SerialDisposable();
+    private boolean recommendationAdvancing;
+    private final SleepTimer sleepTimer = new SleepTimer(AndroidSchedulers.mainThread(),
+            SystemClock::elapsedRealtime, () -> {
+                sleepTimerExpired = true;
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.setPauseAtEndOfMediaItems(false);
+                }
+            }, this::applySleepGain);
 
     /*//////////////////////////////////////////////////////////////////////////
     // Constructor
@@ -288,6 +320,9 @@ public final class Player implements PlaybackListener, Listener {
         context = service;
         prefs = PreferenceManager.getDefaultSharedPreferences(context);
         recordManager = new HistoryRecordManager(context);
+        recommendationExclusions = new RecommendationExclusions(prefs);
+        lastSessionStore = new LastPlaybackSessionStore(prefs);
+        sleepTimer.setFadeEnabled(prefs.getBoolean(SLEEP_FADE_KEY, true));
 
         setupBroadcastReceiver();
 
@@ -308,6 +343,26 @@ public final class Player implements PlaybackListener, Listener {
 
         videoResolver = new VideoPlaybackResolver(context, dataSource, getQualityResolver());
         audioResolver = new AudioPlaybackResolver(context, dataSource);
+        dataSaverListener = (preferences, key) -> {
+            if ((context.getString(R.string.data_saver_key).equals(key)
+                    || context.getString(R.string.audio_quality_key).equals(key))
+                    && playQueue != null && !exoPlayerIsNull()) {
+                saveStreamProgressState();
+                setRecovery();
+                if (context.getString(R.string.data_saver_key).equals(key)
+                        && DataSaver.isEnabled(context) && !audioPlayerSelected()) {
+                    ContextCompat.startForegroundService(context,
+                            NavigationHelper.getPlayerIntent(context, PlayerService.class,
+                                    playQueue, PlayerIntentType.AllOthers)
+                                    .putExtra(PLAYER_TYPE, PlayerType.AUDIO)
+                                    .putExtra(RESUME_PLAYBACK, true)
+                                    .putExtra(PLAY_WHEN_READY, getPlayWhenReady()));
+                } else {
+                    reloadPlayQueueManager();
+                }
+            }
+        };
+        prefs.registerOnSharedPreferenceChangeListener(dataSaverListener);
 
         // The UIs added here should always be present. They will be initialized when the player
         // reaches the initialization step. Make sure the media session ui is before the
@@ -352,6 +407,12 @@ public final class Player implements PlaybackListener, Listener {
                 PlayerIntentType.class);
         if (playerIntentType == null) {
             return;
+        }
+        if (playerIntentType == PlayerIntentType.AllOthers
+                || playerIntentType == PlayerIntentType.TimestampChange) {
+            recommendationRequest.set(null);
+            sleepTimer.expireIfDue();
+            sleepTimerExpired = false;
         }
         // TODO: this should be in the second switch below, but I’m not sure whether I
         // can move the initUIs stuff without breaking the setup for edge cases somehow.
@@ -459,6 +520,11 @@ public final class Player implements PlaybackListener, Listener {
         final PlayQueue newQueue = getPlayQueueFromCache(intent);
         if (newQueue == null) {
             return;
+        }
+        if (sleepTimer.isEndOfItem() && (playQueue == null || playQueue.getItem() == null
+                || newQueue.getItem() == null
+                || !newQueue.getItem().isSameItem(playQueue.getItem()))) {
+            cancelSleepTimer();
         }
 
         // branching parameters for below
@@ -614,7 +680,11 @@ public final class Player implements PlaybackListener, Listener {
 
         UIs.call(PlayerUi::initPlayback);
 
-        simpleExoPlayer.setVolume(isMuted() ? 0 : 1);
+        sessionQueueChanges.set(playQueue.getBroadcastReceiver()
+                .subscribe(event -> saveLastSession(),
+                        error -> Log.w(TAG, "Could not observe playback session", error)));
+
+        applySleepGain(sleepTimer.getGain());
         notifyQueueUpdateToListeners();
     }
 
@@ -629,12 +699,15 @@ public final class Player implements PlaybackListener, Listener {
                 .setUsePlatformDiagnostics(false)
                 .build();
         simpleExoPlayer.addListener(this);
-        simpleExoPlayer.setPlayWhenReady(playOnReady);
+        sleepTimer.expireIfDue();
+        simpleExoPlayer.setPlayWhenReady(playOnReady && !sleepTimerExpired);
         simpleExoPlayer.setSeekParameters(PlayerHelper.getSeekParameters(context));
         simpleExoPlayer.setWakeMode(C.WAKE_MODE_NETWORK);
         simpleExoPlayer.setHandleAudioBecomingNoisy(true);
 
         audioReactor = new AudioReactor(context, simpleExoPlayer);
+        applySleepTimerMode();
+        applySleepGain(sleepTimer.getGain());
 
         registerBroadcastReceiver();
 
@@ -658,10 +731,17 @@ public final class Player implements PlaybackListener, Listener {
     //region Destroy and recovery
 
     private void destroyPlayer() {
+        sessionQueueChanges.set(null);
+        recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "destroyPlayer() called");
         }
         UIs.call(PlayerUi::destroyPlayer);
+
+        if (audioReactor != null) {
+            audioReactor.dispose();
+            audioReactor = null;
+        }
 
         if (!exoPlayerIsNull()) {
             simpleExoPlayer.removeListener(this);
@@ -674,20 +754,20 @@ public final class Player implements PlaybackListener, Listener {
         if (playQueue != null) {
             playQueue.dispose();
         }
-        if (audioReactor != null) {
-            audioReactor.dispose();
-        }
         if (playQueueManager != null) {
             playQueueManager.dispose();
         }
     }
 
     public void destroy() {
+        prefs.unregisterOnSharedPreferenceChangeListener(dataSaverListener);
+        sleepTimer.cancel();
         if (DEBUG) {
             Log.d(TAG, "destroy() called");
         }
 
         saveStreamProgressState();
+        saveLastSession();
         setRecovery();
         stopActivityBinding();
 
@@ -841,6 +921,7 @@ public final class Player implements PlaybackListener, Listener {
                 break;
             case Intent.ACTION_SCREEN_ON:
                 screenOn = true;
+                sleepTimer.expireIfDue();
                 break;
             case Intent.ACTION_CONFIGURATION_CHANGED:
                 if (DEBUG) {
@@ -995,6 +1076,13 @@ public final class Player implements PlaybackListener, Listener {
     private void onUpdateProgress(final int currentProgress,
                                   final int duration,
                                   final int bufferPercent) {
+        if (SystemClock.elapsedRealtime() - lastSessionSave >= 5000) {
+            saveLastSession();
+        }
+        if (sleepTimer.isEndOfItem() && duration > 0) {
+            sleepTimer.updateItemTimeRemaining((long) (Math.max(0, duration - currentProgress)
+                    / Math.max(0.1f, getPlaybackSpeed())));
+        }
         if (isPrepared) {
             UIs.call(ui -> ui.onUpdateProgress(currentProgress, duration, bufferPercent));
             notifyProgressUpdateToListeners(currentProgress, duration, bufferPercent);
@@ -1039,6 +1127,20 @@ public final class Player implements PlaybackListener, Listener {
     //region Playback states
     @Override
     public void onPlayWhenReadyChanged(final boolean playWhenReady, final int reason) {
+        if (!playWhenReady && reason == com.google.android.exoplayer2.Player
+                .PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+            sleepTimer.onItemEnded();
+        }
+        if (!playWhenReady) {
+            recommendationRequest.set(null);
+        }
+        if (playWhenReady && sleepTimer.expireIfDue()) {
+            return;
+        }
+        if (playWhenReady && sleepTimerExpired) {
+            simpleExoPlayer.pause();
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "ExoPlayer - onPlayWhenReadyChanged() called with: "
                     + "playWhenReady = [" + playWhenReady + "], "
@@ -1090,6 +1192,7 @@ public final class Player implements PlaybackListener, Listener {
                 changeState(playWhenReady ? STATE_PLAYING : STATE_PAUSED);
                 break;
             case com.google.android.exoplayer2.Player.STATE_ENDED: // 4
+                sleepTimer.onItemEnded();
                 changeState(STATE_COMPLETED);
                 saveStreamProgressStateCompleted();
                 isPrepared = false;
@@ -1173,6 +1276,8 @@ public final class Player implements PlaybackListener, Listener {
         }
 
         UIs.call(PlayerUi::onPrepared);
+        // A restored paused player stops its progress loop as soon as it is ready.
+        triggerProgressUpdate();
 
         if (playWhenReady && !isMuted()) {
             audioReactor.requestAudioFocus();
@@ -1210,6 +1315,7 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private void onPaused() {
+        saveLastSession();
         if (DEBUG) {
             Log.d(TAG, "onPaused() called");
         }
@@ -1238,8 +1344,16 @@ public final class Player implements PlaybackListener, Listener {
 
         UIs.call(PlayerUi::onCompleted);
 
+        if (sleepTimerExpired) {
+            stopProgressLoop();
+            return;
+        }
+
         if (playQueue.getIndex() < playQueue.size() - 1) {
             playQueue.offsetIndex(+1);
+        } else if (getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
+                && getRepeatMode() == REPEAT_MODE_OFF) {
+            requestNextRecommendation(false);
         }
         if (isProgressLoopRunning()) {
             stopProgressLoop();
@@ -1280,11 +1394,16 @@ public final class Player implements PlaybackListener, Listener {
 
     @Override
     public void onRepeatModeChanged(@RepeatMode final int repeatMode) {
+        saveLastSession();
+        recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "ExoPlayer - onRepeatModeChanged() called with: "
                     + "repeatMode = [" + repeatMode + "]");
         }
         UIs.call(playerUi -> playerUi.onRepeatModeChanged(repeatMode));
+        if (repeatMode == REPEAT_MODE_OFF) {
+            getCurrentStreamInfo().ifPresent(this::maybeAutoQueueNextStream);
+        }
         notifyPlaybackUpdateToListeners();
     }
 
@@ -1323,7 +1442,8 @@ public final class Player implements PlaybackListener, Listener {
 
     public void toggleMute() {
         final boolean wasMuted = isMuted();
-        simpleExoPlayer.setVolume(wasMuted ? 1 : 0);
+        userMuted = !wasMuted;
+        applySleepGain(sleepTimer.getGain());
         if (wasMuted) {
             audioReactor.requestAudioFocus();
         } else {
@@ -1334,7 +1454,7 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public boolean isMuted() {
-        return !exoPlayerIsNull() && simpleExoPlayer.getVolume() == 0;
+        return userMuted;
     }
     //endregion
 
@@ -1373,7 +1493,11 @@ public final class Player implements PlaybackListener, Listener {
                             .flatMap(MediaItemTag::getMaybeAudioTrack).orElse(null);
             currentMetadata = tag;
 
-            if (!currentMetadata.getErrors().isEmpty()) {
+            if (currentMetadata.getErrors().stream()
+                    .anyMatch(AudioOnlyUnavailableException.class::isInstance)) {
+                Toast.makeText(context, R.string.data_saver_audio_unavailable,
+                        Toast.LENGTH_LONG).show();
+            } else if (!currentMetadata.getErrors().isEmpty()) {
                 // new errors might have been added even if previousInfo == tag.getMaybeStreamInfo()
                 final ErrorInfo errorInfo = new ErrorInfo(
                         currentMetadata.getErrors(),
@@ -1466,6 +1590,7 @@ public final class Player implements PlaybackListener, Listener {
             case DISCONTINUITY_REASON_SKIP:
                 break; // only makes Android Studio linter happy, as there are no ads
         }
+        saveLastSession();
     }
 
     @Override
@@ -1740,6 +1865,9 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        sleepTimer.expireIfDue();
+        sleepTimerExpired = false;
+
         if (!isMuted()) {
             audioReactor.requestAudioFocus();
         }
@@ -1763,7 +1891,86 @@ public final class Player implements PlaybackListener, Listener {
         saveStreamProgressState();
     }
 
+    public void setSleepTimer(final long durationMillis) {
+        sleepTimer.start(durationMillis);
+        applySleepTimerMode();
+    }
+
+    public void cancelSleepTimer() {
+        sleepTimer.cancel();
+        applySleepTimerMode();
+    }
+
+    public void setSleepTimerAtEndOfItem() {
+        if (canSetSleepTimerAtEndOfItem()) {
+            sleepTimer.startAtEndOfItem();
+            applySleepTimerMode();
+            triggerProgressUpdate();
+        }
+    }
+
+    public boolean canSetSleepTimerAtEndOfItem() {
+        return !exoPlayerIsNull() && !isLive() && playQueue != null && playQueue.getItem() != null
+                && !StreamTypeUtil.isLiveStream(playQueue.getItem().getStreamType());
+    }
+
+    public boolean isSleepTimerAtEndOfItem() {
+        return sleepTimer.isEndOfItem();
+    }
+
+    public void extendSleepTimer() {
+        sleepTimer.extend(15 * 60_000L);
+        applySleepTimerMode();
+    }
+
+    public void setSleepTimerFadeEnabled(final boolean enabled) {
+        prefs.edit().putBoolean(SLEEP_FADE_KEY, enabled).apply();
+        sleepTimer.setFadeEnabled(enabled);
+        triggerProgressUpdate();
+    }
+
+    public boolean isSleepTimerFadeEnabled() {
+        return sleepTimer.isFadeEnabled();
+    }
+
+    private void applySleepTimerMode() {
+        if (!exoPlayerIsNull()) {
+            simpleExoPlayer.setPauseAtEndOfMediaItems(sleepTimer.isEndOfItem());
+        }
+    }
+
+    private void applySleepGain(final double gain) {
+        if (audioReactor != null) {
+            audioReactor.setPlaybackGain(userMuted ? 0 : (float) gain);
+        }
+    }
+
+    public void restartCurrent() {
+        seekToDefault();
+        triggerProgressUpdate();
+    }
+
+    public long getSleepTimerRemainingMillis() {
+        sleepTimer.expireIfDue();
+        return sleepTimer.remainingMillis();
+    }
+
+    public boolean isAutoQueueEnabled() {
+        return PlayerHelper.isAutoQueueEnabled(context);
+    }
+
+    public void setAutoQueueEnabled(final boolean enabled) {
+        if (!enabled) {
+            recommendationRequest.set(null);
+        }
+        prefs.edit().putBoolean(context.getString(R.string.auto_queue_key), enabled).apply();
+        if (enabled) {
+            getCurrentStreamInfo().ifPresent(this::maybeAutoQueueNextStream);
+        }
+    }
+
     public void pause() {
+        recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "pause() called");
         }
@@ -1791,6 +1998,7 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void playPrevious() {
+        recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "onPlayPrevious() called");
         }
@@ -1798,11 +2006,10 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        /* If current playback has run for PLAY_PREV_ACTIVATION_LIMIT_MILLIS milliseconds,
-         * restart current track. Also restart the track if the current track
-         * is the first in a queue.*/
-        if (simpleExoPlayer.getCurrentPosition() > PLAY_PREV_ACTIVATION_LIMIT_MILLIS
-                || playQueue.getIndex() == 0) {
+        if (sleepTimer.isEndOfItem()) {
+            cancelSleepTimer();
+        }
+        if (playQueue.getIndex() == 0) {
             seekToDefault();
             playQueue.offsetIndex(0);
         } else {
@@ -1813,6 +2020,9 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void playNext() {
+        if (sleepTimer.isEndOfItem()) {
+            cancelSleepTimer();
+        }
         if (DEBUG) {
             Log.d(TAG, "onPlayNext() called");
         }
@@ -1821,7 +2031,13 @@ public final class Player implements PlaybackListener, Listener {
         }
 
         saveStreamProgressState();
-        playQueue.offsetIndex(+1);
+        if (playQueue.getIndex() < playQueue.size() - 1
+                || (playQueue.isComplete() && getRepeatMode() == REPEAT_MODE_ALL)) {
+            recommendationRequest.set(null);
+            playQueue.offsetIndex(+1);
+        } else {
+            requestNextRecommendation(true);
+        }
         triggerProgressUpdate();
     }
 
@@ -1968,21 +2184,291 @@ public final class Player implements PlaybackListener, Listener {
     //////////////////////////////////////////////////////////////////////////*/
     //region Play queue, segments and streams
 
+    /** Save a stable queue snapshot without keeping temporary media URLs or a running timer. */
+    public void saveLastSession() {
+        if (playQueue == null) {
+            return;
+        }
+        final PlayQueueItem item = playQueue.getItem();
+        long position = item == null ? 0 : Math.max(0, item.getRecoveryPosition());
+        if (item != null && item.getRecoveryPosition() == PlayQueueItem.RECOVERY_UNSET
+                && !exoPlayerIsNull()
+                && simpleExoPlayer.getCurrentMediaItemIndex() == playQueue.getIndex()
+                && MediaItemTag.from(simpleExoPlayer.getCurrentMediaItem())
+                .filter(tag -> tag.getServiceId() == item.getServiceId()
+                        && tag.getStreamUrl().equals(item.getUrl())).isPresent()) {
+            position = Math.max(0, simpleExoPlayer.getContentPosition());
+        }
+        lastSessionStore.save(playQueue, position, getRepeatMode());
+        lastSessionSave = SystemClock.elapsedRealtime();
+    }
+
+    private boolean recommendationAllowed(final PlayQueueItem item) {
+        return !recommendationExclusions.excludes(item.getServiceId(), item.getUrl(),
+                item.getUploaderUrl());
+    }
+
+    public boolean excludeNextRecommendation(final boolean channel) {
+        final PlayQueueItem item = getNextRecommendation();
+        if (item == null || !canReplaceNextRecommendation()) {
+            return false;
+        }
+        final boolean added = channel ? recommendationExclusions.excludeChannel(item)
+                : recommendationExclusions.excludeVideo(item);
+        if (!added) {
+            return false;
+        }
+        recommendationRequest.set(null);
+        recommendationPreview = null;
+        final int nextIndex = playQueue.getIndex() + 1;
+        if (playQueue.getItem(nextIndex) == item) {
+            playQueue.remove(nextIndex);
+        }
+        recommendationStatus = RecommendationStatus.IDLE;
+        loadNextRecommendation();
+        return true;
+    }
+
+    public void undoRecommendationExclusion(final PlayQueueItem item, final boolean channel) {
+        if (channel) {
+            recommendationExclusions.allowChannel(item);
+        } else {
+            recommendationExclusions.allowVideo(item);
+        }
+        skippedRecommendations.clear();
+        refreshRecommendationAfterUnblocking();
+    }
+
+    private void refreshRecommendationAfterUnblocking() {
+        if (!canReplaceNextRecommendation()) {
+            return;
+        }
+        recommendationRequest.set(null);
+        recommendationPreview = null;
+        if (playQueue.getItem(playQueue.getIndex() + 1) != null) {
+            playQueue.remove(playQueue.getIndex() + 1);
+        }
+        recommendationStatus = RecommendationStatus.IDLE;
+        loadNextRecommendation();
+    }
+
+    public boolean hasRecommendationExclusions() {
+        return recommendationExclusions.hasExclusions();
+    }
+
+    public void clearRecommendationExclusions() {
+        recommendationExclusions.clear();
+        skippedRecommendations.clear();
+        refreshRecommendationAfterUnblocking();
+    }
+
+    private void syncRecommendationContext() {
+        final PlayQueueItem item = playQueue == null ? null : playQueue.getItem();
+        if (recommendationAnchor != item) {
+            recommendationRequest.set(null);
+            recommendationAnchor = item;
+            recommendationPreview = null;
+            skippedRecommendations.clear();
+            recommendationStatus = RecommendationStatus.IDLE;
+        }
+        if (recommendationPreview != null && !recommendationAllowed(recommendationPreview)) {
+            recommendationPreview = null;
+        }
+    }
+
+    @Nullable
+    public PlayQueueItem getNextRecommendation() {
+        syncRecommendationContext();
+        final PlayQueueItem next = playQueue == null ? null
+                : playQueue.getItem(playQueue.getIndex() + 1);
+        return next == null ? recommendationPreview : next;
+    }
+
+    public RecommendationStatus getRecommendationStatus() {
+        syncRecommendationContext();
+        if (recommendationStatus == RecommendationStatus.LOADING
+                && recommendationRequest.get() == null) {
+            recommendationStatus = RecommendationStatus.IDLE;
+        }
+        if (recommendationStatus == RecommendationStatus.IDLE && getNextRecommendation() != null) {
+            return RecommendationStatus.READY;
+        }
+        return recommendationStatus;
+    }
+
+    public boolean canReplaceNextRecommendation() {
+        syncRecommendationContext();
+        if (playQueue == null || playQueue.getItem() == null) {
+            return false;
+        }
+        final PlayQueueItem next = playQueue.getItem(playQueue.getIndex() + 1);
+        return next == null || (next.isAutoQueued()
+                && playQueue.getIndex() + 1 == playQueue.size() - 1);
+    }
+
+    public void loadNextRecommendation() {
+        requestRecommendation(RecommendationAction.PREVIEW);
+    }
+
+    public void replaceNextRecommendation() {
+        requestRecommendation(RecommendationAction.REPLACE);
+    }
+
+    private void requestNextRecommendation(final boolean explicit) {
+        requestRecommendation(explicit ? RecommendationAction.NEXT
+                : RecommendationAction.AUTO_NEXT);
+    }
+
+    @SuppressWarnings("MethodLength")
+    private void requestRecommendation(final RecommendationAction action) {
+        syncRecommendationContext();
+        final boolean advance = action == RecommendationAction.NEXT
+                || action == RecommendationAction.AUTO_NEXT;
+        final boolean explicit = action != RecommendationAction.AUTO_NEXT;
+        final boolean replace = action == RecommendationAction.REPLACE;
+        final PlayQueue queue = playQueue;
+        if (advance && !recommendationAdvancing) {
+            // A next command takes precedence over a pending preview, including at natural end.
+            recommendationRequest.set(null);
+        }
+        if (queue == null || queue.getItem() == null || (advance && sleepTimerExpired)
+                || recommendationRequest.get() != null) {
+            return;
+        }
+        if ((!advance && !replace && getNextRecommendation() != null)
+                || (replace && !canReplaceNextRecommendation())) {
+            recommendationStatus = RecommendationStatus.READY;
+            return;
+        }
+        final PlayQueueItem item = queue.getItem();
+        recommendationAdvancing = advance;
+        recommendationStatus = RecommendationStatus.LOADING;
+        // A paged playlist owns its next items until its final page has been loaded.
+        if (!queue.isComplete()) {
+            if (queue.getBroadcastReceiver() == null) {
+                return;
+            }
+            recommendationRequest.set(queue.getBroadcastReceiver()
+                    .filter(event -> queue.isComplete() || queue.getIndex() < queue.size() - 1)
+                    .take(1)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(event -> {
+                        recommendationRequest.set(null);
+                        if (playQueue == queue && queue.getItem() == item && !sleepTimerExpired) {
+                            if (queue.getIndex() < queue.size() - 1) {
+                                recommendationStatus = RecommendationStatus.READY;
+                                if (advance) {
+                                    queue.offsetIndex(+1);
+                                }
+                            } else {
+                                requestRecommendation(action);
+                            }
+                        }
+                    }, error -> {
+                        recommendationRequest.set(null);
+                        recommendationStatus = RecommendationStatus.ERROR;
+                        Log.w(TAG, "Could not load the next playlist page", error);
+                    }));
+            queue.fetch();
+            return;
+        }
+        final Single<StreamInfo> info = getCurrentStreamInfo()
+                .filter(current -> current.getUrl().equals(item.getUrl()))
+                .map(Single::just).orElseGet(item::getStream);
+        recommendationRequest.set(info.observeOn(AndroidSchedulers.mainThread())
+                .subscribe(current -> {
+                    recommendationRequest.set(null);
+                    if (playQueue != queue || queue.getItem() != item
+                            || (advance && sleepTimerExpired)
+                            || (!explicit && (!isAutoQueueEnabled() || !getPlayWhenReady()
+                            || getRepeatMode() != REPEAT_MODE_OFF))) {
+                        recommendationStatus = RecommendationStatus.IDLE;
+                        return;
+                    }
+                    if (queue.getIndex() == queue.size() - 1 || replace) {
+                        final PlayQueueItem previous = getNextRecommendation();
+                        final List<PlayQueueItem> excluded = new ArrayList<>(queue.getStreams());
+                        excluded.addAll(skippedRecommendations);
+                        if (replace && previous != null) {
+                            excluded.add(previous);
+                        }
+                        final PlayQueue next = advance && recommendationPreview != null
+                                ? new SinglePlayQueue(recommendationPreview)
+                                : PlayerHelper.autoQueueOf(current, excluded,
+                                        candidate -> !recommendationExclusions.excludes(
+                                                candidate.getServiceId(), candidate.getUrl(),
+                                                candidate.getUploaderUrl()));
+                        if (next == null) {
+                            recommendationStatus = RecommendationStatus.EMPTY;
+                            if (explicit) {
+                                Toast.makeText(context, R.string.personal_no_recommendation,
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                            return;
+                        }
+                        if (replace && !canReplaceNextRecommendation()) {
+                            recommendationStatus = RecommendationStatus.READY;
+                            return;
+                        }
+                        if (replace && previous != null) {
+                            skippedRecommendations.add(previous);
+                        }
+                        if (replace && queue.getItem(queue.getIndex() + 1) != null) {
+                            queue.remove(queue.getIndex() + 1);
+                            queue.append(next.getStreams());
+                            recommendationPreview = null;
+                        } else if (advance) {
+                            queue.append(next.getStreams());
+                            recommendationPreview = null;
+                        } else {
+                            recommendationPreview = next.getItem();
+                        }
+                    }
+                    recommendationStatus = RecommendationStatus.READY;
+                    if (advance) {
+                        queue.offsetIndex(+1);
+                    }
+                    triggerProgressUpdate();
+                }, error -> {
+                    recommendationRequest.set(null);
+                    recommendationStatus = RecommendationStatus.ERROR;
+                    Log.w(TAG, "Could not load the next recommendation", error);
+                    if (explicit && playQueue == queue && queue.getItem() == item) {
+                        Toast.makeText(context, R.string.personal_recommendation_failed,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }));
+    }
+
     private void maybeAutoQueueNextStream(@NonNull final StreamInfo info) {
+        syncRecommendationContext();
         if (playQueue == null || playQueue.getIndex() != playQueue.size() - 1
+                || !playQueue.isComplete() || playQueue.getItem() == null
+                || !playQueue.getItem().getUrl().equals(info.getUrl())
                 || getRepeatMode() != REPEAT_MODE_OFF
                 || !PlayerHelper.isAutoQueueEnabled(context)) {
             return;
         }
         // auto queue when starting playback on the last item when not repeating
-        final PlayQueue autoQueue = PlayerHelper.autoQueueOf(info,
-                playQueue.getStreams());
+        final List<PlayQueueItem> excluded = new ArrayList<>(playQueue.getStreams());
+        excluded.addAll(skippedRecommendations);
+        final PlayQueue autoQueue = recommendationPreview != null
+                ? new SinglePlayQueue(recommendationPreview)
+                : PlayerHelper.autoQueueOf(info, excluded,
+                        candidate -> !recommendationExclusions.excludes(candidate.getServiceId(),
+                                candidate.getUrl(), candidate.getUploaderUrl()));
         if (autoQueue != null) {
             playQueue.append(autoQueue.getStreams());
+            recommendationPreview = null;
+            recommendationStatus = RecommendationStatus.READY;
         }
     }
 
     public void selectQueueItem(final PlayQueueItem item) {
+        if (sleepTimer.isEndOfItem()) {
+            cancelSleepTimer();
+        }
+        recommendationRequest.set(null);
         if (playQueue == null || exoPlayerIsNull()) {
             return;
         }
@@ -2009,17 +2495,16 @@ public final class Player implements PlaybackListener, Listener {
     @Override // own playback listener
     @Nullable
     public MediaSource sourceOf(final PlayQueueItem item, final StreamInfo info) {
-        if (audioPlayerSelected()) {
-            return audioResolver.resolve(info);
-        }
-
-        if (isAudioOnly && videoResolver.getStreamSourceType().orElse(
+        if (audioPlayerSelected() || (isAudioOnly && (DataSaver.isEnabled(context)
+                || videoResolver.getStreamSourceType().orElse(
                 SourceType.VIDEO_WITH_AUDIO_OR_AUDIO_ONLY)
-                == SourceType.VIDEO_WITH_AUDIO_OR_AUDIO_ONLY) {
-            // If the current info has only video streams with audio and if the stream is played as
-            // audio, we need to use the audio resolver, otherwise the video stream will be played
-            // in background.
-            return audioResolver.resolve(info);
+                == SourceType.VIDEO_WITH_AUDIO_OR_AUDIO_ONLY))) {
+            final MediaSource audioSource = audioResolver.resolve(info);
+            if (audioSource == null && DataSaver.isEnabled(context)) {
+                return FailedMediaSource.of(item, new AudioOnlyUnavailableException(
+                        context.getString(R.string.data_saver_audio_unavailable)));
+            }
+            return audioSource;
         }
 
         // Even if the stream is played in background, we need to use the video resolver if the
@@ -2274,6 +2759,11 @@ public final class Player implements PlaybackListener, Listener {
     private boolean playQueueManagerReloadingNeeded(final SourceType sourceType,
                                                     @NonNull final StreamInfo streamInfo,
                                                     final int videoRendererIndex) {
+        if (DataSaver.isEnabled(context)) {
+            // Re-select a separate source when hiding video, and restore video when showing it.
+            // ponytail: duplicate visibility events reload; track source mode if that is frequent.
+            return true;
+        }
         final StreamType streamType = streamInfo.getStreamType();
         final boolean isStreamTypeAudio = StreamTypeUtil.isAudio(streamType);
 
