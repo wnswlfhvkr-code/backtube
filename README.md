@@ -1,5 +1,9 @@
 # backtube
 
+**[⬇️ backtube v8 APK 다운로드](https://github.com/wnswlfhvkr-code/backtube/releases/download/v0.29.1-backtube.8/backtube-v8.apk)**
+
+버전 `0.29.1-backtube.8` (1022). 기존 개인용 backtube 앱을 삭제하지 않고 업데이트할 수 있습니다. [릴리스 페이지](https://github.com/wnswlfhvkr-code/backtube/releases/tag/v0.29.1-backtube.8)
+
 유튜브 공유 링크를 받아 백그라운드에서 오디오를 듣는 개인용 Android 앱입니다. NewPipe 0.29.1을 기반으로 하며 기존 추출기와 재생 엔진을 사용합니다.
 
 - 검색·목록에서 곡을 선택하면 추가 재생 버튼 없이 바로 재생
