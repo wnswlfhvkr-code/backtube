@@ -2,6 +2,7 @@
 
 유튜브 공유 링크를 받아 백그라운드에서 오디오를 듣는 개인용 Android 앱입니다. NewPipe 0.29.1을 기반으로 하며 기존 추출기와 재생 엔진을 사용합니다.
 
+- 검색·목록에서 곡을 선택하면 추가 재생 버튼 없이 바로 재생
 - 화면을 꺼도 백그라운드 오디오 재생
 - 추천곡 연속 재생, 추천 영상·채널 제외, 마지막 대기열과 위치 복원
 - 이전 곡·처음부터 분리, 반복, 자동 이어듣기, 취침 타이머
@@ -16,7 +17,7 @@
 JDK 21, Android SDK가 필요합니다. `ANDROID_HOME`에 SDK 경로를 지정한 뒤 저장소 루트에서 실행합니다.
 
 ```powershell
-.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.7' '-DversionCodeOverride=1021' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
+.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.8' '-DversionCodeOverride=1022' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
 ```
 
 결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 배포에는 개인 서명키로 서명해야 합니다. 기존 개인용 설치와 같은 `org.schabi.newpipe.personal` 패키지를 유지했으며 같은 키로 서명하면 앱 삭제 없이 업데이트할 수 있습니다. 개인 키와 암호는 저장소에 포함하지 않습니다.

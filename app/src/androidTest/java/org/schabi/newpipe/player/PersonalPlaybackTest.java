@@ -35,6 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.MainActivity;
 import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.Image;
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -45,6 +46,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource;
 import org.schabi.newpipe.util.DataSaver;
 import org.schabi.newpipe.util.ListHelper;
+import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.image.ImageStrategy;
 import org.schabi.newpipe.util.image.PreferredImageQuality;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
@@ -158,6 +160,76 @@ public class PersonalPlaybackTest {
         PreferenceManager.getDefaultSharedPreferences(context).edit().commit();
         for (final String id : List.of("offline-A", "offline-B", "offline-C")) {
             InfoCache.getInstance().removeInfo(1, id, InfoCache.Type.STREAM);
+        }
+    }
+
+    @Test
+    public void songSelectionPlaysImmediatelyAndPlayerSwitchKeepsPause() throws Exception {
+        final String autoplayKey = context.getString(R.string.autoplay_key);
+        final String original = player.getPrefs().getString(autoplayKey,
+                context.getString(R.string.autoplay_value));
+        final String commentsKey = context.getString(R.string.show_comments_key);
+        final boolean showComments = player.getPrefs().getBoolean(commentsKey, true);
+        try {
+            startOfflineRecommendationChain(false);
+            runOnMain(() -> {
+                player.pause();
+                player.getPrefs().edit().putString(autoplayKey,
+                        context.getString(R.string.autoplay_never_key))
+                        .putBoolean(commentsKey, false).commit();
+            });
+            final MainActivity activity = (MainActivity) InstrumentationRegistry
+                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
+                    activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
+                    null, false));
+            assertTrue("passive details did not load", waitFor(() -> callOnMain(() -> {
+                final android.widget.TextView title = activity.findViewById(
+                        R.id.detail_video_title_view);
+                return title != null && "offline-C".contentEquals(title.getText());
+            }), 5));
+            assertTrue("opening details changed the paused queue", callOnMain(
+                    () -> !player.getPlayWhenReady()
+                            && "offline-A".equals(player.getVideoUrl())));
+            runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
+                    activity.getSupportFragmentManager(), 1, "offline-B", "offline-B",
+                    null, false, true));
+            assertTrue("song selection required an extra play-button press", waitFor(
+                    () -> callOnMain(() -> player.isPlaying()
+                            && "offline-B".equals(player.getVideoUrl())), 10));
+            captureScreen("backtube-selection-autoplay.png");
+            runOnMain(() -> {
+                player.pause();
+                player.getExoPlayer().seekTo(1200);
+                NavigationHelper.openVideoDetailFragment(activity,
+                        activity.getSupportFragmentManager(), 1, "offline-B", "offline-B",
+                        player.getPlayQueue(), true);
+            });
+            assertTrue("switching a paused player resumed playback", waitFor(() -> callOnMain(
+                    () -> !player.getPlayWhenReady()
+                            && player.getExoPlayer().getPlaybackState() == Player.STATE_READY
+                            && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150),
+                    5));
+            runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
+                    activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
+                    null, false, true));
+            assertTrue("selection from a paused main player did not start", waitFor(
+                    () -> callOnMain(() -> player.isPlaying()
+                            && "offline-C".equals(player.getVideoUrl())), 10));
+            runOnMain(() -> {
+                player.pause();
+                NavigationHelper.playOnMainPlayer((Context) activity,
+                        new SinglePlayQueue(new StreamInfoItem(1, "offline-A", "offline-A",
+                                StreamType.AUDIO_STREAM)), false);
+            });
+            assertTrue("explicit play through a stream intent did not start", waitFor(
+                    () -> callOnMain(() -> player.isPlaying()
+                            && "offline-A".equals(player.getVideoUrl())), 10));
+        } finally {
+            finishQueueActivity();
+            runOnMain(() -> player.getPrefs().edit().putString(autoplayKey, original)
+                    .putBoolean(commentsKey, showComments).commit());
         }
     }
 
@@ -710,7 +782,7 @@ public class PersonalPlaybackTest {
     private void cacheOfflineRecommendationChain() {
         for (final String id : List.of("offline-A", "offline-B", "offline-C")) {
             final StreamInfo info = new StreamInfo(1, id, id,
-                    StreamType.AUDIO_STREAM, id, "", 0);
+                    StreamType.AUDIO_STREAM, id, id, 0);
             info.setDuration(4);
             info.setUploaderName("Offline test");
             info.setAudioStreams(List.of(new AudioStream.Builder().setId(id)
@@ -1363,10 +1435,13 @@ public class PersonalPlaybackTest {
 
     private void finishQueueActivity() {
         runOnMain(() -> {
-            final PlayQueueActivity activity = activeQueueActivity();
-            if (activity != null) {
-                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                activity.finish();
+            for (final android.app.Activity activity : List.copyOf(
+                    ActivityLifecycleMonitorRegistry.getInstance()
+                            .getActivitiesInStage(Stage.RESUMED))) {
+                if (activity instanceof PlayQueueActivity || activity instanceof MainActivity) {
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    activity.finish();
+                }
             }
         });
     }

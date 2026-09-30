@@ -126,7 +126,7 @@ public final class NavigationHelper {
         if (item != null) {
             openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
                     item.getServiceId(), item.getUrl(), item.getTitle(), playQueue,
-                    false);
+                    false, true);
         }
     }
 
@@ -137,7 +137,7 @@ public final class NavigationHelper {
         if (item != null) {
             openVideoDetail(context,
                     item.getServiceId(), item.getUrl(), item.getTitle(), playQueue,
-                    switchingPlayers);
+                    switchingPlayers, !switchingPlayers);
         }
     }
 
@@ -413,22 +413,23 @@ public final class NavigationHelper {
                                                @NonNull final String title,
                                                @Nullable final PlayQueue playQueue,
                                                final boolean switchingPlayers) {
+        openVideoDetailFragment(context, fragmentManager, serviceId, url, title, playQueue,
+                switchingPlayers, false);
+    }
 
-        final boolean autoPlay;
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public static void openVideoDetailFragment(@NonNull final Context context,
+                                               @NonNull final FragmentManager fragmentManager,
+                                               final int serviceId,
+                                               @Nullable final String url,
+                                               @NonNull final String title,
+                                               @Nullable final PlayQueue playQueue,
+                                               final boolean switchingPlayers,
+                                               final boolean playImmediately) {
         @Nullable final PlayerType playerType = PlayerHolder.getInstance().getType();
-        if (playerType == null) {
-            // no player open
-            autoPlay = PlayerHelper.isAutoplayAllowedByUser(context);
-        } else if (switchingPlayers) {
-            // switching player to main player
-            autoPlay = PlayerHolder.getInstance().isPlaying(); // keep play/pause state
-        } else if (playerType == PlayerType.MAIN) {
-            // opening new stream while already playing in main player
-            autoPlay = PlayerHelper.isAutoplayAllowedByUser(context);
-        } else {
-            // opening new stream while already playing in another player
-            autoPlay = false;
-        }
+        final boolean autoPlay = switchingPlayers ? PlayerHolder.getInstance().isPlaying()
+                : playImmediately || ((playerType == null || playerType == PlayerType.MAIN)
+                    && PlayerHelper.isAutoplayAllowedByUser(context));
 
         final RunnableWithVideoDetailFragment onVideoDetailFragmentReady = detailFragment -> {
             expandMainPlayer(detailFragment.requireActivity());
@@ -443,7 +444,8 @@ public final class NavigationHelper {
                 if (switchingPlayers && playerType == PlayerType.POPUP) {
                     detailFragment.setForceFullscreen(true);
                 }
-                detailFragment.selectAndLoadVideo(serviceId, url, title, playQueue);
+                detailFragment.selectAndLoadVideo(serviceId, url, title, playQueue,
+                        playImmediately && !switchingPlayers);
             }
             detailFragment.scrollToTop();
         };
@@ -636,9 +638,19 @@ public final class NavigationHelper {
                                        @NonNull final String title,
                                        @Nullable final PlayQueue playQueue,
                                        final boolean switchingPlayers) {
+        openVideoDetail(context, serviceId, url, title, playQueue, switchingPlayers, false);
+    }
 
+    public static void openVideoDetail(final Context context,
+                                       final int serviceId,
+                                       final String url,
+                                       @NonNull final String title,
+                                       @Nullable final PlayQueue playQueue,
+                                       final boolean switchingPlayers,
+                                       final boolean playImmediately) {
         final Intent intent = getStreamIntent(context, serviceId, url, title)
-                .putExtra(VideoDetailFragment.KEY_SWITCHING_PLAYERS, switchingPlayers);
+                .putExtra(VideoDetailFragment.KEY_SWITCHING_PLAYERS, switchingPlayers)
+                .putExtra(VideoDetailFragment.KEY_PLAY_IMMEDIATELY, playImmediately);
 
         if (playQueue != null) {
             final String cacheKey = SerializedCache.getInstance().put(playQueue, PlayQueue.class);

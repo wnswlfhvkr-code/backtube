@@ -834,7 +834,9 @@ public class MainActivity extends AppCompatActivity {
                                 VideoDetailFragment.KEY_SWITCHING_PLAYERS, false);
                         NavigationHelper.openVideoDetailFragment(
                                 getApplicationContext(), getSupportFragmentManager(),
-                                serviceId, url, title, playQueue, switchingPlayers);
+                                serviceId, url, title, playQueue, switchingPlayers,
+                                intent.getBooleanExtra(
+                                        VideoDetailFragment.KEY_PLAY_IMMEDIATELY, false));
                         break;
                     case CHANNEL:
                         NavigationHelper.openChannelFragment(getSupportFragmentManager(),

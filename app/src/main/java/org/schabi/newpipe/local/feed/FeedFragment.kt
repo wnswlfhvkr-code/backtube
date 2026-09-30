@@ -395,7 +395,8 @@ class FeedFragment : BaseStateFragment<FeedState>() {
                     stream.url,
                     stream.title,
                     null,
-                    false
+                    false,
+                    true
                 )
             }
         }

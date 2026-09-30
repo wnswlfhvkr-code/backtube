@@ -141,6 +141,7 @@ public final class VideoDetailFragment
         PlayerServiceExtendedEventListener,
         OnKeyDownListener {
     public static final String KEY_SWITCHING_PLAYERS = "switching_players";
+    public static final String KEY_PLAY_IMMEDIATELY = "play_immediately";
 
     private static final float MAX_OVERLAY_ALPHA = 0.9f;
     private static final float MAX_PLAYER_HEIGHT = 0.7f;
@@ -205,6 +206,8 @@ public final class VideoDetailFragment
     int lastStableBottomSheetState = BottomSheetBehavior.STATE_EXPANDED;
     @State
     protected boolean autoPlayEnabled = true;
+    @State
+    boolean playOnSelection = false;
     private boolean forceFullscreen = false;
 
     @Nullable
@@ -781,7 +784,9 @@ public final class VideoDetailFragment
     public void selectAndLoadVideo(final int newServiceId,
                                    @Nullable final String newUrl,
                                    @NonNull final String newTitle,
-                                   @Nullable final PlayQueue newQueue) {
+                                   @Nullable final PlayQueue newQueue,
+                                   final boolean playImmediately) {
+        playOnSelection = playImmediately;
         if (isPlayerAvailable() && newQueue != null && playQueue != null
                 && playQueue.getItem() != null && !playQueue.getItem().getUrl().equals(newUrl)) {
             // Preloading can be disabled since playback is surely being replaced.
@@ -1194,6 +1199,7 @@ public final class VideoDetailFragment
                         .putExtra(Player.PLAY_WHEN_READY, autoPlayEnabled)
                         .putExtra(Player.RESUME_PLAYBACK, true);
         ContextCompat.startForegroundService(activity, playerIntent);
+        playOnSelection = false;
     }
 
     /**
@@ -1238,6 +1244,7 @@ public final class VideoDetailFragment
 
     public void setAutoPlay(final boolean autoPlay) {
         this.autoPlayEnabled = autoPlay;
+        playOnSelection = false;
     }
 
     private void startOnExternalPlayer(@NonNull final Context context,
@@ -1265,14 +1272,13 @@ public final class VideoDetailFragment
                 .getBoolean(getString(R.string.use_external_video_player_key), false);
     }
 
-    // This method overrides default behaviour when setAutoPlay() is called.
-    // Don't auto play if the user selected an external player or disabled it in settings
+    // An explicit song selection is a play request; passive loads still obey autoplay settings.
     private boolean isAutoplayEnabled() {
         return autoPlayEnabled
                 && !isExternalPlayerEnabled()
-                && (!isPlayerAvailable() || player.videoPlayerSelected())
                 && bottomSheetState != BottomSheetBehavior.STATE_HIDDEN
-                && PlayerHelper.isAutoplayAllowedByUser(requireContext());
+                && (playOnSelection || ((!isPlayerAvailable() || player.videoPlayerSelected())
+                    && PlayerHelper.isAutoplayAllowedByUser(requireContext())));
     }
 
     private void tryAddVideoPlayerView() {
