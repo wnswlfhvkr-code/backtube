@@ -59,6 +59,7 @@ import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.subjects.SingleSubject;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -109,7 +110,7 @@ public class PersonalPlaybackTest {
                 .commit();
         final Intent startIntent = new Intent(context, PlayerService.class)
                 .putExtra(PlayerService.SHOULD_START_FOREGROUND_EXTRA, true);
-        context.startForegroundService(startIntent);
+        androidx.core.content.ContextCompat.startForegroundService(context, startIntent);
 
         final Intent bindIntent = new Intent(context, PlayerService.class)
                 .setAction(PlayerService.BIND_PLAYER_HOLDER_ACTION);
@@ -342,6 +343,112 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void networkPolicyReloadsCurrentAudioAndKeepsPausedPosition() throws Exception {
+        final String wifiId = InstrumentationRegistry.getArguments()
+                .getString("metered_wifi_id", "");
+        // Shell network policy mutation is opt-in, only on a dedicated test emulator.
+        org.junit.Assume.assumeTrue(wifiId.matches("[A-Za-z0-9_. -]+"));
+        final String policies = shellCommand("cmd netpolicy list wifi-networks");
+        final String original = policies.lines().filter(line -> line.startsWith(wifiId + ";"))
+                .findFirst().orElseThrow().substring(wifiId.length() + 1).trim();
+        final String restore = "none".equals(original) ? "undefined" : original;
+        final String command = "cmd netpolicy set metered-network \"" + wifiId + "\" ";
+        final String limitKey = context.getString(R.string.limit_mobile_data_usage_key);
+        final String originalLimit = player.getPrefs().getString(limitKey,
+                context.getString(R.string.limit_data_usage_none_key));
+        try {
+            shellCommand(command + "false");
+            assertTrue(waitFor(() -> !ListHelper.isMeteredNetwork(context), 5));
+            startOfflineRecommendationChain(false);
+            runOnMain(() -> {
+                final StreamInfo info = (StreamInfo) InfoCache.getInstance()
+                        .getFromKey(1, "offline-A", InfoCache.Type.STREAM);
+                info.setAudioStreams(List.of(
+                        new AudioStream.Builder().setId("high")
+                                .setContent(Uri.fromFile(localAudio).toString(), true)
+                                .setMediaFormat(MediaFormat.WAV).setAverageBitrate(320).build(),
+                        new AudioStream.Builder().setId("low")
+                                .setContent(Uri.fromFile(localAudio).toString(), true)
+                                .setMediaFormat(MediaFormat.WAV).setAverageBitrate(48).build()));
+                player.pause();
+                player.getExoPlayer().seekTo(1200);
+                player.getPrefs().edit()
+                        .putBoolean(context.getString(R.string.data_saver_key), true)
+                        .putString(context.getString(R.string.audio_quality_key), DataSaver.HIGH)
+                        .commit();
+            });
+            assertPausedAudioBitrate(320);
+            for (int transition = 0; transition < 3; transition++) {
+                shellCommand(command + "true");
+                assertPausedAudioBitrate(48);
+                assertTrue(androidx.core.content.ContextCompat.getSystemService(context,
+                        android.net.ConnectivityManager.class).isActiveNetworkMetered());
+                assertEquals(DataSaver.HIGH, player.getPrefs().getString(
+                        context.getString(R.string.audio_quality_key), ""));
+                final Object meteredManager = callOnMain(this::queueManager);
+                shellCommand(command + "true");
+                SystemClock.sleep(500);
+                assertTrue("duplicate network event reloaded the queue",
+                        meteredManager == callOnMain(this::queueManager));
+                shellCommand(command + "false");
+                assertTrue("unmetered network policy did not update", waitFor(
+                        () -> !ListHelper.isMeteredNetwork(context), 5));
+                assertPausedAudioBitrate(320);
+                assertFalse(androidx.core.content.ContextCompat.getSystemService(context,
+                        android.net.ConnectivityManager.class).isActiveNetworkMetered());
+            }
+            runOnMain(() -> {
+                // Exercise the API 23 broadcast fallback with a stale callback snapshot.
+                ListHelper.setPlayerNetworkMetered(true);
+                final Method receive = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                        "onBroadcastReceived", Intent.class);
+                receive.setAccessible(true);
+                receive.invoke(player, new Intent(android.net.ConnectivityManager
+                        .CONNECTIVITY_ACTION));
+                assertFalse(ListHelper.isMeteredNetwork(context));
+            });
+            runOnMain(() -> player.getPrefs().edit()
+                    .putBoolean(context.getString(R.string.data_saver_key), false)
+                    .putString(limitKey, "360p").commit());
+            assertPausedAudioBitrate(320);
+            final Object disabledManager = callOnMain(this::queueManager);
+            shellCommand(command + "true");
+            assertTrue(waitFor(() -> ListHelper.isMeteredNetwork(context), 5));
+            SystemClock.sleep(500);
+            assertTrue("disabled saver reloaded the queue",
+                    disabledManager == callOnMain(this::queueManager));
+            assertPausedAudioBitrate(320);
+        } finally {
+            shellCommand(command + restore);
+            runOnMain(() -> player.getPrefs().edit().putString(limitKey, originalLimit).commit());
+        }
+    }
+
+    private void assertPausedAudioBitrate(final int bitrate) throws Exception {
+        assertTrue("network reload lost quality, paused state, or position: " + bitrate,
+                waitFor(() -> callOnMain(() -> player.getSelectedAudioStream()
+                        .map(stream -> stream.getAverageBitrate() == bitrate).orElse(false)
+                        && player.getExoPlayer().getPlaybackState() == Player.STATE_READY
+                        && !player.getPlayWhenReady()
+                        && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150), 10));
+    }
+
+    private Object queueManager() throws Exception {
+        final Field field = org.schabi.newpipe.player.Player.class
+                .getDeclaredField("playQueueManager");
+        field.setAccessible(true);
+        return field.get(player);
+    }
+
+    private String shellCommand(final String command) throws IOException {
+        try (android.os.ParcelFileDescriptor descriptor = InstrumentationRegistry
+                .getInstrumentation().getUiAutomation().executeShellCommand(command);
+             FileInputStream input = new FileInputStream(descriptor.getFileDescriptor())) {
+            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    @Test
     public void naturalEndAppendsRecommendationWhenAutoQueueEnabled() throws Exception {
         runOnMain(() -> {
             final StreamInfo info = recommendationInfo("A", "B");
@@ -509,7 +616,8 @@ public class PersonalPlaybackTest {
         final org.schabi.newpipe.player.Player activePlayer = player;
         final org.schabi.newpipe.player.playqueue.PlayQueue activeQueue =
                 callOnMain(player::getPlayQueue);
-        context.startForegroundService(new Intent(context, PlayerService.class)
+        androidx.core.content.ContextCompat.startForegroundService(context,
+                new Intent(context, PlayerService.class)
                 .setAction(PlayerService.ACTION_RESTORE_LAST_SESSION)
                 .putExtra(PlayerService.SHOULD_START_FOREGROUND_EXTRA, true));
         assertTrue("restore action replaced an active queue", waitFor(

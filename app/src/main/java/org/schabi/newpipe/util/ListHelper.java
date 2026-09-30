@@ -34,6 +34,12 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public final class ListHelper {
+    // The single playback service publishes callback snapshots; other callers query on demand.
+    private static volatile Boolean playerNetworkMetered;
+
+    public static void setPlayerNetworkMetered(@Nullable final Boolean metered) {
+        playerNetworkMetered = metered;
+    }
     // Video format in order of quality. 0=lowest quality, n=highest quality
     private static final List<MediaFormat> VIDEO_FORMAT_QUALITY_RANKING =
             List.of(MediaFormat.v3GPP, MediaFormat.WEBM, MediaFormat.MPEG_4);
@@ -725,6 +731,10 @@ public final class ListHelper {
      * @return {@code true} if connected to a metered network
      */
     public static boolean isMeteredNetwork(@NonNull final Context context) {
+        final Boolean snapshot = playerNetworkMetered;
+        if (snapshot != null) {
+            return snapshot;
+        }
         final ConnectivityManager manager =
                 ContextCompat.getSystemService(context, ConnectivityManager.class);
         if (manager == null || manager.getActiveNetworkInfo() == null) {

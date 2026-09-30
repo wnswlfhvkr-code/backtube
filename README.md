@@ -9,14 +9,14 @@
 - **절약 / 균형 / 고음질**: 제공된 오디오 중 낮은 비트레이트 / 128 kbit/s에 가까운 값 / 높은 비트레이트 선택
 - 절약 모드의 요금제 네트워크: 낮은 오디오 품질과 작은 썸네일. 이미지 끄기 설정은 유지
 
-재생 화면의 ⋮ 메뉴에서 데이터 절약과 오디오 품질을 바꿉니다. 설정 → 영상 및 오디오에서도 변경할 수 있습니다. 품질 변경은 현재 위치와 일시정지 상태를 유지합니다. 네트워크 변경에 따른 절약은 다음 소스·이미지 선택 시 적용됩니다. 영상 보기를 직접 선택하면 영상이 재생됩니다.
+재생 화면의 ⋮ 메뉴에서 데이터 절약과 오디오 품질을 바꿉니다. 설정 → 영상 및 오디오에서도 변경할 수 있습니다. 품질 변경은 현재 위치와 일시정지 상태를 유지합니다. 네트워크가 요금제 상태로 바뀌면 현재 오디오를 즉시 낮은 품질로 다시 선택하며, 해제되면 선호 품질로 복원합니다. 썸네일은 다음 이미지 요청부터 적용됩니다. 영상 보기를 직접 선택하면 영상이 재생됩니다.
 
 ## 빌드
 
 JDK 21, Android SDK가 필요합니다. `ANDROID_HOME`에 SDK 경로를 지정한 뒤 저장소 루트에서 실행합니다.
 
 ```powershell
-.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.6' '-DversionCodeOverride=1020' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
+.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.7' '-DversionCodeOverride=1021' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
 ```
 
 결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 배포에는 개인 서명키로 서명해야 합니다. 기존 개인용 설치와 같은 `org.schabi.newpipe.personal` 패키지를 유지했으며 같은 키로 서명하면 앱 삭제 없이 업데이트할 수 있습니다. 개인 키와 암호는 저장소에 포함하지 않습니다.

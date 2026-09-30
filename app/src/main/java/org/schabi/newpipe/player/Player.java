@@ -55,6 +55,13 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.widget.Toast;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -273,6 +280,58 @@ public final class Player implements PlaybackListener, Listener {
     @NonNull
     private final SharedPreferences prefs;
     private final SharedPreferences.OnSharedPreferenceChangeListener dataSaverListener;
+    private final ConnectivityManager connectivityManager;
+    private final Handler networkHandler = new Handler(Looper.getMainLooper());
+    private String observedAudioQuality;
+    private boolean destroyed;
+    private Network audioQualityNetwork;
+    private final ConnectivityManager.NetworkCallback networkCallback =
+            new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(@NonNull final Network network) {
+                    networkHandler.post(() -> {
+                        if (destroyed) {
+                            return;
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                                || network.equals(connectivityManager.getActiveNetwork())) {
+                            audioQualityNetwork = network;
+                        }
+                        // Before API 26 initial capabilities are not guaranteed after availability.
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                            ListHelper.setPlayerNetworkMetered(null);
+                            refreshNetworkAudioQuality();
+                        }
+                    });
+                }
+
+                @Override
+                public void onCapabilitiesChanged(@NonNull final Network network,
+                                                  @NonNull final NetworkCapabilities capabilities) {
+                    final boolean metered = !capabilities.hasCapability(
+                            NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+                    networkHandler.post(() -> {
+                        if (destroyed || !network.equals(Build.VERSION.SDK_INT
+                                >= Build.VERSION_CODES.N ? audioQualityNetwork
+                                : connectivityManager.getActiveNetwork())) {
+                            return;
+                        }
+                        audioQualityNetwork = network;
+                        ListHelper.setPlayerNetworkMetered(metered);
+                        refreshNetworkAudioQuality();
+                    });
+                }
+
+                @Override
+                public void onLost(@NonNull final Network network) {
+                    networkHandler.post(() -> {
+                        if (!destroyed && network.equals(audioQualityNetwork)) {
+                            audioQualityNetwork = null;
+                            ListHelper.setPlayerNetworkMetered(null);
+                        }
+                    });
+                }
+            };
     @NonNull
     private final HistoryRecordManager recordManager;
     private final RecommendationExclusions recommendationExclusions;
@@ -319,6 +378,8 @@ public final class Player implements PlaybackListener, Listener {
         this.service = service;
         context = service;
         prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        connectivityManager = ContextCompat.getSystemService(context, ConnectivityManager.class);
+        observedAudioQuality = DataSaver.getAudioQuality(context);
         recordManager = new HistoryRecordManager(context);
         recommendationExclusions = new RecommendationExclusions(prefs);
         lastSessionStore = new LastPlaybackSessionStore(prefs);
@@ -344,9 +405,12 @@ public final class Player implements PlaybackListener, Listener {
         videoResolver = new VideoPlaybackResolver(context, dataSource, getQualityResolver());
         audioResolver = new AudioPlaybackResolver(context, dataSource);
         dataSaverListener = (preferences, key) -> {
-            if ((context.getString(R.string.data_saver_key).equals(key)
-                    || context.getString(R.string.audio_quality_key).equals(key))
-                    && playQueue != null && !exoPlayerIsNull()) {
+            if (!context.getString(R.string.data_saver_key).equals(key)
+                    && !context.getString(R.string.audio_quality_key).equals(key)) {
+                return;
+            }
+            observedAudioQuality = DataSaver.getAudioQuality(context);
+            if (playQueue != null && !exoPlayerIsNull()) {
                 saveStreamProgressState();
                 setRecovery();
                 if (context.getString(R.string.data_saver_key).equals(key)
@@ -372,6 +436,34 @@ public final class Player implements PlaybackListener, Listener {
                 new MediaSessionPlayerUi(this, mediaSession, sessionConnector),
                 new NotificationPlayerUi(this)
         );
+        if (connectivityManager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager.registerDefaultNetworkCallback(networkCallback);
+            } else {
+                connectivityManager.registerNetworkCallback(new NetworkRequest.Builder()
+                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(),
+                        networkCallback);
+            }
+        }
+    }
+
+    private void refreshNetworkAudioQuality() {
+        if (destroyed || !DataSaver.isEnabled(context)) {
+            return;
+        }
+        final String quality = DataSaver.getAudioQuality(context);
+        if (DEBUG) {
+            Log.d(TAG, "Network audio quality: " + observedAudioQuality + " -> " + quality);
+        }
+        if (quality.equals(observedAudioQuality)) {
+            return;
+        }
+        observedAudioQuality = quality;
+        if (playQueue != null && !exoPlayerIsNull()) {
+            saveStreamProgressState();
+            setRecovery();
+            reloadPlayQueueManager();
+        }
     }
 
     private VideoPlaybackResolver.QualityResolver getQualityResolver() {
@@ -760,6 +852,12 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void destroy() {
+        destroyed = true;
+        if (connectivityManager != null) {
+            connectivityManager.unregisterNetworkCallback(networkCallback);
+        }
+        networkHandler.removeCallbacksAndMessages(null);
+        ListHelper.setPlayerNetworkMetered(null);
         prefs.unregisterOnSharedPreferenceChangeListener(dataSaverListener);
         sleepTimer.cancel();
         if (DEBUG) {
@@ -877,6 +975,9 @@ public final class Player implements PlaybackListener, Listener {
         intentFilter.addAction(Intent.ACTION_SCREEN_ON);
         intentFilter.addAction(Intent.ACTION_SCREEN_OFF);
         intentFilter.addAction(Intent.ACTION_HEADSET_PLUG);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        }
     }
 
     private void onBroadcastReceived(final Intent intent) {
@@ -889,6 +990,20 @@ public final class Player implements PlaybackListener, Listener {
         }
 
         switch (intent.getAction()) {
+            case ConnectivityManager.CONNECTIVITY_ACTION:
+                // API 23 generic callbacks do not report switches between existing networks.
+                ListHelper.setPlayerNetworkMetered(null);
+                if (connectivityManager != null) {
+                    audioQualityNetwork = connectivityManager.getActiveNetwork();
+                    final NetworkCapabilities capabilities = audioQualityNetwork == null ? null
+                            : connectivityManager.getNetworkCapabilities(audioQualityNetwork);
+                    if (capabilities != null) {
+                        ListHelper.setPlayerNetworkMetered(!capabilities.hasCapability(
+                                NetworkCapabilities.NET_CAPABILITY_NOT_METERED));
+                    }
+                }
+                refreshNetworkAudioQuality();
+                break;
             case AudioManager.ACTION_AUDIO_BECOMING_NOISY:
                 pause();
                 break;
