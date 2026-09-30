@@ -36,3 +36,14 @@
 - 인증서 SHA256: `78fa3e7d3dd06d25f32f42f0409c5fc9738448060f2cf4be7a6693ae37a5e5e4`
 
 증거: 워크스페이스의 `build-v8-delivery.log`, `verification/v8-source-build-inputs.json`, `v8-runtime-verified.txt`, `v8-delivery-focused.txt`, `v8-apk-signature.txt`, `v8-upgrade-install.txt`, `v8-release-launch.txt` 및 대응 logcat·화면 캡처.
+
+## 곡 종료 후 자동 넘김 재확인
+
+2026-09-30 사용자 추가 요청으로 관련 네이티브 테스트 6개를 새로 실행해 `OK (6 tests)` 확인했습니다. 대기열 및 추천 재생 검증을 보강했으며 앱 실행 코드는 수정하지 않았습니다. 전달한 v8 APK의 해시도 그대로입니다.
+
+- 다음 버튼·끝부분 탐색 없이 4초 WAV를 끝까지 재생했습니다. 자동 대기열 OFF에서도 이미 대기열에 있는 A→B는 바로 재생되며, 마지막 B에서는 멈춥니다.
+- 자동 대기열 ON에서는 A→추천 B→추천 C가 각각 끝날 때 이어 재생됩니다. 추천이 없는 C가 끝나면 멈추며 이전 곡으로 돌아가지 않습니다.
+- 늦게 도착하는 추천 미리보기가 자동 넘김을 막지 않는지, 중복 다음곡 요청이 한 번만 넘어가는지, ‘현재 곡 끝에서 정지’ 타이머가 자동 넘김보다 우선하는지도 통과했습니다.
+- 계측 테스트 APK 빌드·Checkstyle 보고 0. 증거는 `verification/v8-auto-next-build.txt`, `v8-auto-next-runtime.txt`, `v8-auto-next-logcat.txt`입니다. 생성 WAV 및 합성 추천 메타데이터 기준이며 실제 YouTube 추천 추출·휴대폰 재생은 미검증입니다.
+
+마지막 곡 뒤 추천곡까지 계속 들으려면 상세 화면의 **자동 대기열에 추가**를 켜고 한 곡 반복을 해제해야 합니다. 자동 대기열 기본값은 ON이며 업데이트 설치는 기존 설정을 유지합니다.

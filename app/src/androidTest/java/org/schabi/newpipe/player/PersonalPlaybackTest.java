@@ -752,13 +752,42 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void naturalEndPlaysQueuedItemsAndStopsAtTailWhenAutoQueueDisabled()
+            throws Exception {
+        startOfflineRecommendationChain(false);
+        runOnMain(() -> {
+            final StreamInfo next = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "offline-B", InfoCache.Type.STREAM);
+            player.getPlayQueue().append(new SinglePlayQueue(next).getStreams());
+        });
+        assertTrue("natural end did not play the queued B", waitFor(
+                () -> callOnMain(() -> player.isPlaying()
+                        && "offline-B".equals(player.getVideoUrl())), 10));
+        assertTrue("disabled auto queue did not stop at the tail", waitFor(
+                () -> callOnMain(() -> player.getExoPlayer().getPlaybackState()
+                        == Player.STATE_ENDED), 10));
+        assertEquals("offline-B", callOnMain(player::getVideoUrl));
+        assertEquals(1, (int) callOnMain(() -> player.getPlayQueue().getIndex()));
+        assertEquals(2, (int) callOnMain(() -> player.getPlayQueue().size()));
+        assertFalse(callOnMain(player::isPlaying));
+    }
+
+    @Test
     public void naturalEndActuallyPlaysRecommendedAudioThroughTheMediaSourceManager()
             throws Exception {
         startOfflineRecommendationChain(true);
-        runOnMain(() -> player.getExoPlayer().seekTo(3800));
         assertTrue("natural end did not play recommended B", waitFor(
                 () -> callOnMain(() -> player.isPlaying()
                         && "offline-B".equals(player.getVideoUrl())), 10));
+        assertTrue("the second natural end did not play recommended C", waitFor(
+                () -> callOnMain(() -> player.isPlaying()
+                        && "offline-C".equals(player.getVideoUrl())), 10));
+        assertTrue("a stream without recommendations did not finish", waitFor(
+                () -> callOnMain(() -> player.getExoPlayer().getPlaybackState()
+                        == Player.STATE_ENDED), 10));
+        assertEquals("offline-C", callOnMain(player::getVideoUrl));
+        assertEquals(2, (int) callOnMain(() -> player.getPlayQueue().getIndex()));
+        assertFalse(callOnMain(player::isPlaying));
     }
 
     private void startOfflineRecommendationChain(final boolean automatic) throws Exception {
