@@ -98,8 +98,10 @@ import org.schabi.newpipe.error.ErrorInfo;
 import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.extractor.Image;
+import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
+import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
@@ -143,9 +145,11 @@ import org.schabi.newpipe.util.StreamTypeUtil;
 import org.schabi.newpipe.util.image.CoilHelper;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import coil3.target.Target;
@@ -2319,8 +2323,12 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private boolean recommendationAllowed(final PlayQueueItem item) {
-        return !recommendationExclusions.excludes(item.getServiceId(), item.getUrl(),
-                item.getUploaderUrl());
+        return recommendationAllowed(item.getServiceId(), item.getUrl(), item.getUploaderUrl());
+    }
+
+    private boolean recommendationAllowed(final int serviceId, final String url,
+                                           @Nullable final String uploaderUrl) {
+        return !recommendationExclusions.excludes(serviceId, url, uploaderUrl);
     }
 
     public boolean excludeNextRecommendation(final boolean channel) {
@@ -2341,6 +2349,7 @@ public final class Player implements PlaybackListener, Listener {
         }
         recommendationStatus = RecommendationStatus.IDLE;
         loadNextRecommendation();
+        triggerProgressUpdate();
         return true;
     }
 
@@ -2397,6 +2406,44 @@ public final class Player implements PlaybackListener, Listener {
         final PlayQueueItem next = playQueue == null ? null
                 : playQueue.getItem(playQueue.getIndex() + 1);
         return next == null ? recommendationPreview : next;
+    }
+
+    public List<InfoItem> getRelatedItemsForPlayback(@NonNull final StreamInfo info) {
+        syncRecommendationContext();
+        if (playQueue == null || playQueue.getItem() == null
+                || playQueue.getItem().getServiceId() != info.getServiceId()
+                || !playQueue.getItem().getUrl().equals(info.getUrl())) {
+            return new ArrayList<>(info.getRelatedItems());
+        }
+        final Set<String> queued = new HashSet<>();
+        for (final PlayQueueItem item : playQueue.getStreams()) {
+            queued.add(item.getServiceId() + ":" + item.getUrl());
+        }
+        for (final PlayQueueItem item : skippedRecommendations) {
+            queued.add(item.getServiceId() + ":" + item.getUrl());
+        }
+        final List<InfoItem> result = new ArrayList<>();
+        final Set<String> added = new HashSet<>();
+        final PlayQueueItem next = getNextRecommendation();
+        if (next != null && (!next.isAutoQueued() || recommendationAllowed(next))) {
+            final StreamInfoItem first = new StreamInfoItem(next.getServiceId(), next.getUrl(),
+                    next.getTitle(), next.getStreamType());
+            first.setDuration(next.getDuration());
+            first.setUploaderName(next.getUploader());
+            first.setUploaderUrl(next.getUploaderUrl());
+            first.setThumbnails(next.getThumbnails());
+            result.add(first);
+            added.add(next.getServiceId() + ":" + next.getUrl());
+        }
+        for (final InfoItem item : info.getRelatedItems()) {
+            final String key = item.getServiceId() + ":" + item.getUrl();
+            if (item instanceof StreamInfoItem && !item.getUrl().isEmpty()
+                    && !queued.contains(key) && recommendationAllowed(item.getServiceId(),
+                    item.getUrl(), ((StreamInfoItem) item).getUploaderUrl()) && added.add(key)) {
+                result.add(item);
+            }
+        }
+        return result;
     }
 
     public RecommendationStatus getRecommendationStatus() {
@@ -2510,11 +2557,12 @@ public final class Player implements PlaybackListener, Listener {
                         final PlayQueue next = advance && recommendationPreview != null
                                 ? new SinglePlayQueue(recommendationPreview)
                                 : PlayerHelper.autoQueueOf(current, excluded,
-                                        candidate -> !recommendationExclusions.excludes(
+                                        candidate -> recommendationAllowed(
                                                 candidate.getServiceId(), candidate.getUrl(),
                                                 candidate.getUploaderUrl()));
                         if (next == null) {
                             recommendationStatus = RecommendationStatus.EMPTY;
+                            triggerProgressUpdate();
                             if (explicit) {
                                 Toast.makeText(context, R.string.personal_no_recommendation,
                                         Toast.LENGTH_SHORT).show();
@@ -2570,7 +2618,7 @@ public final class Player implements PlaybackListener, Listener {
         final PlayQueue autoQueue = recommendationPreview != null
                 ? new SinglePlayQueue(recommendationPreview)
                 : PlayerHelper.autoQueueOf(info, excluded,
-                        candidate -> !recommendationExclusions.excludes(candidate.getServiceId(),
+                        candidate -> recommendationAllowed(candidate.getServiceId(),
                                 candidate.getUrl(), candidate.getUploaderUrl()));
         if (autoQueue != null) {
             playQueue.append(autoQueue.getStreams());

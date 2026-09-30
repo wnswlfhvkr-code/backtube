@@ -73,6 +73,7 @@ import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.ReCaptchaActivity;
 import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.extractor.Image;
+import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.comments.CommentsInfoItem;
 import org.schabi.newpipe.extractor.exceptions.ContentNotSupportedException;
@@ -408,9 +409,8 @@ public final class VideoDetailFragment
         // if video player is selected. Otherwise unbind
         if (activity.isFinishing() && isPlayerAvailable() && player.videoPlayerSelected()) {
             playerHolder.stopService();
-        } else {
-            playerHolder.setListener(null);
         }
+        playerHolder.setListener(null);
 
         PreferenceManager.getDefaultSharedPreferences(activity)
                 .unregisterOnSharedPreferenceChangeListener(preferenceChangeListener);
@@ -801,7 +801,7 @@ public final class VideoDetailFragment
                                                         final boolean scrollToTop,
                                                         final long delay) {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (activity == null) {
+            if (activity == null || binding == null) {
                 return;
             }
             // Data can already be drawn, don't spend time twice
@@ -958,11 +958,15 @@ public final class VideoDetailFragment
 
     private void updateTabs(@NonNull final StreamInfo info) {
         if (showRelatedItems) {
+            final List<InfoItem> items = isPlayerAvailable()
+                    ? player.getRelatedItemsForPlayback(info) : info.getRelatedItems();
             if (binding.relatedItemsLayout == null) { // phone
-                pageAdapter.updateItem(RELATED_TAB_TAG, RelatedItemsFragment.getInstance(info));
+                pageAdapter.updateItem(RELATED_TAB_TAG,
+                        RelatedItemsFragment.getInstance(info, items));
             } else { // tablet + TV
                 getChildFragmentManager().beginTransaction()
-                        .replace(R.id.relatedItemsLayout, RelatedItemsFragment.getInstance(info))
+                        .replace(R.id.relatedItemsLayout, RelatedItemsFragment.getInstance(info,
+                                items))
                         .commitAllowingStateLoss();
                 binding.relatedItemsLayout.setVisibility(isFullscreen() ? View.GONE : View.VISIBLE);
             }
@@ -1847,6 +1851,9 @@ public final class VideoDetailFragment
     public void onProgressUpdate(final int currentProgress,
                                  final int duration,
                                  final int bufferPercent) {
+        if (currentInfo != null) {
+            refreshRelatedItems(currentInfo);
+        }
         // Progress updates every second even if media is paused. It's useless until playing
         if (!player.isPlaying() || playQueue == null) {
             return;
@@ -1876,6 +1883,8 @@ public final class VideoDetailFragment
 
         updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
         if (currentInfo != null && info.getUrl().equals(currentInfo.getUrl())) {
+            currentInfo = info;
+            refreshRelatedItems(info);
             return;
         }
 
@@ -1886,6 +1895,18 @@ public final class VideoDetailFragment
         // next/previous video you see visual glitches
         // (when non-vertical video goes after vertical video)
         prepareAndHandleInfoIfNeededAfterDelay(info, true, 200);
+    }
+
+    private void refreshRelatedItems(final StreamInfo info) {
+        if (!showRelatedItems || !isPlayerAndPlayerServiceAvailable()) {
+            return;
+        }
+        final List<InfoItem> items = player.getRelatedItemsForPlayback(info);
+        for (final Fragment fragment : getChildFragmentManager().getFragments()) {
+            if (fragment instanceof RelatedItemsFragment) {
+                ((RelatedItemsFragment) fragment).updateRelatedItems(items);
+            }
+        }
     }
 
     @Override

@@ -26,6 +26,8 @@ import org.schabi.newpipe.info_list.dialog.InfoItemDialog;
 import org.schabi.newpipe.ktx.ViewUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 import io.reactivex.rxjava3.core.Single;
@@ -46,6 +48,37 @@ public class RelatedItemsFragment extends BaseListInfoFragment<InfoItem, Related
         final RelatedItemsFragment instance = new RelatedItemsFragment();
         instance.setInitialData(info);
         return instance;
+    }
+
+    public static RelatedItemsFragment getInstance(final StreamInfo info,
+                                                   final List<InfoItem> items) {
+        final RelatedItemsFragment instance = getInstance(info);
+        instance.relatedItemsInfo.setRelatedItems(new ArrayList<>(items));
+        return instance;
+    }
+
+    public void updateRelatedItems(final List<InfoItem> items) {
+        if (relatedItemsInfo == null) {
+            return;
+        }
+        relatedItemsInfo.setRelatedItems(new ArrayList<>(items));
+        if (getView() == null || infoListAdapter == null) {
+            return;
+        }
+        if (infoListAdapter.getItemsList().stream()
+                .map(item -> item.getServiceId() + ":" + item.getUrl()).toList().equals(
+                items.stream().map(item -> item.getServiceId() + ":" + item.getUrl()).toList())) {
+            return;
+        }
+        infoListAdapter.clearStreamItemList();
+        infoListAdapter.addInfoItemList(items);
+        if (items.isEmpty()) {
+            if (currentInfo != null) {
+                showEmptyState();
+            }
+        } else {
+            hideLoading();
+        }
     }
 
     public RelatedItemsFragment() {
@@ -113,6 +146,7 @@ public class RelatedItemsFragment extends BaseListInfoFragment<InfoItem, Related
 
     @Override
     public void handleResult(@NonNull final RelatedItemsInfo result) {
+        infoListAdapter.clearStreamItemList();
         super.handleResult(result);
 
         if (headerBinding != null) {

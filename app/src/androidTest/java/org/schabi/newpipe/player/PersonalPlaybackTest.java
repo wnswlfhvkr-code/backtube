@@ -2,6 +2,7 @@ package org.schabi.newpipe.player;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.ComponentName;
@@ -36,6 +37,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.MainActivity;
+import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
+import org.schabi.newpipe.fragments.list.BaseListFragment;
+import org.schabi.newpipe.fragments.list.videos.RelatedItemsFragment;
+import org.schabi.newpipe.info_list.InfoListAdapter;
 import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.Image;
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -752,6 +757,129 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void relatedListStartsWithActualNextAndHidesUsedSongs() throws Exception {
+        final String commentsKey = context.getString(R.string.show_comments_key);
+        final boolean showComments = player.getPrefs().getBoolean(commentsKey, true);
+        try {
+            startOfflineRecommendationChain(false);
+            runOnMain(() -> {
+                player.pause();
+                final StreamInfo info = (StreamInfo) InfoCache.getInstance()
+                        .getFromKey(1, "offline-A", InfoCache.Type.STREAM);
+                info.setRelatedItems(List.of(
+                        new StreamInfoItem(1, "offline-A", "offline-A", StreamType.AUDIO_STREAM),
+                        new StreamInfoItem(1, "offline-B", "offline-B", StreamType.AUDIO_STREAM),
+                        new StreamInfoItem(1, "offline-C", "offline-C", StreamType.AUDIO_STREAM)));
+                player.setAutoQueueEnabled(true);
+                player.getPrefs().edit().putBoolean(commentsKey, false).commit();
+            });
+            final MainActivity launchedActivity = (MainActivity) InstrumentationRegistry
+                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            runOnMain(() -> launchedActivity.setRequestedOrientation(
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+            assertTrue(waitFor(() -> callOnMain(() -> activeMainActivity() != null
+                    && activeMainActivity().getResources().getConfiguration().orientation
+                    == Configuration.ORIENTATION_PORTRAIT), 5));
+            final MainActivity activity = callOnMain(this::activeMainActivity);
+            runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
+                    activity.getSupportFragmentManager(), 1, "offline-A", "offline-A",
+                    player.getPlayQueue(), true));
+            assertTrue("related list did not load", waitFor(
+                    () -> callOnMain(() -> !relatedListUrls(activity).isEmpty()), 5));
+            assertEquals("the first visible song differs from actual next",
+                    callOnMain(() -> player.getNextRecommendation().getUrl()),
+                    callOnMain(() -> relatedListUrls(activity).get(0)));
+            assertFalse(callOnMain(() -> relatedListUrls(activity).contains("offline-A")));
+            captureScreen("backtube-next-list-aligned.png");
+            runOnMain(player::replaceNextRecommendation);
+            assertTrue("replacement did not reach the first visible position", waitFor(
+                    () -> callOnMain(() -> !relatedListUrls(activity).isEmpty()
+                            && "offline-C".equals(relatedListUrls(activity).get(0))), 5));
+            assertEquals("offline-C", callOnMain(() -> player.getNextRecommendation().getUrl()));
+            runOnMain(() -> activity.setRequestedOrientation(
+                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+            final boolean rotationAligned = waitFor(
+                    () -> callOnMain(() -> activeMainActivity() != null
+                            && activeMainActivity().getResources().getConfiguration().orientation
+                            == Configuration.ORIENTATION_LANDSCAPE
+                            && !relatedListUrls(activeMainActivity()).isEmpty()
+                            && "offline-C".equals(relatedListUrls(activeMainActivity()).get(0))),
+                    5);
+            assertTrue("rotation state: " + callOnMain(() -> activeMainActivity() == null
+                    ? "no resumed activity" : activeMainActivity().getResources()
+                    .getConfiguration().orientation + " / " + relatedListUrls(activeMainActivity())
+                    + " / next=" + player.getNextRecommendation()), rotationAligned);
+            runOnMain(() -> ((com.google.android.material.appbar.AppBarLayout) activeMainActivity()
+                    .findViewById(R.id.app_bar_layout)).setExpanded(false, false));
+            captureScreen("backtube-next-list-landscape.png");
+            runOnMain(() -> assertTrue(player.excludeNextRecommendation(false)));
+            assertTrue("explicitly excluded song remained in the list", waitFor(
+                    () -> callOnMain(() -> relatedListUrls(activeMainActivity()).isEmpty()), 5));
+            assertNull(callOnMain(player::getNextRecommendation));
+        } finally {
+            finishQueueActivity();
+            runOnMain(() -> player.getPrefs().edit()
+                    .putBoolean(commentsKey, showComments).commit());
+        }
+    }
+
+    @Test
+    public void removedSongCanReturnUnlessExplicitlyExcluded() throws Exception {
+        startOfflineRecommendationChain(false);
+        runOnMain(() -> {
+            final StreamInfo info = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "offline-B", InfoCache.Type.STREAM);
+            info.setRelatedItems(List.of(
+                    new StreamInfoItem(1, "offline-A", "offline-A", StreamType.AUDIO_STREAM),
+                    new StreamInfoItem(1, "offline-C", "offline-C", StreamType.AUDIO_STREAM)));
+            player.getPlayQueue().append(new SinglePlayQueue(info).getStreams());
+            player.playNext();
+        });
+        assertTrue("B did not start", waitFor(() -> callOnMain(() -> player.isPlaying()
+                && "offline-B".equals(player.getVideoUrl())), 5));
+        runOnMain(() -> {
+            player.pause();
+            player.getPlayQueue().remove(0);
+            player.setAutoQueueEnabled(true);
+            assertEquals("deletion permanently blocked a song",
+                    "offline-A", player.getNextRecommendation().getUrl());
+            assertTrue(player.excludeNextRecommendation(false));
+        });
+        awaitRecommendation("offline-C");
+        assertTrue(new RecommendationExclusions(player.getPrefs()).excludes(1, "offline-A", null));
+    }
+
+    private MainActivity activeMainActivity() {
+        for (final android.app.Activity activity : ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)) {
+            if (activity instanceof MainActivity) {
+                return (MainActivity) activity;
+            }
+        }
+        return null;
+    }
+
+    private List<String> relatedListUrls(final MainActivity activity) throws Exception {
+        final VideoDetailFragment detail = (VideoDetailFragment) activity
+                .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder);
+        if (detail == null) {
+            return List.of();
+        }
+        for (final androidx.fragment.app.Fragment fragment
+                : detail.getChildFragmentManager().getFragments()) {
+            if (fragment instanceof RelatedItemsFragment) {
+                final Field field = BaseListFragment.class.getDeclaredField("infoListAdapter");
+                field.setAccessible(true);
+                final InfoListAdapter adapter = (InfoListAdapter) field.get(fragment);
+                return adapter == null ? List.of() : adapter.getItemsList().stream()
+                        .map(org.schabi.newpipe.extractor.InfoItem::getUrl).toList();
+            }
+        }
+        return List.of();
+    }
+
+    @Test
     public void naturalEndPlaysQueuedItemsAndStopsAtTailWhenAutoQueueDisabled()
             throws Exception {
         startOfflineRecommendationChain(false);
@@ -776,13 +904,23 @@ public class PersonalPlaybackTest {
     public void naturalEndActuallyPlaysRecommendedAudioThroughTheMediaSourceManager()
             throws Exception {
         startOfflineRecommendationChain(true);
+        runOnMain(() -> {
+            for (final String id : List.of("offline-B", "offline-C")) {
+                final StreamInfo info = (StreamInfo) InfoCache.getInstance()
+                        .getFromKey(1, id, InfoCache.Type.STREAM);
+                info.setRelatedItems(List.of(
+                        new StreamInfoItem(1, "offline-A", "offline-A", StreamType.AUDIO_STREAM),
+                        new StreamInfoItem(1, "offline-B", "offline-B", StreamType.AUDIO_STREAM),
+                        new StreamInfoItem(1, "offline-C", "offline-C", StreamType.AUDIO_STREAM)));
+            }
+        });
         assertTrue("natural end did not play recommended B", waitFor(
                 () -> callOnMain(() -> player.isPlaying()
                         && "offline-B".equals(player.getVideoUrl())), 10));
         assertTrue("the second natural end did not play recommended C", waitFor(
                 () -> callOnMain(() -> player.isPlaying()
                         && "offline-C".equals(player.getVideoUrl())), 10));
-        assertTrue("a stream without recommendations did not finish", waitFor(
+        assertTrue("exhausted recommendations looped instead of finishing", waitFor(
                 () -> callOnMain(() -> player.getExoPlayer().getPlaybackState()
                         == Player.STATE_ENDED), 10));
         assertEquals("offline-C", callOnMain(player::getVideoUrl));

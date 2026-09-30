@@ -1,18 +1,21 @@
 # backtube
 
-**[⬇️ backtube v8 APK 다운로드](https://github.com/wnswlfhvkr-code/backtube/releases/download/v0.29.1-backtube.8/backtube-v8.apk)**
+**[⬇️ backtube v9 APK 다운로드](https://github.com/wnswlfhvkr-code/backtube/releases/download/v0.29.1-backtube.9/backtube-v9.apk)**
 
-버전 `0.29.1-backtube.8` (1022). 기존 개인용 backtube 앱을 삭제하지 않고 업데이트할 수 있습니다. [릴리스 페이지](https://github.com/wnswlfhvkr-code/backtube/releases/tag/v0.29.1-backtube.8)
+버전 `0.29.1-backtube.9` (1023). 기존 개인용 backtube 앱을 삭제하지 않고 업데이트할 수 있습니다. [릴리스 페이지](https://github.com/wnswlfhvkr-code/backtube/releases/tag/v0.29.1-backtube.9)
 
 유튜브 공유 링크를 받아 백그라운드에서 오디오를 듣는 개인용 Android 앱입니다. NewPipe 0.29.1을 기반으로 하며 기존 추출기와 재생 엔진을 사용합니다.
 
 - 검색·목록에서 곡을 선택하면 추가 재생 버튼 없이 바로 재생
 - 화면을 꺼도 백그라운드 오디오 재생
 - 추천곡 연속 재생, 추천 영상·채널 제외, 마지막 대기열과 위치 복원
+- ‘다음’ 목록 첫 곡과 실제 다음곡 일치. 대기열에 남아 있는 곡은 재추천하지 않으며, 후보가 소진되면 정지
 - 이전 곡·처음부터 분리, 반복, 자동 이어듣기, 취침 타이머
 - **데이터 절약 · 오디오 전용**: 영상 대체 소스와 일반 라이브 영상 매니페스트를 사용하지 않음. 오디오 전용 소스가 없으면 안내 후 건너뜀
 - **절약 / 균형 / 고음질**: 제공된 오디오 중 낮은 비트레이트 / 128 kbit/s에 가까운 값 / 높은 비트레이트 선택
 - 절약 모드의 요금제 네트워크: 낮은 오디오 품질과 작은 썸네일. 이미지 끄기 설정은 유지
+
+대기열에서 삭제한 곡은 다시 추천될 수 있습니다. 계속 숨기려면 추천 영상·채널 제외를 사용합니다.
 
 재생 화면의 ⋮ 메뉴에서 데이터 절약과 오디오 품질을 바꿉니다. 설정 → 영상 및 오디오에서도 변경할 수 있습니다. 품질 변경은 현재 위치와 일시정지 상태를 유지합니다. 네트워크가 요금제 상태로 바뀌면 현재 오디오를 즉시 낮은 품질로 다시 선택하며, 해제되면 선호 품질로 복원합니다. 썸네일은 다음 이미지 요청부터 적용됩니다. 영상 보기를 직접 선택하면 영상이 재생됩니다.
 
@@ -21,7 +24,7 @@
 JDK 21, Android SDK가 필요합니다. `ANDROID_HOME`에 SDK 경로를 지정한 뒤 저장소 루트에서 실행합니다.
 
 ```powershell
-.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.8' '-DversionCodeOverride=1022' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
+.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.9' '-DversionCodeOverride=1023' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
 ```
 
 결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 배포에는 개인 서명키로 서명해야 합니다. 기존 개인용 설치와 같은 `org.schabi.newpipe.personal` 패키지를 유지했으며 같은 키로 서명하면 앱 삭제 없이 업데이트할 수 있습니다. 개인 키와 암호는 저장소에 포함하지 않습니다.
