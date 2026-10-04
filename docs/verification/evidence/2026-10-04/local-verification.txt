@@ -1,0 +1,45 @@
+Source SHA: 84b4e0e85f02f29a8523486345db5fc5df9e395d
+Execution: 2026-10-04 22:25-22:26 UTC
+Command exit: 1; no requested task executed (configuration failed).
+Command: ./gradlew :app:assembleContinuous :app:lintContinuous :app:testDebugUnitTest :app:runCheckstyle :app:runKtlint -DskipFormatKtlint -Pandroid.builder.sdkDownload=false --offline --no-daemon --console=plain
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+Calculating task graph as no cached configuration is available for tasks: :app:assembleContinuous :app:lintContinuous :app:testDebugUnitTest :app:runCheckstyle :app:runKtlint
+Type-safe project accessors is an incubating feature.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+A problem occurred configuring project ':buildSrc'.
+> Could not resolve all artifacts for configuration 'classpath'.
+   > Could not resolve org.jetbrains.kotlin:kotlin-stdlib:2.3.21.
+     Required by:
+         buildscript of project ':buildSrc'
+         buildscript of project ':buildSrc' > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.6.4 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:6.6.4
+      > No cached version of org.jetbrains.kotlin:kotlin-stdlib:2.3.21 available for offline mode.
+   > Could not resolve org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21.
+     Required by:
+         buildscript of project ':buildSrc' > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.6.4 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:6.6.4
+      > No cached version of org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21 available for offline mode.
+   > Could not resolve org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.3.21.
+     Required by:
+         buildscript of project ':buildSrc' > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.6.4 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:6.6.4
+      > No cached version of org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.3.21 available for offline mode.
+   > Could not resolve org.jetbrains.kotlin:kotlin-sam-with-receiver:2.3.21.
+     Required by:
+         buildscript of project ':buildSrc' > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.6.4 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:6.6.4
+      > No cached version of org.jetbrains.kotlin:kotlin-sam-with-receiver:2.3.21 available for offline mode.
+   > Could not resolve org.jetbrains.kotlin:kotlin-assignment:2.3.21.
+     Required by:
+         buildscript of project ':buildSrc' > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.6.4 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:6.6.4
+      > No cached version of org.jetbrains.kotlin:kotlin-assignment:2.3.21 available for offline mode.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4s
+Configuration cache entry stored.

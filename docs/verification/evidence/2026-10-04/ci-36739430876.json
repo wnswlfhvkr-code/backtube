@@ -1,0 +1,196 @@
+{
+  "conclusion": "failure",
+  "createdAt": "2026-09-30T15:47:40Z",
+  "databaseId": 36739430876,
+  "headSha": "84b4e0e85f02f29a8523486345db5fc5df9e395d",
+  "jobs": [
+    {
+      "completedAt": "2026-09-30T15:53:35Z",
+      "conclusion": "failure",
+      "databaseId": 109969607868,
+      "name": "test-android (35, default, x86_64)",
+      "startedAt": "2026-09-30T15:47:43Z",
+      "status": "completed",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Enable KVM",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run android tests",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Upload test report when tests fail",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/36739430876/job/109969607868"
+    },
+    {
+      "completedAt": "2026-09-30T15:54:02Z",
+      "conclusion": "cancelled",
+      "databaseId": 109969608319,
+      "name": "test-android (23, default, x86)",
+      "startedAt": "2026-09-30T15:47:43Z",
+      "status": "completed",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Enable KVM",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run android tests",
+          "status": "completed",
+          "conclusion": "cancelled"
+        },
+        {
+          "name": "Upload test report when tests fail",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/36739430876/job/109969608319"
+    },
+    {
+      "completedAt": "2026-09-30T15:56:18Z",
+      "conclusion": "success",
+      "databaseId": 109969608614,
+      "name": "build-and-test-jvm",
+      "startedAt": "2026-09-30T15:47:43Z",
+      "status": "completed",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run gradle/actions/wrapper-validation@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "create and checkout branch",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build debug APK and run jvm tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload APK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post set up JDK",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/36739430876/job/109969608614"
+    },
+    {
+      "completedAt": "2026-09-30T15:47:40Z",
+      "conclusion": "skipped",
+      "databaseId": 109969609981,
+      "name": "sonar",
+      "startedAt": "2026-09-30T15:47:41Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/36739430876/job/109969609981"
+    }
+  ],
+  "status": "completed",
+  "updatedAt": "2026-09-30T15:56:19Z",
+  "url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/36739430876",
+  "observedAt": "2026-10-04T22:29:01+00:00",
+  "evidenceScope": "GitHub run/job metadata only; detailed logs and API 35 artifact download were denied. This is an existing 2026-09-30 run, not a new execution."
+}
