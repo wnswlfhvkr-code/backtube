@@ -186,3 +186,26 @@ bounded attempts to reach a fully visible target in this short viewport. It
 still requires exact text apart from case, full visibility, real touch input and
 all original timer/playback assertions. Fresh runtime results are required to
 verify these fixture corrections; no timer product change was made.
+
+
+## Late preference callback after detail screen teardown
+
+[Full run 37319849305](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37319849305)
+at `88fca81576a5dfceff107da6cc8e37045d936077` passed JVM/build. API 23 completed its
+runner's 62 cases; XML records 60 tests, 2 failures and 2 skipped tests. Failures
+were the already-diagnosed timer scroll selector and a 45-second queue Activity
+launch timeout in `recommendationMenuSupportsExcludeUndoAndClear`, still under
+investigation. API 35 stopped early: runner finished 46, XML records 44 tests,
+2 failures and 2 skips. The timer case failed on the already-diagnosed uppercase
+button; the following test crashed in a late SharedPreferences callback.
+
+The captured stack reaches `VideoDetailFragment.preferenceChangeListener` via
+Android's queued `SharedPreferencesImpl.notifyListeners`. Its first `getString`
+requires an attached context even after the old fragment has been detached.
+Unregistering the listener does not retract a delivery already queued by Android.
+A deterministic instrumented regression invokes that actual listener with a
+contextless fragment; a FutureTask returns the exception to the test thread.
+This is a separate existing lifecycle bug. The proposed minimal guard ignores
+callbacks when `getContext()` is null; normal registration/unregistration and
+attached-fragment handling remain unchanged. Each new fragment already reads
+these preferences on creation. Independent review approved this scope.

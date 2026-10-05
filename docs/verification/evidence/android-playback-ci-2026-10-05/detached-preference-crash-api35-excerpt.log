@@ -1,0 +1,24 @@
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: java.lang.IllegalStateException: Fragment VideoDetailFragment{935f0aa} (327061c5-cfdd-4d40-a098-488832b6bd1d) not attached to a context.
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at androidx.fragment.app.Fragment.requireContext(Fragment.java:977)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at androidx.fragment.app.Fragment.getResources(Fragment.java:1041)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at androidx.fragment.app.Fragment.getString(Fragment.java:1063)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at org.schabi.newpipe.fragments.detail.VideoDetailFragment.lambda$new$0(VideoDetailFragment.java:183)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at org.schabi.newpipe.fragments.detail.VideoDetailFragment.$r8$lambda$ZaD0k5BIrIvuigdv0_emR0aWWFQ(Unknown Source:0)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at org.schabi.newpipe.fragments.detail.VideoDetailFragment$$ExternalSyntheticLambda18.onSharedPreferenceChanged(D8$$SyntheticClass:0)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.app.SharedPreferencesImpl$EditorImpl.notifyListeners(SharedPreferencesImpl.java:645)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.app.SharedPreferencesImpl$EditorImpl.lambda$notifyListeners$0(SharedPreferencesImpl.java:651)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.app.SharedPreferencesImpl$EditorImpl.$r8$lambda$K3ZhT5raBwBpi0ZNTVZjjuEvbWI(Unknown Source:0)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.app.SharedPreferencesImpl$EditorImpl$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.os.Handler.handleCallback(Handler.java:959)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:232)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:317)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:8705)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)
+10-05 13:57:10.745  2303  2303 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:886)
+10-05 13:57:10.747  1001  1001 I bluetooth: system/btif/avrcp/avrcp_service.cc:586 SendPlayerSettingsChanged: {attribute=PlayerAttribute::REPEAT : value=PlayerRepeatValue::OFF}, {attribute=PlayerAttribute::SHUFFLE : value=PlayerShuffleValue::OFF}
+10-05 13:57:10.747  1001  1001 I PlayerSettingsManager: getPlayerRepeatMode: no active player
+10-05 13:57:10.748  1001  1001 I PlayerSettingsManager: getPlayerShuffleMode: no active player
+10-05 13:57:10.748  1001  1001 I PlayerSettingsManager: updateRemoteDevice: STATE_REPEAT_OFF, STATE_SHUFFLE_OFF
+10-05 13:57:10.748  1001  1001 I bluetooth: system/btif/avrcp/avrcp_service.cc:586 SendPlayerSettingsChanged: {attribute=PlayerAttribute::REPEAT : value=PlayerRepeatValue::OFF}, {attribute=PlayerAttribute::SHUFFLE : value=PlayerShuffleValue::OFF}
