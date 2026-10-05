@@ -1,10 +1,10 @@
 {
-  "commit": "601222ad3ce5cbc59745d31cea47b4fdb848c2f3",
+  "commit": "05acf4430283c828817dbba6464a4b078fb19bc7",
   "command": "./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:runCheckstyle :app:runKtlint -I /workspace/scratch/backtube-player-timer/all-buildtools37.gradle -DskipFormatKtlint -Pandroid.builder.sdkDownload=false --no-configuration-cache --no-daemon --console=plain",
   "result": "PASS",
   "toolchain_override": "installed Build Tools 37.0.0; default 36.0.0 unavailable",
   "totals": {
-    "tests": 180,
+    "tests": 182,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -16,7 +16,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:43.505Z"
+      "timestamp": "2026-10-05T13:36:51.204Z"
     },
     {
       "name": "org.schabi.newpipe.database.playlist.PlaylistLocalItemTest",
@@ -24,7 +24,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:43.527Z"
+      "timestamp": "2026-10-05T13:36:51.256Z"
     },
     {
       "name": "org.schabi.newpipe.error.ReCaptchaActivityTest",
@@ -32,7 +32,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:43.551Z"
+      "timestamp": "2026-10-05T13:36:51.278Z"
     },
     {
       "name": "org.schabi.newpipe.ktx.ThrowableExtensionsTest",
@@ -40,7 +40,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:43.569Z"
+      "timestamp": "2026-10-05T13:36:51.301Z"
     },
     {
       "name": "org.schabi.newpipe.local.playlist.ExportPlaylistTest",
@@ -48,7 +48,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:43.573Z"
+      "timestamp": "2026-10-05T13:36:51.307Z"
     },
     {
       "name": "org.schabi.newpipe.local.subscription.FeedGroupIconTest",
@@ -56,7 +56,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:44.608Z"
+      "timestamp": "2026-10-05T13:36:52.345Z"
     },
     {
       "name": "org.schabi.newpipe.local.subscription.services.ImportExportJsonHelperTest",
@@ -64,7 +64,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.162Z"
+      "timestamp": "2026-10-05T13:36:53.027Z"
     },
     {
       "name": "org.schabi.newpipe.local.subscription.workers.SubscriptionImportInputTest",
@@ -72,7 +72,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:44.622Z"
+      "timestamp": "2026-10-05T13:36:52.358Z"
     },
     {
       "name": "org.schabi.newpipe.local.subscription.workers.SubscriptionImportWorkerTest",
@@ -80,7 +80,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:44.652Z"
+      "timestamp": "2026-10-05T13:36:52.386Z"
     },
     {
       "name": "org.schabi.newpipe.player.SleepTimerLayoutTest",
@@ -88,7 +88,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.191Z"
+      "timestamp": "2026-10-05T13:36:53.085Z"
     },
     {
       "name": "org.schabi.newpipe.player.helper.AutoQueueTest",
@@ -96,7 +96,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.241Z"
+      "timestamp": "2026-10-05T13:36:53.228Z"
     },
     {
       "name": "org.schabi.newpipe.player.helper.LastPlaybackSessionStoreTest",
@@ -104,7 +104,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.248Z"
+      "timestamp": "2026-10-05T13:36:53.238Z"
     },
     {
       "name": "org.schabi.newpipe.player.helper.RecommendationExclusionsTest",
@@ -112,7 +112,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.255Z"
+      "timestamp": "2026-10-05T13:36:53.252Z"
     },
     {
       "name": "org.schabi.newpipe.player.helper.SleepTimerTest",
@@ -120,7 +120,15 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.260Z"
+      "timestamp": "2026-10-05T13:36:53.260Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.mediasource.ManagedMediaSourcePlaylistTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T13:36:53.284Z"
     },
     {
       "name": "org.schabi.newpipe.player.playqueue.PlayQueueItemTest",
@@ -128,7 +136,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.270Z"
+      "timestamp": "2026-10-05T13:36:53.369Z"
     },
     {
       "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$EqualsTests",
@@ -136,7 +144,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.271Z"
+      "timestamp": "2026-10-05T13:36:53.370Z"
     },
     {
       "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$GetItemTests",
@@ -144,7 +152,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.273Z"
+      "timestamp": "2026-10-05T13:36:53.372Z"
     },
     {
       "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$SetIndexTests",
@@ -152,7 +160,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.274Z"
+      "timestamp": "2026-10-05T13:36:53.374Z"
     },
     {
       "name": "org.schabi.newpipe.settings.ImportAllCombinationsTest",
@@ -160,7 +168,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:44.825Z"
+      "timestamp": "2026-10-05T13:36:52.549Z"
     },
     {
       "name": "org.schabi.newpipe.settings.ImportExportManagerTest",
@@ -168,7 +176,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.067Z"
+      "timestamp": "2026-10-05T13:36:52.894Z"
     },
     {
       "name": "org.schabi.newpipe.settings.tabs.TabTest",
@@ -176,7 +184,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.339Z"
+      "timestamp": "2026-10-05T13:36:53.427Z"
     },
     {
       "name": "org.schabi.newpipe.settings.tabs.TabsJsonHelperTest",
@@ -184,7 +192,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.350Z"
+      "timestamp": "2026-10-05T13:36:53.435Z"
     },
     {
       "name": "org.schabi.newpipe.streams.SrtFromTtmlWriterTest",
@@ -192,7 +200,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.360Z"
+      "timestamp": "2026-10-05T13:36:53.441Z"
     },
     {
       "name": "org.schabi.newpipe.util.ListHelperTest",
@@ -200,7 +208,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.420Z"
+      "timestamp": "2026-10-05T13:36:53.502Z"
     },
     {
       "name": "org.schabi.newpipe.util.LocalizationTest",
@@ -208,7 +216,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.138Z"
+      "timestamp": "2026-10-05T13:36:52.958Z"
     },
     {
       "name": "org.schabi.newpipe.util.QuadraticSliderStrategyTest",
@@ -216,7 +224,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.440Z"
+      "timestamp": "2026-10-05T13:36:53.524Z"
     },
     {
       "name": "org.schabi.newpipe.util.external_communication.TimestampExtractorTest",
@@ -224,7 +232,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.453Z"
+      "timestamp": "2026-10-05T13:36:53.536Z"
     },
     {
       "name": "org.schabi.newpipe.util.image.ImageStrategyTest",
@@ -232,7 +240,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.460Z"
+      "timestamp": "2026-10-05T13:36:53.547Z"
     },
     {
       "name": "org.schabi.newpipe.util.urlfinder.UrlFinderTest",
@@ -240,7 +248,7 @@
       "failures": "0",
       "errors": "0",
       "skipped": "0",
-      "timestamp": "2026-10-05T13:19:45.153Z"
+      "timestamp": "2026-10-05T13:36:52.987Z"
     }
   ],
   "style": "Checkstyle and ktlint up-to-date from successful same-source checks; Checkstyle XML has 0 errors",

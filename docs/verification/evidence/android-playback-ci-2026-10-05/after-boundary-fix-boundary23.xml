@@ -1,0 +1,74 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="18" failures="1" errors="0" skipped="0" time="14.681" timestamp="2026-10-05T13:43:21" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.database.DatabaseMigrationTest" tests="3" failures="0" errors="0" skipped="0" time="0.478" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="migrateDatabaseFrom2to3" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.298" />
+    <testcase name="migrateDatabaseFrom7to8" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.078" />
+    <testcase name="migrateDatabaseFrom8to9" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.102" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.database.FeedDAOTest" tests="2" failures="0" errors="0" skipped="0" time="0.079" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testUnlinkStreamsOlderThan_KeepMultiple" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.052" />
+    <testcase name="testUnlinkStreamsOlderThan_KeepOne" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.027" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.error.ErrorInfoTest" tests="1" failures="0" errors="0" skipped="0" time="0.002" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="errorInfoTestParcelable" classname="org.schabi.newpipe.error.ErrorInfoTest" time="0.002" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.history.HistoryRecordManagerTest" tests="6" failures="0" errors="0" skipped="0" time="0.212" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="onSearched" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.103" />
+    <testcase name="deleteCompleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="getRelatedSearches_emptyQuery_manyDuplicates" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.002" />
+    <testcase name="getRelatedSearched_nonEmptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="deleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="getRelatedSearches_emptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.026" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" tests="3" failures="0" errors="0" skipped="0" time="0.053" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="createPlaylist" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.001" />
+    <testcase name="createPlaylist_nonExistentStreamsAreUpserted" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.026" />
+    <testcase name="createPlaylist_emptyPlaylistMustReturnEmpty" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.026" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" tests="2" failures="0" errors="0" skipped="0" time="0.706" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testInsert" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.428" />
+    <testcase name="testUpdateNotificationMode" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.278" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="1" failures="1" errors="0" skipped="0" time="1.609" timestamp="2026-10-05T13:43:21" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="relatedListStartsWithActualNextAndHidesUsedSongs" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="1.609">
+      <failure></failure>
+    </testcase>
+  </testsuite>
+  <system-err>Test run failed to complete. Instrumentation run failed due to Process crashed.
+</system-err>
+</testsuites>

@@ -137,3 +137,32 @@ been made during this investigation.
 All four XML reports at this stage are preserved as `after-permission-fix-*.xml`
 in the evidence directory. Independent review confirmed the boundary fix and
 fixture cleanup scope; fresh full/runtime validation remains required.
+
+## Migration isolation and nullable legacy counts
+
+[Full run 37318066153](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37318066153)
+at `05acf4430283c828817dbba6464a4b078fb19bc7` exposed another existing defect before
+reaching the removal test: both APIs recorded 18 tests/1 failure and a process
+exit in `RemotePlaylistItemHolder.updateFromItem()`. The stream count was null
+and Java unboxed it to `long`. Both the entity and historical DB schemas permit
+null, so this is a real legacy-data rendering bug, not an invalid SQL fixture.
+[Crash stack](evidence/android-playback-ci-2026-10-05/legacy-count-crash-api35-excerpt.log),
+`after-boundary-fix-*.xml` in the same evidence directory.
+
+Migration tests had also used the actual application DB filename. Reopening that
+DB after fixing the closed singleton surfaced their synthetic legacy bookmarks
+in the next MainActivity test. The migration helper's create/validate/open paths
+now all use `migration-test.db`, preserving every migration assertion while
+separating the data from playback fixtures.
+
+The product formatter separately accepts nullable `Long` and maps null to the
+same empty label as the existing UNKNOWN count. Known and special-count branches
+retain their behavior. New JVM coverage checks null, UNKNOWN and a known count;
+the null case failed with NPE before the change while the other two passed.
+[RED report](evidence/android-playback-ci-2026-10-05/stream-count-red.xml).
+After the fix, all three cases passed
+([GREEN](evidence/android-playback-ci-2026-10-05/stream-count-green.xml)); the local
+full build/JVM/style run passed with 185 tests, no failures/errors/skips, using
+the same temporary Build Tools 37 override.
+Independent review verified the schema's nullability and that all migration DB
+paths use the new name. This does not weaken or remove the failing UI tests.
