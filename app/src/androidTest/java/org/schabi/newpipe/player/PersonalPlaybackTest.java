@@ -778,9 +778,12 @@ public class PersonalPlaybackTest {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             runOnMain(() -> launchedActivity.setRequestedOrientation(
                     ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
-            assertTrue(waitFor(() -> callOnMain(() -> activeMainActivity() != null
-                    && activeMainActivity().getResources().getConfiguration().orientation
-                    == Configuration.ORIENTATION_PORTRAIT), 5));
+            final boolean portraitResumed = waitFor(
+                    () -> callOnMain(() -> activeMainActivity() != null
+                            && activeMainActivity().getResources().getConfiguration().orientation
+                            == Configuration.ORIENTATION_PORTRAIT), 5);
+            assertTrue("MainActivity did not resume in portrait: " + activityDiagnostics(),
+                    portraitResumed);
             final MainActivity activity = callOnMain(this::activeMainActivity);
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-A", "offline-A",
@@ -858,6 +861,27 @@ public class PersonalPlaybackTest {
             }
         }
         return null;
+    }
+
+    private String activityDiagnostics() throws Exception {
+        return callOnMain(() -> {
+            final StringBuilder result = new StringBuilder();
+            for (final Stage stage : Stage.values()) {
+                for (final android.app.Activity activity : ActivityLifecycleMonitorRegistry
+                        .getInstance().getActivitiesInStage(stage)) {
+                    result.append(activity.getClass().getSimpleName()).append(':').append(stage)
+                            .append(" orientation=")
+                            .append(activity.getResources().getConfiguration().orientation)
+                            .append(" finishing=").append(activity.isFinishing()).append(';');
+                }
+            }
+            result.append(" notificationPermission=").append(androidx.core.content.ContextCompat
+                    .checkSelfPermission(context, "android.permission.POST_NOTIFICATIONS"));
+            final org.schabi.newpipe.player.helper.PlayerHolder holder =
+                    org.schabi.newpipe.player.helper.PlayerHolder.getInstance();
+            return result.append(" holderBound=").append(holder.isBound())
+                    .append(" playerOpen=").append(holder.isPlayerOpen()).toString();
+        });
     }
 
     private List<String> relatedListUrls(final MainActivity activity) throws Exception {
