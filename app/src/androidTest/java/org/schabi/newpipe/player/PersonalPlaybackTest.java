@@ -1083,6 +1083,9 @@ public class PersonalPlaybackTest {
 
     @Test
     public void recommendationMenuSupportsExcludeUndoAndClear() throws Exception {
+        // A real paused item avoids leaving the queue in its PRE_FLIGHT loading animation.
+        prepareAndPlayLocalAudio();
+        runOnMain(player::pause);
         final StreamInfo info = recommendationInfo("A", "B");
         info.setRelatedItems(List.of(recommendationItem("B", "channel-b"),
                 recommendationItem("C", "channel-c")));

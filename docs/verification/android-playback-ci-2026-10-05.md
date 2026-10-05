@@ -209,3 +209,19 @@ This is a separate existing lifecycle bug. The proposed minimal guard ignores
 callbacks when `getContext()` is null; normal registration/unregistration and
 attached-fragment handling remain unchanged. Each new fragment already reads
 these preferences on creation. Independent review approved this scope.
+
+
+The four-line context guard is implemented. The recommendation menu fixture now
+prepares its existing local WAV and pauses it before injecting recommendation
+metadata, matching the other queue UI fixture. Previously it left the real player
+in PRE_FLIGHT, which renders an indeterminate progress animation; API 23's trace
+shows the Activity RESUMED, service connected and window displayed, while
+`startActivitySync` timed out waiting for idle. The real paused media setup keeps
+all menu/exclusion/undo checks and the original launch/wait behavior. Runtime
+validation will determine whether it resolves that fixture timeout.
+
+Local build, test APK, 185 JVM tests and Checkstyle/ktlint all PASS after these
+changes (temporary Build Tools 37 override). The new Android regression's source
+was committed before the product guard at `0ebf5f1e95f29cbd535e073294d352c37545b28a`;
+[its selected RED run](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37321538652)
+is recorded separately from the ensuing full-suite verification.
