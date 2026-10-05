@@ -280,7 +280,9 @@ The same selected run's timer and recommendation-menu tests passed on API 35.
 Its older API 23 diagnostic execution did not finish before the corrected full
 suite passed on both APIs; it was explicitly **CANCELLED** to stop the superseded
 work (run 37321538652: API 23 cancelled, API 35 expected RED, JVM PASS, sonar SKIP).
-It is not counted as PASS. The later full suite at `7936e39` independently
+The cancelled API 23 job log also records the same new regression failing before
+the cancellation ([partial RED log](evidence/android-playback-ci-2026-10-05/preference-red-api23-cancelled-excerpt.log));
+there is no completed selected-suite report, so it is not counted as PASS. The later full suite at `7936e39` independently
 verified the new regression and all existing tests on both APIs.
 
 The full GREEN reports also verify the paused local-media menu fixture on API 23
