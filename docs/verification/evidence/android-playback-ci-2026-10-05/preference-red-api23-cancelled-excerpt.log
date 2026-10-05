@@ -1,0 +1,3 @@
+2026-10-05T14:08:21.8099421Z org.schabi.newpipe.fragments.detail.VideoDetailFragmentPreferenceTest > queuedPreferenceChangeAfterDetachDoesNotRequireContext[emulator-5554 - 6.0] [31mFAILED [0m
+2026-10-05T14:08:21.8101067Z 	java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Fragment VideoDetailFragment{9a11a80} (229d38a4-afa8-4aac-9e0c-84050ab2f160) not attached to a context.
+2026-10-05T14:16:34.5792219Z ##[error]The operation was canceled.

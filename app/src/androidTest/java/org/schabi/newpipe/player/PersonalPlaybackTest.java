@@ -5,15 +5,19 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.Manifest;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -35,6 +39,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.schabi.newpipe.App;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.MainActivity;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
@@ -71,7 +76,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -183,9 +190,7 @@ public class PersonalPlaybackTest {
                         context.getString(R.string.autoplay_never_key))
                         .putBoolean(commentsKey, false).commit();
             });
-            final MainActivity activity = (MainActivity) InstrumentationRegistry
-                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            final MainActivity activity = launchMainActivity();
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
                     null, false));
@@ -773,14 +778,15 @@ public class PersonalPlaybackTest {
                 player.setAutoQueueEnabled(true);
                 player.getPrefs().edit().putBoolean(commentsKey, false).commit();
             });
-            final MainActivity launchedActivity = (MainActivity) InstrumentationRegistry
-                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            final MainActivity launchedActivity = launchMainActivity();
             runOnMain(() -> launchedActivity.setRequestedOrientation(
                     ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
-            assertTrue(waitFor(() -> callOnMain(() -> activeMainActivity() != null
-                    && activeMainActivity().getResources().getConfiguration().orientation
-                    == Configuration.ORIENTATION_PORTRAIT), 5));
+            final boolean portraitResumed = waitFor(
+                    () -> callOnMain(() -> activeMainActivity() != null
+                            && activeMainActivity().getResources().getConfiguration().orientation
+                            == Configuration.ORIENTATION_PORTRAIT), 5);
+            assertTrue("MainActivity did not resume in portrait: " + activityDiagnostics(),
+                    portraitResumed);
             final MainActivity activity = callOnMain(this::activeMainActivity);
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-A", "offline-A",
@@ -850,6 +856,48 @@ public class PersonalPlaybackTest {
         assertTrue(new RecommendationExclusions(player.getPrefs()).excludes(1, "offline-A", null));
     }
 
+    private MainActivity launchMainActivity() throws InterruptedException {
+        final boolean expectsNotificationPrompt = Build.VERSION.SDK_INT >= 33
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+                && !App.getInstance().getNotificationsRequested();
+        if (expectsNotificationPrompt) {
+            final android.app.UiAutomation automation = InstrumentationRegistry
+                    .getInstrumentation().getUiAutomation();
+            final AccessibilityServiceInfo info = automation.getServiceInfo();
+            info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+            automation.setServiceInfo(info);
+        }
+        final MainActivity activity = (MainActivity) InstrumentationRegistry
+                .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        if (expectsNotificationPrompt) {
+            // Exercise the notification-denied path; playback controls do not require a grant.
+            assertTrue("notification permission prompt did not appear", waitFor(() -> {
+                final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                        .getUiAutomation().getRootInActiveWindow();
+                if (root == null) {
+                    return false;
+                }
+                final List<AccessibilityNodeInfo> buttons = root.findAccessibilityNodeInfosByViewId(
+                        root.getPackageName() + ":id/permission_deny_button");
+                root.recycle();
+                boolean clicked = false;
+                for (final AccessibilityNodeInfo button : buttons) {
+                    if (!clicked && button.isVisibleToUser()) {
+                        clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                    button.recycle();
+                }
+                return clicked;
+            }, PLAYBACK_TIMEOUT_SECONDS));
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        return activity;
+    }
+
     private MainActivity activeMainActivity() {
         for (final android.app.Activity activity : ActivityLifecycleMonitorRegistry.getInstance()
                 .getActivitiesInStage(Stage.RESUMED)) {
@@ -858,6 +906,27 @@ public class PersonalPlaybackTest {
             }
         }
         return null;
+    }
+
+    private String activityDiagnostics() throws Exception {
+        return callOnMain(() -> {
+            final StringBuilder result = new StringBuilder();
+            for (final Stage stage : Stage.values()) {
+                for (final android.app.Activity activity : ActivityLifecycleMonitorRegistry
+                        .getInstance().getActivitiesInStage(stage)) {
+                    result.append(activity.getClass().getSimpleName()).append(':').append(stage)
+                            .append(" orientation=")
+                            .append(activity.getResources().getConfiguration().orientation)
+                            .append(" finishing=").append(activity.isFinishing()).append(';');
+                }
+            }
+            result.append(" notificationPermission=").append(androidx.core.content.ContextCompat
+                    .checkSelfPermission(context, "android.permission.POST_NOTIFICATIONS"));
+            final org.schabi.newpipe.player.helper.PlayerHolder holder =
+                    org.schabi.newpipe.player.helper.PlayerHolder.getInstance();
+            return result.append(" holderBound=").append(holder.isBound())
+                    .append(" playerOpen=").append(holder.isPlayerOpen()).toString();
+        });
     }
 
     private List<String> relatedListUrls(final MainActivity activity) throws Exception {
@@ -1014,6 +1083,9 @@ public class PersonalPlaybackTest {
 
     @Test
     public void recommendationMenuSupportsExcludeUndoAndClear() throws Exception {
+        // A real paused item avoids leaving the queue in its PRE_FLIGHT loading animation.
+        prepareAndPlayLocalAudio();
+        runOnMain(player::pause);
         final StreamInfo info = recommendationInfo("A", "B");
         info.setRelatedItems(List.of(recommendationItem("B", "channel-b"),
                 recommendationItem("C", "channel-c")));
@@ -1368,14 +1440,16 @@ public class PersonalPlaybackTest {
             player.pause();
             player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
         });
-        final MainActivity launched = (MainActivity) InstrumentationRegistry.getInstrumentation()
-                .startActivitySync(new Intent(context, MainActivity.class)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        final MainActivity launched = launchMainActivity();
         runOnMain(() -> NavigationHelper.openVideoDetailFragment(launched,
                 launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
                 player.getPlayQueue(), false));
         assertTrue("detail timer did not connect", waitFor(() -> callOnMain(() ->
                 activeMainActivity() != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder) != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder).isResumed()
                         && activeMainActivity().findViewById(
                                 R.id.detail_controls_sleep_timer) != null
                         && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
@@ -1383,7 +1457,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
-        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
+        assertTrue("15 minute selection did not set the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 14 * 60_000L), 5));
         assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
                 callOnMain(() -> ((android.widget.TextView) activeMainActivity().findViewById(
                         R.id.detail_controls_sleep_timer)).getText().toString()));
@@ -1410,7 +1485,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_extend));
-        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+        assertTrue("extend selection did not add 15 minutes", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 29 * 60_000L), 5));
         runOnMain(() -> {
             player.pause();
             activeMainActivity().findViewById(R.id.detail_controls_sleep_timer).performClick();
@@ -1427,6 +1503,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_cancel_timer));
+        assertTrue("cancel selection did not stop the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() == 0), 5));
         assertEquals(0, (long) callOnMain(player::getSleepTimerRemainingMillis));
         assertFalse("cancelling timer resumed playback", callOnMain(player::isPlaying));
     }
@@ -1556,7 +1634,8 @@ public class PersonalPlaybackTest {
     private void clickAccessibilityText(final String text) {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         SystemClock.sleep(300);
-        for (int attempt = 0; attempt < 6; attempt++) {
+        // Landscape can show only one of the nine timer options per scroll.
+        for (int attempt = 0; attempt < 12; attempt++) {
             final AccessibilityNodeInfo visible = findNodeByText(text);
             if (visible != null) {
                 visible.recycle();
@@ -1573,7 +1652,8 @@ public class PersonalPlaybackTest {
         // Wait for native ListView scrolling to settle before reading touch coordinates.
         SystemClock.sleep(800);
         final AccessibilityNodeInfo node = findNodeByText(text);
-        assertTrue("missing accessibility text: " + text, node != null);
+        assertTrue("missing accessibility text: " + text + "; " + accessibilityWindowText(),
+                node != null);
         final Rect bounds = new Rect();
         node.getBoundsInScreen(bounds);
         node.recycle();
@@ -1603,13 +1683,40 @@ public class PersonalPlaybackTest {
         AccessibilityNodeInfo match = null;
         for (final AccessibilityNodeInfo node : nodes) {
             if (match == null && node.isVisibleToUser() && fullyVisibleInList(node)
-                    && text.equals(String.valueOf(node.getText()))) {
+                    && text.equalsIgnoreCase(String.valueOf(node.getText()))) {
                 match = node;
             } else {
                 node.recycle();
             }
         }
         return match;
+    }
+
+    private String accessibilityWindowText() {
+        final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                .getUiAutomation().getRootInActiveWindow();
+        if (root == null) {
+            return "no active accessibility window";
+        }
+        final StringBuilder result = new StringBuilder("window=").append(root.getPackageName());
+        appendAccessibilityText(root, result);
+        root.recycle();
+        return result.toString();
+    }
+
+    private void appendAccessibilityText(final AccessibilityNodeInfo node,
+                                         final StringBuilder result) {
+        if (node.getText() != null) {
+            result.append(" [").append(node.getText()).append(" visible=")
+                    .append(node.isVisibleToUser()).append(']');
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            final AccessibilityNodeInfo child = node.getChild(index);
+            if (child != null) {
+                appendAccessibilityText(child, result);
+                child.recycle();
+            }
+        }
     }
 
     private boolean fullyVisibleInList(final AccessibilityNodeInfo node) {
@@ -1672,15 +1779,22 @@ public class PersonalPlaybackTest {
 
     private void finishQueueActivity() {
         runOnMain(() -> {
-            for (final android.app.Activity activity : List.copyOf(
-                    ActivityLifecycleMonitorRegistry.getInstance()
-                            .getActivitiesInStage(Stage.RESUMED))) {
-                if (activity instanceof PlayQueueActivity || activity instanceof MainActivity) {
+            final Set<android.app.Activity> activities = new HashSet<>();
+            for (final Stage stage : Stage.values()) {
+                if (stage != Stage.PRE_ON_CREATE && stage != Stage.DESTROYED) {
+                    activities.addAll(ActivityLifecycleMonitorRegistry.getInstance()
+                            .getActivitiesInStage(stage));
+                }
+            }
+            for (final android.app.Activity activity : activities) {
+                if (!activity.isFinishing() && (activity instanceof PlayQueueActivity
+                        || activity instanceof MainActivity)) {
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                     activity.finish();
                 }
             }
         });
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
     }
 
     private void initPlayerForLocalAudio() throws Exception {

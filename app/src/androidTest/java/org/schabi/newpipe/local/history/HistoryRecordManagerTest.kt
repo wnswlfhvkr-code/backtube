@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.schabi.newpipe.NewPipeDatabase
 import org.schabi.newpipe.database.AppDatabase
 import org.schabi.newpipe.database.history.model.SearchHistoryEntry
 import org.schabi.newpipe.testUtil.TestDatabase
@@ -31,7 +32,7 @@ class HistoryRecordManagerTest {
 
     @After
     fun cleanUp() {
-        database.close()
+        NewPipeDatabase.close()
     }
 
     @Test

@@ -1,0 +1,264 @@
+{
+  "commit": "7936e39e8f4e2f482d8f6b0785083e18e81a0990",
+  "command": "./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:runCheckstyle :app:runKtlint -I /workspace/scratch/backtube-player-timer/all-buildtools37.gradle -DskipFormatKtlint -Pandroid.builder.sdkDownload=false --no-configuration-cache --no-daemon --console=plain",
+  "result": "PASS",
+  "toolchain_override": "installed Build Tools 37.0.0; default 36.0.0 unavailable",
+  "totals": {
+    "tests": 185,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "org.schabi.newpipe.NewVersionManagerTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:32.517Z"
+    },
+    {
+      "name": "org.schabi.newpipe.database.playlist.PlaylistLocalItemTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:32.537Z"
+    },
+    {
+      "name": "org.schabi.newpipe.error.ReCaptchaActivityTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:32.554Z"
+    },
+    {
+      "name": "org.schabi.newpipe.ktx.ThrowableExtensionsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:32.568Z"
+    },
+    {
+      "name": "org.schabi.newpipe.local.playlist.ExportPlaylistTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:32.571Z"
+    },
+    {
+      "name": "org.schabi.newpipe.local.subscription.FeedGroupIconTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.453Z"
+    },
+    {
+      "name": "org.schabi.newpipe.local.subscription.services.ImportExportJsonHelperTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.920Z"
+    },
+    {
+      "name": "org.schabi.newpipe.local.subscription.workers.SubscriptionImportInputTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.465Z"
+    },
+    {
+      "name": "org.schabi.newpipe.local.subscription.workers.SubscriptionImportWorkerTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.489Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.SleepTimerLayoutTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.955Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.helper.AutoQueueTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.025Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.helper.LastPlaybackSessionStoreTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.034Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.helper.RecommendationExclusionsTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.044Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.helper.SleepTimerTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.051Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.mediasource.ManagedMediaSourcePlaylistTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.065Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.playqueue.PlayQueueItemTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.144Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$EqualsTests",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.146Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$GetItemTests",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.149Z"
+    },
+    {
+      "name": "org.schabi.newpipe.player.playqueue.PlayQueueTest$SetIndexTests",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.151Z"
+    },
+    {
+      "name": "org.schabi.newpipe.settings.ImportAllCombinationsTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.620Z"
+    },
+    {
+      "name": "org.schabi.newpipe.settings.ImportExportManagerTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.840Z"
+    },
+    {
+      "name": "org.schabi.newpipe.settings.tabs.TabTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.223Z"
+    },
+    {
+      "name": "org.schabi.newpipe.settings.tabs.TabsJsonHelperTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.234Z"
+    },
+    {
+      "name": "org.schabi.newpipe.streams.SrtFromTtmlWriterTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.242Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.ListHelperTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.335Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.LocalizationStreamCountTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.357Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.LocalizationTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.898Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.QuadraticSliderStrategyTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.360Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.external_communication.TimestampExtractorTest",
+      "tests": "37",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.373Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.image.ImageStrategyTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:34.382Z"
+    },
+    {
+      "name": "org.schabi.newpipe.util.urlfinder.UrlFinderTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "timestamp": "2026-10-05T14:04:33.912Z"
+    }
+  ],
+  "style": "Checkstyle and ktlint PASS; Checkstyle XML has 0 errors",
+  "android_runtime": "NOT RUN LOCALLY; remote emulator results recorded separately"
+}

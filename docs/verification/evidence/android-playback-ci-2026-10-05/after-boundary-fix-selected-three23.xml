@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="3" failures="1" errors="0" skipped="0" time="20.131" timestamp="2026-10-05T13:52:25" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="3" failures="1" errors="0" skipped="0" time="18.606" timestamp="2026-10-05T13:52:25" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="relatedListStartsWithActualNextAndHidesUsedSongs" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="5.041" />
+    <testcase name="removedSongCanReturnUnlessExplicitlyExcluded" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.279" />
+    <testcase name="detailTimerSharesStateAndDialogCancellationPreservesPlayback" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="13.286">
+      <failure>java.lang.AssertionError: missing accessibility text: Cancel timer; window=org.schabi.newpipe.debug.fixandroidplaybackci [Sleep timer visible=true] [Custom (minutes) visible=false] [End of current item visible=true] [Fade audio before stopping visible=true] [Cancel visible=true]
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at org.schabi.newpipe.player.PersonalPlaybackTest.clickAccessibilityText(PersonalPlaybackTest.java:1651)
+at org.schabi.newpipe.player.PersonalPlaybackTest.detailTimerSharesStateAndDialogCancellationPreservesPlayback(PersonalPlaybackTest.java:1502)
+</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

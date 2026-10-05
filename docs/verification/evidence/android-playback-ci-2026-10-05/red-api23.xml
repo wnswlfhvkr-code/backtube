@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="2" failures="0" errors="0" skipped="0" time="7.822" timestamp="2026-10-05T13:13:26" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="2" failures="0" errors="0" skipped="0" time="6.126" timestamp="2026-10-05T13:13:26" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="relatedListStartsWithActualNextAndHidesUsedSongs" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="5.895" />
+    <testcase name="removedSongCanReturnUnlessExplicitlyExcluded" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.231" />
+  </testsuite>
+</testsuites>

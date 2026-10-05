@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="20" failures="2" errors="0" skipped="1" time="48.396" timestamp="2026-10-05T13:25:23" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.database.DatabaseMigrationTest" tests="3" failures="0" errors="0" skipped="0" time="0.321" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="migrateDatabaseFrom2to3" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.191" />
+    <testcase name="migrateDatabaseFrom7to8" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.078" />
+    <testcase name="migrateDatabaseFrom8to9" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.052" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.database.FeedDAOTest" tests="2" failures="0" errors="0" skipped="0" time="0.053" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testUnlinkStreamsOlderThan_KeepMultiple" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.052" />
+    <testcase name="testUnlinkStreamsOlderThan_KeepOne" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.001" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.error.ErrorInfoTest" tests="1" failures="0" errors="0" skipped="0" time="0.001" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="errorInfoTestParcelable" classname="org.schabi.newpipe.error.ErrorInfoTest" time="0.001" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.history.HistoryRecordManagerTest" tests="6" failures="0" errors="0" skipped="0" time="0.133" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="onSearched" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.077" />
+    <testcase name="deleteCompleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.001" />
+    <testcase name="getRelatedSearches_emptyQuery_manyDuplicates" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="getRelatedSearched_nonEmptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.001" />
+    <testcase name="deleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.026" />
+    <testcase name="getRelatedSearches_emptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.001" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" tests="3" failures="0" errors="0" skipped="0" time="0.053" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="createPlaylist" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.026" />
+    <testcase name="createPlaylist_nonExistentStreamsAreUpserted" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.001" />
+    <testcase name="createPlaylist_emptyPlaylistMustReturnEmpty" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.026" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" tests="2" failures="0" errors="0" skipped="0" time="0.754" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testInsert" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.427" />
+    <testcase name="testUpdateNotificationMode" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.327" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="3" failures="2" errors="0" skipped="1" time="45.75" timestamp="2026-10-05T13:25:23" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="relatedListStartsWithActualNextAndHidesUsedSongs" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="45.396">
+      <failure>java.lang.RuntimeException: Could not launch intent Intent { flg=0x14000000 cmp=org.schabi.newpipe.debug.fixandroidplaybackci/org.schabi.newpipe.MainActivity } within 45000 milliseconds. Perhaps the main thread has not gone idle within a reasonable amount of time? There could be an animation or something constantly repainting the screen. Or the activity is doing network calls on creation? See the threaddump logs. For your reference the last time the event queue was idle before your activity launch request was 1791206676277 and now the last time the queue went idle was: 1791206676318. If these numbers are the same your activity might be hogging the event queue.
+at androidx.test.runner.MonitoringInstrumentation.startActivitySync(MonitoringInstrumentation.java:537)
+at org.schabi.newpipe.player.PersonalPlaybackTest.launchMainActivity(PersonalPlaybackTest.java:872)
+at org.schabi.newpipe.player.PersonalPlaybackTest.relatedListStartsWithActualNextAndHidesUsedSongs(PersonalPlaybackTest.java:781)
+</failure>
+    </testcase>
+    <testcase name="networkPolicyReloadsCurrentAudioAndKeepsPausedPosition" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.052">
+      <skipped />
+    </testcase>
+    <testcase name="removedSongCanReturnUnlessExplicitlyExcluded" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.302">
+      <failure></failure>
+    </testcase>
+  </testsuite>
+  <system-err>Test run failed to complete. Instrumentation run failed due to Process crashed.
+</system-err>
+</testsuites>

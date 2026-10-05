@@ -1,5 +1,10 @@
 # 플레이 상세 화면의 취침 타이머 — 2026-10-05
 
+> Follow-up: the runtime CI blockers recorded below were corrected and the full
+> API 23/35 suites passed on `7936e39` in stacked Draft PR #3. See the
+> [Android CI investigation and final results](android-playback-ci-2026-10-05.md).
+> Earlier results below remain historical evidence; PR #2 itself is unchanged.
+
 ## 요청과 결과
 
 영상 아래 `이곳에 추가 / 백그라운드 / 팝업 / 다운로드` 액션 행에 취침 타이머를 추가했다. `백그라운드`는 현재 위치를 보존하고 오디오 전용 foreground service로 전환하는 기존 동작이다. 외부 오디오 플레이어 설정이 켜진 경우 외부 앱 선택 경로를 사용한다. 해당 버튼과 기존 long-press 대기열 추가 동작을 보존했다.
