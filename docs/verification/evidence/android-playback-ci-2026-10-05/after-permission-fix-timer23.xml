@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="1" failures="1" errors="0" skipped="0" time="7.554" timestamp="2026-10-05T13:26:00" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="1" failures="1" errors="0" skipped="0" time="5.898" timestamp="2026-10-05T13:26:00" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="detailTimerSharesStateAndDialogCancellationPreservesPlayback" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="5.898">
+      <failure>java.lang.AssertionError: missing accessibility text: 15 minutes
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at org.schabi.newpipe.player.PersonalPlaybackTest.clickAccessibilityText(PersonalPlaybackTest.java:1643)
+at org.schabi.newpipe.player.PersonalPlaybackTest.detailTimerSharesStateAndDialogCancellationPreservesPlayback(PersonalPlaybackTest.java:1452)
+</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

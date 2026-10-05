@@ -4,6 +4,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.schabi.newpipe.NewPipeDatabase
 import org.schabi.newpipe.database.AppDatabase
 import org.schabi.newpipe.database.stream.model.StreamEntity
 import org.schabi.newpipe.extractor.stream.StreamType
@@ -26,7 +27,7 @@ class LocalPlaylistManagerTest {
 
     @After
     fun cleanUp() {
-        database.close()
+        NewPipeDatabase.close()
     }
 
     @Test

@@ -1443,6 +1443,10 @@ public class PersonalPlaybackTest {
                 player.getPlayQueue(), false));
         assertTrue("detail timer did not connect", waitFor(() -> callOnMain(() ->
                 activeMainActivity() != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder) != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder).isResumed()
                         && activeMainActivity().findViewById(
                                 R.id.detail_controls_sleep_timer) != null
                         && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
@@ -1450,7 +1454,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
-        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
+        assertTrue("15 minute selection did not set the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 14 * 60_000L), 5));
         assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
                 callOnMain(() -> ((android.widget.TextView) activeMainActivity().findViewById(
                         R.id.detail_controls_sleep_timer)).getText().toString()));
@@ -1477,7 +1482,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_extend));
-        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+        assertTrue("extend selection did not add 15 minutes", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 29 * 60_000L), 5));
         runOnMain(() -> {
             player.pause();
             activeMainActivity().findViewById(R.id.detail_controls_sleep_timer).performClick();
@@ -1494,6 +1500,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
                 .performClick());
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_cancel_timer));
+        assertTrue("cancel selection did not stop the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() == 0), 5));
         assertEquals(0, (long) callOnMain(player::getSleepTimerRemainingMillis));
         assertFalse("cancelling timer resumed playback", callOnMain(player::isPlaying));
     }
@@ -1640,7 +1648,8 @@ public class PersonalPlaybackTest {
         // Wait for native ListView scrolling to settle before reading touch coordinates.
         SystemClock.sleep(800);
         final AccessibilityNodeInfo node = findNodeByText(text);
-        assertTrue("missing accessibility text: " + text, node != null);
+        assertTrue("missing accessibility text: " + text + "; " + accessibilityWindowText(),
+                node != null);
         final Rect bounds = new Rect();
         node.getBoundsInScreen(bounds);
         node.recycle();
@@ -1677,6 +1686,33 @@ public class PersonalPlaybackTest {
             }
         }
         return match;
+    }
+
+    private String accessibilityWindowText() {
+        final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                .getUiAutomation().getRootInActiveWindow();
+        if (root == null) {
+            return "no active accessibility window";
+        }
+        final StringBuilder result = new StringBuilder("window=").append(root.getPackageName());
+        appendAccessibilityText(root, result);
+        root.recycle();
+        return result.toString();
+    }
+
+    private void appendAccessibilityText(final AccessibilityNodeInfo node,
+                                         final StringBuilder result) {
+        if (node.getText() != null) {
+            result.append(" [").append(node.getText()).append(" visible=")
+                    .append(node.isVisibleToUser()).append(']');
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            final AccessibilityNodeInfo child = node.getChild(index);
+            if (child != null) {
+                appendAccessibilityText(child, result);
+                child.recycle();
+            }
+        }
     }
 
     private boolean fullyVisibleInList(final AccessibilityNodeInfo node) {

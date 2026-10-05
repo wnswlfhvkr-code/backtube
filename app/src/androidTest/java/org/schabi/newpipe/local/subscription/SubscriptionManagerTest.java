@@ -8,6 +8,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.schabi.newpipe.NewPipeDatabase;
 import org.schabi.newpipe.database.AppDatabase;
 import org.schabi.newpipe.database.feed.model.FeedGroupEntity;
 import org.schabi.newpipe.database.subscription.SubscriptionEntity;
@@ -44,7 +45,7 @@ public class SubscriptionManagerTest {
 
     @After
     public void cleanUp() {
-        database.close();
+        NewPipeDatabase.close();
     }
 
     @Test

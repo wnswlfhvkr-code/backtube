@@ -89,3 +89,51 @@ launches use the same helper. Assertions and their original timeouts remain.
 Independent read-only review found no remaining blocker. A reused emulator where
 Android no longer shows the permission prompt is outside this fresh-install CI
 fixture assumption.
+
+## Full-suite crash isolated after permission correction
+
+At `601222ad3ce5cbc59745d31cea47b4fdb848c2f3`,
+[full run 37315825444](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37315825444)
+still **FAILed** on both APIs. API 35's related-list test passed, confirming the
+notification fixture correction, but `removedSong` still ended the process.
+Both full reports contain only 20 recorded tests (the runner says finished 21
+of 60 before the crash): API 35 has 1 failure/1 skip; API 23 has 2 failures/1 skip,
+including a MainActivity launch timeout. These are incomplete suites, not 60
+executed tests.
+
+The full logcat, rather than the empty crash buffer, contains ACRA's fatal stack:
+`IndexOutOfBoundsException: Index 1 out of bounds for length 1`, through
+`ManagedMediaSourcePlaylist.remove()` and `MediaSourceManager.onPlayQueueChanged()`.
+[Preserved stack](evidence/android-playback-ci-2026-10-05/playlist-crash-api35-excerpt.log).
+The guard incorrectly allowed `index == size`. Rapid append/remove queue events
+can reach the source list after the item has already disappeared from the current
+queue; the documented contract is to ignore an out-of-range deletion. The product
+fix changes only `>` to `>=`.
+
+Two new JVM regressions use the real ExoPlayer source list (only the item is
+mocked), covering empty removal, negative/at-size removal and valid deletion.
+Both failed with the matching bounds exception before the fix and passed after:
+[RED](evidence/android-playback-ci-2026-10-05/playlist-boundary-red.xml),
+[GREEN](evidence/android-playback-ci-2026-10-05/playlist-boundary-green.xml).
+
+Earlier selected `removedSong` PASS was misleading in isolation: its logcat also
+contains the same exception, which the normal app Rx error handler logged. DB
+tests' `TrampolineSchedulerRule.reset()` erased that handler in the full suite,
+allowing ACRA to terminate the process. The fixture now restores only the five
+scheduler handlers it changed. Separately, three DB fixtures left a closed global
+database; they now call the existing `NewPipeDatabase.close()` to clear its global
+reference. No production error policy was relaxed. Final runtime verification
+must check both the assertions and absence of the bounds/closed-DB exceptions.
+
+[Timer-only run 37315880405](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37315880405)
+also **FAILed** on both APIs (1 test each). API 35 read the timer immediately after
+an injected list click; API 23 could not find the 15-minute accessibility item.
+The test now waits for the detail fragment to resume and for asynchronous timer
+state changes under the original duration conditions. Missing UI text includes
+the actual window contents. This is fixture synchronization/diagnostic work; the
+timer UI's root cause is not yet declared resolved. No timer product change has
+been made during this investigation.
+
+All four XML reports at this stage are preserved as `after-permission-fix-*.xml`
+in the evidence directory. Independent review confirmed the boundary fix and
+fixture cleanup scope; fresh full/runtime validation remains required.
