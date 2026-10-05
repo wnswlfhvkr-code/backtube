@@ -1631,7 +1631,8 @@ public class PersonalPlaybackTest {
     private void clickAccessibilityText(final String text) {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         SystemClock.sleep(300);
-        for (int attempt = 0; attempt < 6; attempt++) {
+        // Landscape can show only one of the nine timer options per scroll.
+        for (int attempt = 0; attempt < 12; attempt++) {
             final AccessibilityNodeInfo visible = findNodeByText(text);
             if (visible != null) {
                 visible.recycle();
@@ -1679,7 +1680,7 @@ public class PersonalPlaybackTest {
         AccessibilityNodeInfo match = null;
         for (final AccessibilityNodeInfo node : nodes) {
             if (match == null && node.isVisibleToUser() && fullyVisibleInList(node)
-                    && text.equals(String.valueOf(node.getText()))) {
+                    && text.equalsIgnoreCase(String.valueOf(node.getText()))) {
                 match = node;
             } else {
                 node.recycle();

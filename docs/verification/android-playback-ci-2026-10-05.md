@@ -166,3 +166,23 @@ full build/JVM/style run passed with 185 tests, no failures/errors/skips, using
 the same temporary Build Tools 37 override.
 Independent review verified the schema's nullability and that all migration DB
 paths use the new name. This does not weaken or remove the failing UI tests.
+
+
+## Selected runtime verification and accessibility fixture
+
+[Selected run 37319230779](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37319230779)
+at `05acf4430283c828817dbba6464a4b078fb19bc7` ran the original two regressions and
+the detail timer test on both APIs. The related-list and removed-song tests both
+**PASSed**, with no ACRA, bounds, closed-database or undeliverable exception in
+either captured logcat. Each API recorded 3 tests/1 failure, solely in the timer
+fixture (`after-boundary-fix-selected-three*.xml`).
+
+API 35 reached the custom dialog with visible `CANCEL`, but the selector required
+case-sensitive `Cancel`. It now accepts the platform theme's capitalization.
+API 23 completed preset selection, custom cancellation in paused/playing states,
+extension and rotation. Its landscape list was still at the seventh of nine
+options after the helper's six scroll attempts. The helper now permits twelve
+bounded attempts to reach a fully visible target in this short viewport. It
+still requires exact text apart from case, full visibility, real touch input and
+all original timer/playback assertions. Fresh runtime results are required to
+verify these fixture corrections; no timer product change was made.
