@@ -1,0 +1,260 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+Type-safe project accessors is an incubating feature.
+> Task :buildSrc:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :buildSrc:compileKotlin UP-TO-DATE
+> Task :buildSrc:compileJava NO-SOURCE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:pluginDescriptors UP-TO-DATE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+
+> Configure project :app
+Unable to initialize metrics, ensure /home/agent/.android is writable, details: /home/agent/.android/analytics.settings (No such file or directory)
+Configuration 'debugCompileClasspath' was resolved during configuration time.
+This is a build performance and scalability issue.
+See https://github.com/gradle/gradle/issues/2298
+Run with --info for a stacktrace.
+Configuration 'debugRuntimeClasspath' was resolved during configuration time.
+This is a build performance and scalability issue.
+See https://github.com/gradle/gradle/issues/2298
+Run with --info for a stacktrace.
+
+> Task :app:checkDependenciesOrder
+> Task :app:preBuild UP-TO-DATE
+> Task :app:runCheckstyle UP-TO-DATE
+> Task :app:runKtlint UP-TO-DATE
+> Task :app:preDebugBuild
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:dataBindingMergeDependencyArtifactsDebug
+> Task :app:generateDebugResValues
+> Task :app:prepareLibraryDefinitionsDebug
+> Task :app:extractDebugSupportedLocales
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugLocaleConfig
+> Task :app:generateDebugResources
+> Task :shared:convertXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :shared:copyNonXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :shared:prepareComposeResourcesTaskForAndroidMain NO-SOURCE
+> Task :shared:convertXmlValueResourcesForCommonMain
+> Task :shared:copyNonXmlValueResourcesForCommonMain
+> Task :shared:prepareComposeResourcesTaskForCommonMain
+> Task :shared:copyAndroidMainComposeResourcesToAndroidAssets
+> Task :shared:androidPreBuild UP-TO-DATE
+> Task :shared:preAndroidMainBuild UP-TO-DATE
+
+> Task :shared:prepareLibraryDefinitionsAndroidMain
+No dependencies found for variant: androidMain
+
+> Task :shared:packageAndroidMainResources
+> Task :app:packageDebugResources
+> Task :shared:generateAndroidMainEmptyResourceFiles
+> Task :app:processDebugNavigationResources
+> Task :app:parseDebugLocalResources
+> Task :shared:parseAndroidMainLocalResources
+> Task :shared:generateAndroidMainRFile
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugRFile
+> Task :app:mergeDebugResources
+> Task :shared:buildConfigGenerator
+> Task :app:dataBindingGenBaseClassesDebug
+> Task :shared:kmpPartiallyResolvedDependenciesChecker
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:generateResourceAccessorsForAndroidMain NO-SOURCE
+> Task :shared:generateResourceAccessorsForCommonMain
+> Task :shared:generateActualResourceCollectorsForAndroidMain
+> Task :shared:generateComposeResClass
+> Task :shared:generateExpectResourceCollectorsForCommonMain
+> Task :app:javaPreCompileDebug
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :shared:generateAndroidMainAssets UP-TO-DATE
+> Task :shared:mergeAndroidMainAssets
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:generateDebugGlobalSynthetics
+
+> Task :shared:compileAndroidMain
+w: Koin compiler plugin: Kotlin 2.4.10 is newer than the newest tested version (2.4.0) — proceeding with the 2.4.0 adapter. If compilation fails, check for a koin-compiler-plugin update. Supported versions: 2.3.20, 2.4.0.
+w: The argument '-Xexplicit-backing-fields' is redundant for the current language version 2.4.
+
+> Task :shared:bundleAndroidMainClassesToCompileJar
+> Task :app:l8DexDesugarLibDebug
+> Task :shared:processAndroidMainJavaRes
+> Task :app:checkDebugDuplicateClasses
+> Task :app:desugarDebugFileDependencies
+> Task :app:kspDebugKotlin
+> Task :app:mergeExtDexDebug
+> Task :shared:bundleAndroidMainClassesToRuntimeJar
+> Task :app:mergeLibDexDebug
+> Task :shared:writeAndroidMainAarMetadata
+> Task :app:checkDebugAarMetadata
+> Task :app:compileDebugNavigationResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :shared:processAndroidMainManifest
+
+> Task :app:processDebugMainManifest
+/workspace/backtube-detail-sleep-timer/app/src/debug/AndroidManifest.xml Warning:
+	provider#org.acra.attachment.AcraContentProvider@android:authorities was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :shared:mapAndroidMainSourceSetPaths
+> Task :shared:compileAndroidMainLibraryResources
+> Task :app:processDebugResources
+> Task :app:mergeDebugJniLibFolders
+> Task :shared:mergeAndroidMainJniLibFolders
+> Task :shared:mergeAndroidMainNativeLibs NO-SOURCE
+> Task :shared:copyAndroidMainJniLibsProjectOnly
+> Task :app:mergeDebugNativeLibs
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:kaptGenerateStubsDebugKotlin
+> Task :app:dataBindingMergeDependencyArtifactsDebugAndroidTest
+> Task :app:generateDebugAndroidTestResValues
+> Task :app:generateDebugAndroidTestResources
+> Task :app:mergeDebugAndroidTestResources
+> Task :app:dataBindingGenBaseClassesDebugAndroidTest
+> Task :app:processDebugAndroidTestManifest
+> Task :app:generateDebugAndroidTestBuildConfig
+> Task :app:packageDebugAndroidTestResources
+> Task :app:processDebugAndroidTestNavigationResources
+> Task :app:parseDebugAndroidTestLocalResources
+> Task :app:generateDebugAndroidTestRFile
+> Task :app:javaPreCompileDebugAndroidTest
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:generateDebugAndroidTestGlobalSynthetics
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:kaptDebugKotlin
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:checkDebugAndroidTestAarMetadata
+> Task :app:mapDebugAndroidTestSourceSetPaths
+> Task :app:compileDebugAndroidTestNavigationResources
+> Task :app:processDebugAndroidTestResources
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+
+> Task :app:compileDebugKotlin
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/App.kt:210:21 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Thread.UncaughtExceptionHandler?'.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/error/ErrorActivity.kt:119:17 'fun onBackPressed(): Unit' is deprecated. This method has been deprecated in favor of using the
+      {@link OnBackPressedDispatcher} via {@link #getOnBackPressedDispatcher()}.
+      The OnBackPressedDispatcher controls how back button events are dispatched
+      to one or more {@link OnBackPressedCallback} objects.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/error/ErrorInfo.kt:184:30 'class ExoPlaybackException : PlaybackException' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/error/ErrorInfo.kt:202:43 'class ExoPlaybackException : PlaybackException' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/error/ErrorInfo.kt:205:43 'class ExoPlaybackException : PlaybackException' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/error/ErrorPanelHelper.kt:75:26 'fun startActivityForResult(p0: Intent, p1: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:112:9 'fun setHasOptionsMenu(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:207:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:208:15 'fun onCreateOptionsMenu(p0: Menu, p1: MenuInflater): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:217:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:242:22 'fun onOptionsItemSelected(p0: MenuItem): Boolean' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:272:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:273:15 'fun onDestroyOptionsMenu(): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/FeedFragment.kt:694:38 'fun bundleOf(vararg pairs: Pair<String, Any?>): Bundle' is deprecated. This method does not provide type safety at compile time. Use the platform `Bundle` class directly instead.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/feed/service/FeedLoadManager.kt:241:33 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Info'.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/SubscriptionFragment.kt:79:9 'fun setHasOptionsMenu(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/SubscriptionFragment.kt:116:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/SubscriptionFragment.kt:117:15 'fun onCreateOptionsMenu(p0: Menu, p1: MenuInflater): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:122:26 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:124:27 'fun onBackPressed(): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:501:36 'static field SHOW_IMPLICIT: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:509:32 'static field HIDE_NOT_ALWAYS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:518:36 'static field SHOW_IMPLICIT: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:526:32 'static field HIDE_NOT_ALWAYS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/local/subscription/dialog/FeedGroupDialog.kt:546:32 'fun bundleOf(vararg pairs: Pair<String, Any?>): Bundle' is deprecated. This method does not provide type safety at compile time. Use the platform `Bundle` class directly instead.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/player/mediabrowser/MediaBrowserPlaybackPreparer.kt:12:8 'class MediaSessionConnector : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/player/mediabrowser/MediaBrowserPlaybackPreparer.kt:102:17 'interface Player : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/export/ImportExportManager.kt:39:35 'val FILE_NAME_SERIALIZED_PREFS: String' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/export/ImportExportManager.kt:93:69 'val FILE_NAME_SERIALIZED_PREFS: String' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/export/ImportExportManager.kt:109:65 'val FILE_NAME_SERIALIZED_PREFS: String' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/export/ImportExportManager.kt:143:63 'val FILE_NAME_SERIALIZED_PREFS: String' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/notifications/NotificationModeConfigFragment.kt:42:9 'fun setHasOptionsMenu(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/notifications/NotificationModeConfigFragment.kt:80:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/notifications/NotificationModeConfigFragment.kt:81:15 'fun onCreateOptionsMenu(p0: Menu, p1: MenuInflater): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/notifications/NotificationModeConfigFragment.kt:85:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/main/java/org/schabi/newpipe/settings/notifications/NotificationModeConfigFragment.kt:92:27 'fun onOptionsItemSelected(p0: MenuItem): Boolean' is deprecated. Deprecated in Java.
+
+> Task :app:compileDebugJavaWithJavac
+
+
+
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :app:processDebugJavaRes
+> Task :app:mergeDebugJavaResource
+> Task :app:dexBuilderDebug
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:kspDebugAndroidTestKotlin
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:kaptGenerateStubsDebugAndroidTestKotlin
+> Task :app:kaptDebugAndroidTestKotlin SKIPPED
+> Task :app:kaptGenerateStubsDebugUnitTestKotlin
+> Task :app:kaptDebugUnitTestKotlin SKIPPED
+> Task :app:compileDebugAndroidTestKotlin
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:86:68 'fun exportHasSerializedPrefs(zipFile: StoredFileHelper): Boolean' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:87:50 'fun loadSerializedPrefs(zipFile: StoredFileHelper, preferences: SharedPreferences): Unit' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:100:68 'fun exportHasSerializedPrefs(zipFile: StoredFileHelper): Boolean' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:102:54 'fun loadSerializedPrefs(zipFile: StoredFileHelper, preferences: SharedPreferences): Unit' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:110:69 'fun exportHasSerializedPrefs(zipFile: StoredFileHelper): Boolean' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportAllCombinationsTest.kt:112:54 'fun loadSerializedPrefs(zipFile: StoredFileHelper, preferences: SharedPreferences): Unit' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportExportManagerTest.kt:153:53 'fun exportHasSerializedPrefs(zipFile: StoredFileHelper): Boolean' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportExportManagerTest.kt:160:54 'fun exportHasSerializedPrefs(zipFile: StoredFileHelper): Boolean' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportExportManagerTest.kt:173:42 'fun loadSerializedPrefs(zipFile: StoredFileHelper, preferences: SharedPreferences): Unit' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+w: file:///workspace/backtube-detail-sleep-timer/app/src/test/java/org/schabi/newpipe/settings/ImportExportManagerTest.kt:188:46 'fun loadSerializedPrefs(zipFile: StoredFileHelper, preferences: SharedPreferences): Unit' is deprecated. Serializing preferences with Java's ObjectOutputStream is vulnerable to injections.
+
+> Task :app:compileDebugAndroidTestJavaWithJavac
+Note: /workspace/backtube-detail-sleep-timer/app/src/androidTest/java/org/schabi/newpipe/player/PersonalPlaybackTest.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:processDebugAndroidTestJavaRes
+> Task :app:mergeDebugAndroidTestJavaResource
+> Task :app:dexBuilderDebugAndroidTest
+> Task :app:mergeProjectDexDebugAndroidTest
+> Task :app:compileDebugUnitTestJavaWithJavac
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:packageDebugAndroidTest
+> Task :app:createDebugAndroidTestApkListingFileRedirect
+> Task :app:assembleDebugAndroidTest
+
+[Incubating] Problems report is available at: file:///workspace/backtube-detail-sleep-timer/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4m 25s
+125 actionable tasks: 120 executed, 5 up-to-date

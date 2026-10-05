@@ -20,10 +20,11 @@
 | RED 확인 | 구현 전 기존 타이머 7개 PASS, 신규 XML 2개가 타이머 액션/스크롤 부재로 FAIL. [로그](evidence/detail-sleep-timer-2026-10-05/red-layout.log) |
 | FAIL / 환경 차단 | 기본 `:app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest`: Build Tools 36.0.0 누락으로 task dependency 계산 중 종료. 앱 컴파일·테스트 실행 실패로 오인하지 말 것. [로그](evidence/detail-sleep-timer-2026-10-05/baseline-build.log) |
 | FAIL / 진단 한정 | 저장소 변경 없이 임시 Gradle init script로 app에 설치된 Build Tools 37.0.0을 지정해 같은 작업 재시도. shared 모듈의 36.0.0 요구로 여전히 차단. 대체 SDK로 앱을 빌드했다는 증거가 아님. [로그](evidence/detail-sleep-timer-2026-10-05/installed-buildtools37.log) |
-| 미실행 | 신규 `detailTimerSharesStateAndDialogCancellationPreservesPlayback` 및 기존 Android instrumentation. 로컬 emulator/system image/KVM 없음. 새 테스트는 생성 WAV와 합성 StreamInfo를 이용하며 실기기·실제 영상 검증이 아님 |
+| PASS / 진단 도구 환경 | app와 shared 모두 설치된 Build Tools 37.0.0을 임시 지정한 `assembleDebug`, `assembleDebugAndroidTest`, `testDebugUnitTest` 성공. JVM 29 suites / 180 tests / 실패·오류·skip 0. [로그](evidence/detail-sleep-timer-2026-10-05/all-buildtools37.log), [집계](evidence/detail-sleep-timer-2026-10-05/full-jvm-summary.json). 저장소 기본 도구 환경 PASS로 대체하지 않음 |
+| 로컬 미실행 | 신규 `detailTimerSharesStateAndDialogCancellationPreservesPlayback` 및 기존 Android instrumentation의 **기기 실행**. 테스트 APK 컴파일은 위에서 PASS. 로컬 emulator/system image/KVM 없음. 새 테스트는 생성 WAV와 합성 StreamInfo를 이용하며 실기기·실제 영상 검증이 아님 |
 | 미실행 | 실제 Android 기기, 화면 끔/Doze, Bluetooth, 제조사 절전, 외부 오디오 앱, 실제 네트워크 재생 |
 
-Checkstyle XML 오류 0개 및 ktlint PASS ([최종 스타일 로그](evidence/detail-sleep-timer-2026-10-05/style-final.log)). `git diff --check` PASS. 최종 독립 리뷰의 disconnect 처리 지적도 기존 화면 종료 경로를 재사용하여 해소했다. 원격 CI 결과는 아래 최종 기록에 추가한다. 현재 변경을 실기기 검증 완료 또는 배포 완료로 읽으면 안 된다.
+Checkstyle XML 오류 0개 및 ktlint PASS ([최종 스타일 로그](evidence/detail-sleep-timer-2026-10-05/style-final.log)). `git diff --check` PASS. 최종 독립 리뷰의 disconnect 처리 지적도 기존 화면 종료 경로를 재사용하여 해소했다. 원격 CI 결과는 아래에 별도로 기록했다. 현재 변경을 실기기 검증 완료 또는 배포 완료로 읽으면 안 된다.
 
 ### 재현 명령
 
@@ -36,6 +37,17 @@ JDK 21, 프로젝트 Gradle wrapper 사용. 기본 Android 검사는 설치된 3
   -DskipFormatKtlint -Pandroid.builder.sdkDownload=false --no-daemon --console=plain
 ```
 
+설치된 Build Tools 37.0.0으로 수행한 진단 명령(저장소 설정 변경 없음):
+
+```sh
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest \
+  -I docs/verification/evidence/detail-sleep-timer-2026-10-05/all-buildtools37.gradle \
+  -DskipFormatKtlint -Pandroid.builder.sdkDownload=false \
+  --no-configuration-cache --no-daemon --console=plain
+```
+
+위 진단 결과물은 로컬 debug 산출물이며 릴리스/배포하지 않았다. 앱 APK SHA256 `c4c4d579087eefd66ede9d3f72a0157db698c9bd4a89ef040b5f0b67d20f5b8c`, 테스트 APK SHA256 `715f4dab92bcf97693c2d69a53eb4bc45993911f1a9ca998eda417803aa813b9`. 앱 코드 검증 커밋은 `5edf0a41db0fb32f19e45258cd2a2b930ebb72be`다.
+
 분리 JVM harness는 Java plugin/JDK21, Maven Central의 RxJava 3.1.12/JUnit4 4.13.2를 사용한다. main source는 `app/src/main/java/org/schabi/newpipe/player/helper/SleepTimer.java`만, test source는 `SleepTimerTest.java`와 `SleepTimerLayoutTest.java`만 포함한다. `test.workingDir`는 저장소의 `app` 디렉터리다. Android 전체 suite나 UI helper의 런타임 검증으로 대체하지 않는다.
 
 ## 독립 리뷰
@@ -45,3 +57,15 @@ JDK 21, 프로젝트 Gradle wrapper 사용. 기본 Android 검사는 설치된 3
 ## 통합 범위
 
 `feat/detail-sleep-timer`는 main `84b4e0e85f02f29a8523486345db5fc5df9e395d`에서 만든 격리 worktree다. 기존 문서 Draft PR #1과 원래 checkout을 보존한다. 새 Draft PR만 만들며 merge, 새 릴리스, 배포, SDK 설치, 인증/권한 변경은 하지 않는다.
+
+## 원격 CI와 Draft PR
+
+- [Draft PR #2](https://github.com/wnswlfhvkr-code/backtube/pull/2), base main.
+- 소스 검증 커밋: `5edf0a41db0fb32f19e45258cd2a2b930ebb72be`.
+- [CI run 37307864266](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37307864266): 전체 결론 **FAIL**.
+- **PASS**: `build-and-test-jvm`의 `assembleContinuous lintContinuous testDebugUnitTest`, APK 업로드. 저장소 기본 설정을 사용하는 원격 빌드다. `lintContinuous`는 기존 설정상 `abortOnError=false`이므로 이 종료 상태가 lint 항목 0개라는 뜻은 아니다.
+- **FAIL**: API 35 Android job (`Run android tests`). **CANCELLED**: API 23 Android job. **SKIP**: sonar(기존 workflow에서 비활성).
+- API 35 annotation은 `/usr/bin/sh` exit 1만 제공한다. 세션에서 이미 확인된 로그/아티팩트 다운로드 접근 거부를 우회하지 않고 job/annotation 메타데이터만 사용했다. 실패한 개별 테스트와 원인은 미확인이다. 이전 CI와 최종 상태가 비슷하더라도 같은 원인이라고 단정하지 않는다. 새 상세 화면 instrumentation의 원격 개별 실행 결과도 미확인이다.
+- [job/step 메타데이터](evidence/detail-sleep-timer-2026-10-05/ci-final.json), [API 35 annotations](evidence/detail-sleep-timer-2026-10-05/ci-android35-annotations.json).
+
+이후 증거 보존 커밋은 문서만 변경한다. 이 문서에서 PASS로 기록한 빌드/테스트는 위 소스 커밋에 대한 결과다. merge·배포·실기기 검증은 수행하지 않았다.

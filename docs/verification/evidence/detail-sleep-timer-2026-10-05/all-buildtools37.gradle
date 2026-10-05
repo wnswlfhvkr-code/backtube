@@ -1,0 +1,10 @@
+allprojects {
+    plugins.withId('com.android.application') {
+        android { buildToolsVersion '37.0.0' }
+    }
+    afterEvaluate {
+        if (plugins.hasPlugin('com.android.kotlin.multiplatform.library')) {
+            extensions.getByName('kotlin').targets.getByName('android').buildToolsVersion = '37.0.0'
+        }
+    }
+}
