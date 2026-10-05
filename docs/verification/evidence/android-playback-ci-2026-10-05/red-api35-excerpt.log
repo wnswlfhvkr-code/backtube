@@ -1,0 +1,8 @@
+10-05 13:12:28.970  2300  2319 I TestRunner: run started: 2 tests
+10-05 13:12:28.972  2300  2319 I TestRunner: started: relatedListStartsWithActualNextAndHidesUsedSongs(org.schabi.newpipe.player.PersonalPlaybackTest)
+10-05 13:12:30.991   540   563 I ActivityTaskManager: Displayed com.android.permissioncontroller/.permission.ui.GrantPermissionsActivity for user 0: +1s285ms
+10-05 13:12:39.025  2300  2319 E TestRunner: java.lang.AssertionError: MainActivity did not resume in portrait: MainActivity:PAUSED orientation=1 finishing=false; notificationPermission=-1 holderBound=true playerOpen=true
+10-05 13:12:39.029  2300  2319 I TestRunner: finished: relatedListStartsWithActualNextAndHidesUsedSongs(org.schabi.newpipe.player.PersonalPlaybackTest)
+10-05 13:12:39.185  2300  2319 I TestRunner: started: removedSongCanReturnUnlessExplicitlyExcluded(org.schabi.newpipe.player.PersonalPlaybackTest)
+10-05 13:12:39.604  2300  2319 I TestRunner: finished: removedSongCanReturnUnlessExplicitlyExcluded(org.schabi.newpipe.player.PersonalPlaybackTest)
+10-05 13:12:39.607  2300  2319 I TestRunner: run finished: 2 tests, 1 failed, 0 ignored

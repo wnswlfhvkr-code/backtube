@@ -5,15 +5,19 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.Manifest;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -35,6 +39,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.schabi.newpipe.App;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.MainActivity;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
@@ -71,7 +76,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -183,9 +190,7 @@ public class PersonalPlaybackTest {
                         context.getString(R.string.autoplay_never_key))
                         .putBoolean(commentsKey, false).commit();
             });
-            final MainActivity activity = (MainActivity) InstrumentationRegistry
-                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            final MainActivity activity = launchMainActivity();
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
                     null, false));
@@ -773,9 +778,7 @@ public class PersonalPlaybackTest {
                 player.setAutoQueueEnabled(true);
                 player.getPrefs().edit().putBoolean(commentsKey, false).commit();
             });
-            final MainActivity launchedActivity = (MainActivity) InstrumentationRegistry
-                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            final MainActivity launchedActivity = launchMainActivity();
             runOnMain(() -> launchedActivity.setRequestedOrientation(
                     ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
             final boolean portraitResumed = waitFor(
@@ -851,6 +854,48 @@ public class PersonalPlaybackTest {
         });
         awaitRecommendation("offline-C");
         assertTrue(new RecommendationExclusions(player.getPrefs()).excludes(1, "offline-A", null));
+    }
+
+    private MainActivity launchMainActivity() throws InterruptedException {
+        final boolean expectsNotificationPrompt = Build.VERSION.SDK_INT >= 33
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+                && !App.getInstance().getNotificationsRequested();
+        if (expectsNotificationPrompt) {
+            final android.app.UiAutomation automation = InstrumentationRegistry
+                    .getInstrumentation().getUiAutomation();
+            final AccessibilityServiceInfo info = automation.getServiceInfo();
+            info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+            automation.setServiceInfo(info);
+        }
+        final MainActivity activity = (MainActivity) InstrumentationRegistry
+                .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        if (expectsNotificationPrompt) {
+            // Exercise the notification-denied path; playback controls do not require a grant.
+            assertTrue("notification permission prompt did not appear", waitFor(() -> {
+                final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                        .getUiAutomation().getRootInActiveWindow();
+                if (root == null) {
+                    return false;
+                }
+                final List<AccessibilityNodeInfo> buttons = root.findAccessibilityNodeInfosByViewId(
+                        root.getPackageName() + ":id/permission_deny_button");
+                root.recycle();
+                boolean clicked = false;
+                for (final AccessibilityNodeInfo button : buttons) {
+                    if (!clicked && button.isVisibleToUser()) {
+                        clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                    button.recycle();
+                }
+                return clicked;
+            }, PLAYBACK_TIMEOUT_SECONDS));
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        return activity;
     }
 
     private MainActivity activeMainActivity() {
@@ -1392,9 +1437,7 @@ public class PersonalPlaybackTest {
             player.pause();
             player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
         });
-        final MainActivity launched = (MainActivity) InstrumentationRegistry.getInstrumentation()
-                .startActivitySync(new Intent(context, MainActivity.class)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        final MainActivity launched = launchMainActivity();
         runOnMain(() -> NavigationHelper.openVideoDetailFragment(launched,
                 launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
                 player.getPlayQueue(), false));
@@ -1696,15 +1739,22 @@ public class PersonalPlaybackTest {
 
     private void finishQueueActivity() {
         runOnMain(() -> {
-            for (final android.app.Activity activity : List.copyOf(
-                    ActivityLifecycleMonitorRegistry.getInstance()
-                            .getActivitiesInStage(Stage.RESUMED))) {
-                if (activity instanceof PlayQueueActivity || activity instanceof MainActivity) {
+            final Set<android.app.Activity> activities = new HashSet<>();
+            for (final Stage stage : Stage.values()) {
+                if (stage != Stage.PRE_ON_CREATE && stage != Stage.DESTROYED) {
+                    activities.addAll(ActivityLifecycleMonitorRegistry.getInstance()
+                            .getActivitiesInStage(stage));
+                }
+            }
+            for (final android.app.Activity activity : activities) {
+                if (!activity.isFinishing() && (activity instanceof PlayQueueActivity
+                        || activity instanceof MainActivity)) {
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                     activity.finish();
                 }
             }
         });
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
     }
 
     private void initPlayerForLocalAudio() throws Exception {

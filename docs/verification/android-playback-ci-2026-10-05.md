@@ -57,3 +57,35 @@ Local Android builds use the already installed Build Tools 37.0.0 through the
 temporary init script recorded in the detail timer verification. Default 36.0.0
 remains unavailable. No local emulator/system image/KVM or real Android device is
 available. Remote emulators use synthetic local WAV fixtures, not user media.
+
+## Targeted RED and confirmed fixture defect
+
+[Run 37313973834](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37313973834)
+executed both named failing tests at diagnostic commit
+`f49c669f03623c264206c2ca5c62893af049c016`:
+
+- API 23: **PASS**, 2 tests, no failures/errors/skips.
+- API 35: **FAIL**, 2 tests, 1 failure, no errors/skips. The assertion reports
+  `MainActivity:PAUSED orientation=1 finishing=false; notificationPermission=-1`.
+  Logcat confirms `GrantPermissionsActivity` above the app. This establishes that
+  the test omitted the expected notification prompt, not a portrait-layout bug.
+- The following `removedSongCanReturnUnlessExplicitlyExcluded` test **PASSed** on
+  both. No process crash occurred and the crash buffer is empty in this selected
+  run. The original full-suite crash still requires verification; no PlayerHolder
+  product defect is established by this evidence.
+- Build/JVM/runner checks **PASS**; sonar **SKIP** (existing disabled job).
+
+[API 23 XML](evidence/android-playback-ci-2026-10-05/red-api23.xml),
+[API 35 XML](evidence/android-playback-ci-2026-10-05/red-api35.xml), and a minimal
+[API 35 log excerpt](evidence/android-playback-ci-2026-10-05/red-api35-excerpt.log)
+preserve this evidence. Full synthetic-emulator diagnostics remain in the run's
+artifacts `android-test-report-api23` and `android-test-report-api35`.
+
+The fixture now denies the actual notification dialog before testing playback
+controls, asserts permission remains denied, and finishes Main/Queue Activity
+instances in paused/stopped as well as resumed states. It does not change the
+app's permission policy or grant any permission. All three MainActivity test
+launches use the same helper. Assertions and their original timeouts remain.
+Independent read-only review found no remaining blocker. A reused emulator where
+Android no longer shows the permission prompt is outside this fresh-install CI
+fixture assumption.
