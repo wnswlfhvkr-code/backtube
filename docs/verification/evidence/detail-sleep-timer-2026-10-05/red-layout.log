@@ -1,0 +1,44 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :compileJava
+> Task :processResources NO-SOURCE
+> Task :classes
+> Task :compileTestJava
+> Task :processTestResources NO-SOURCE
+> Task :testClasses
+
+> Task :test FAILED
+
+SleepTimerLayoutTest > detailTimerIsAnAccessibleActionBesideBackgroundInBothLayouts FAILED
+    java.lang.AssertionError at SleepTimerLayoutTest.java:26
+
+SleepTimerLayoutTest > narrowScreensCanScrollActionsWithoutShrinkingTouchTargets FAILED
+    org.junit.ComparisonFailure at SleepTimerLayoutTest.java:47
+
+SleepTimerTest > disablingFadeRestoresGain PASSED
+
+SleepTimerTest > endOfItemModeFadesOnlyFromPlayerUpdatesAndExpiresOnItemEnd PASSED
+
+SleepTimerTest > elapsedTimeExpiryIsHandledAfterDeviceSleep PASSED
+
+SleepTimerTest > rejectsInvalidDurationsWithoutReplacingActiveTimer PASSED
+
+SleepTimerTest > expiresOnceAndCanBeCancelledOrReplaced PASSED
+
+SleepTimerTest > extendConvertsEndModeAndCapsAnActiveTimerAtTwentyFourHours PASSED
+
+SleepTimerTest > timedFadeKeepsReducedGainUntilExpiryCallbackThenRestoresIt PASSED
+
+9 tests completed, 2 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///workspace/scratch/backtube-player-timer/jvm-check/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 6s
+3 actionable tasks: 3 executed

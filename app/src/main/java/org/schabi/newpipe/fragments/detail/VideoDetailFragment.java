@@ -101,6 +101,7 @@ import org.schabi.newpipe.player.event.OnKeyDownListener;
 import org.schabi.newpipe.player.event.PlayerServiceExtendedEventListener;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.helper.PlayerHolder;
+import org.schabi.newpipe.player.helper.SleepTimerDialog;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
@@ -236,6 +237,18 @@ public final class VideoDetailFragment
     private PlayerService playerService;
     private Player player;
     private final PlayerHolder playerHolder = PlayerHolder.getInstance();
+    @Nullable
+    private SleepTimerDialog sleepTimerDialog;
+    private final Handler sleepTimerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable sleepTimerUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updateSleepTimerButton();
+            if (isResumed() && binding != null && player != null) {
+                sleepTimerHandler.postDelayed(this, 1000);
+            }
+        }
+    };
 
     /*//////////////////////////////////////////////////////////////////////////
     // Service management
@@ -248,7 +261,9 @@ public final class VideoDetailFragment
     @Override
     public void onPlayerConnected(@NonNull final Player connectedPlayer,
                                   final boolean playAfterConnect) {
+        dismissSleepTimerDialog();
         player = connectedPlayer;
+        updateSleepTimerUpdates();
 
         // It will do nothing if the player is not in fullscreen mode
         hideSystemUiIfNeeded();
@@ -282,7 +297,9 @@ public final class VideoDetailFragment
 
     @Override
     public void onPlayerDisconnected() {
+        dismissSleepTimerDialog();
         player = null;
+        updateSleepTimerUpdates();
         // the binding could be null at this point, if the app is finishing
         if (binding != null) {
             restoreDefaultBrightness();
@@ -353,6 +370,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onPause() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
         super.onPause();
         if (currentWorker != null) {
             currentWorker.dispose();
@@ -368,6 +386,7 @@ public final class VideoDetailFragment
     @Override
     public void onResume() {
         super.onResume();
+        updateSleepTimerUpdates();
         if (DEBUG) {
             Log.d(TAG, "onResume() called");
         }
@@ -437,6 +456,8 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
+        dismissSleepTimerDialog();
         super.onDestroyView();
         binding = null;
     }
@@ -463,6 +484,27 @@ public final class VideoDetailFragment
     // OnClick
     //////////////////////////////////////////////////////////////////////////*/
 
+    private void updateSleepTimerButton() {
+        if (binding != null) {
+            SleepTimerDialog.updateButton(binding.detailControlsSleepTimer, player);
+        }
+    }
+
+    private void updateSleepTimerUpdates() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
+        updateSleepTimerButton();
+        if (isResumed() && binding != null && player != null) {
+            sleepTimerHandler.postDelayed(sleepTimerUpdater, 1000);
+        }
+    }
+
+    private void dismissSleepTimerDialog() {
+        if (sleepTimerDialog != null) {
+            sleepTimerDialog.dismiss();
+            sleepTimerDialog = null;
+        }
+    }
+
     private void setOnClickListeners() {
         binding.detailTitleRootLayout.setOnClickListener(v -> toggleTitleAndSecondaryControls());
         binding.detailUploaderRootLayout.setOnClickListener(makeOnClickListener(info -> {
@@ -488,6 +530,14 @@ public final class VideoDetailFragment
         });
 
         binding.detailControlsBackground.setOnClickListener(v -> openBackgroundPlayer(false));
+        binding.detailControlsSleepTimer.setOnClickListener(v -> {
+            dismissSleepTimerDialog();
+            if (player != null) {
+                sleepTimerDialog = new SleepTimerDialog(requireContext(), player,
+                        this::updateSleepTimerButton);
+                sleepTimerDialog.show();
+            }
+        });
         binding.detailControlsPopup.setOnClickListener(v -> openPopupPlayer(false));
         binding.detailControlsPlaylistAppend.setOnClickListener(makeOnClickListener(info -> {
             if (getFM() != null && currentInfo != null) {

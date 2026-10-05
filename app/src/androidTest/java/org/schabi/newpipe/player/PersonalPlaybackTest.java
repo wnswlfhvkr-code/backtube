@@ -1362,6 +1362,76 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void detailTimerSharesStateAndDialogCancellationPreservesPlayback() throws Exception {
+        startOfflineRecommendationChain(false);
+        runOnMain(() -> {
+            player.pause();
+            player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
+        });
+        final MainActivity launched = (MainActivity) InstrumentationRegistry.getInstrumentation()
+                .startActivitySync(new Intent(context, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        runOnMain(() -> NavigationHelper.openVideoDetailFragment(launched,
+                launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
+                player.getPlayQueue(), false));
+        assertTrue("detail timer did not connect", waitFor(() -> callOnMain(() ->
+                activeMainActivity() != null
+                        && activeMainActivity().findViewById(
+                                R.id.detail_controls_sleep_timer) != null
+                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                        .isEnabled()), 5));
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
+        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
+        assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
+                callOnMain(() -> ((android.widget.TextView) activeMainActivity().findViewById(
+                        R.id.detail_controls_sleep_timer)).getText().toString()));
+        assertFalse("setting a timer resumed paused playback", callOnMain(player::isPlaying));
+
+        for (final boolean playing : new boolean[]{false, true}) {
+            runOnMain(() -> {
+                if (playing) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+            });
+            assertTrue(waitFor(() -> callOnMain(() -> player.isPlaying() == playing), 5));
+            runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                    .performClick());
+            clickAccessibilityText(context.getString(R.string.personal_sleep_timer_custom));
+            clickAccessibilityText(context.getString(R.string.cancel));
+            assertEquals("dialog cancellation changed playback", playing,
+                    (boolean) callOnMain(player::isPlaying));
+            assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
+        }
+
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_extend));
+        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+        runOnMain(() -> {
+            player.pause();
+            activeMainActivity().findViewById(R.id.detail_controls_sleep_timer).performClick();
+            activeMainActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        });
+        assertTrue("rotated detail screen did not reconnect", waitFor(() -> callOnMain(() ->
+                activeMainActivity() != null && activeMainActivity().getResources()
+                        .getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
+                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                        .isEnabled()), 5));
+        assertNull("old timer dialog survived rotation", findNodeByText(
+                context.getString(R.string.personal_sleep_timer_minutes, 15)));
+        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_cancel_timer));
+        assertEquals(0, (long) callOnMain(player::getSleepTimerRemainingMillis));
+        assertFalse("cancelling timer resumed playback", callOnMain(player::isPlaying));
+    }
+
+    @Test
     public void queueOptionsAndTimerDialogRenderInPortraitAndLandscape() throws Exception {
         runOnMain(() -> setField("playQueue", twoItemQueue()));
         prepareAndPlayTwoLocalAudioItems();

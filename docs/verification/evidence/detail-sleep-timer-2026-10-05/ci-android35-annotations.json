@@ -1,0 +1,26 @@
+[
+  {
+    "path": ".github",
+    "blob_href": "https://github.com/wnswlfhvkr-code/backtube/blob/5edf0a41db0fb32f19e45258cd2a2b930ebb72be/.github",
+    "start_line": 641,
+    "start_column": null,
+    "end_line": 641,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "",
+    "message": "The process '/usr/bin/sh' failed with exit code 1",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://github.com/wnswlfhvkr-code/backtube/blob/5edf0a41db0fb32f19e45258cd2a2b930ebb72be/.github",
+    "start_line": 1,
+    "start_column": null,
+    "end_line": 1,
+    "end_column": null,
+    "annotation_level": "notice",
+    "title": "",
+    "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+    "raw_details": ""
+  }
+]

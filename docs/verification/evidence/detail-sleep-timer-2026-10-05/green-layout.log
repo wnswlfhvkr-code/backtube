@@ -1,0 +1,32 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+
+SleepTimerLayoutTest > detailTimerIsAnAccessibleActionBesideBackgroundInBothLayouts PASSED
+
+SleepTimerLayoutTest > narrowScreensCanScrollActionsWithoutShrinkingTouchTargets PASSED
+
+SleepTimerTest > disablingFadeRestoresGain PASSED
+
+SleepTimerTest > endOfItemModeFadesOnlyFromPlayerUpdatesAndExpiresOnItemEnd PASSED
+
+SleepTimerTest > elapsedTimeExpiryIsHandledAfterDeviceSleep PASSED
+
+SleepTimerTest > rejectsInvalidDurationsWithoutReplacingActiveTimer PASSED
+
+SleepTimerTest > expiresOnceAndCanBeCancelledOrReplaced PASSED
+
+SleepTimerTest > extendConvertsEndModeAndCapsAnActiveTimerAtTwentyFourHours PASSED
+
+SleepTimerTest > timedFadeKeepsReducedGainUntilExpiryCallbackThenRestoresIt PASSED
+
+BUILD SUCCESSFUL in 7s
+3 actionable tasks: 1 executed, 2 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.1/userguide/configuration_cache_enabling.html
