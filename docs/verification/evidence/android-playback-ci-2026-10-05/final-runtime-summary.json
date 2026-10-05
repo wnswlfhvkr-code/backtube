@@ -1,0 +1,54 @@
+{
+  "source_commit": "7936e39e8f4e2f482d8f6b0785083e18e81a0990",
+  "run_id": 37321883958,
+  "run_url": "https://github.com/wnswlfhvkr-code/backtube/actions/runs/37321883958",
+  "run_conclusion": "success",
+  "environment": "GitHub-hosted Android emulators; synthetic local WAV fixtures",
+  "physical_device": "NOT RUN",
+  "results": [
+    {
+      "api": 23,
+      "job_id": 111802755983,
+      "artifact_id": 11350148642,
+      "result": "PASS",
+      "xml_cases": 61,
+      "passed": 59,
+      "failed": 0,
+      "errors": 0,
+      "skipped": [
+        "networkPolicyReloadsCurrentAudioAndKeepsPausedPosition",
+        "sessionAcrossProcessRestart"
+      ],
+      "logcat_exception_occurrences": {
+        " E ACRA ": 0,
+        "IndexOutOfBoundsException": 0,
+        "connection is closed": 0,
+        "UndeliverableException": 0,
+        "not attached to a context": 0,
+        "NullPointerException": 0
+      }
+    },
+    {
+      "api": 35,
+      "job_id": 111802755636,
+      "artifact_id": 11350838036,
+      "result": "PASS",
+      "xml_cases": 61,
+      "passed": 59,
+      "failed": 0,
+      "errors": 0,
+      "skipped": [
+        "networkPolicyReloadsCurrentAudioAndKeepsPausedPosition",
+        "sessionAcrossProcessRestart"
+      ],
+      "logcat_exception_occurrences": {
+        " E ACRA ": 0,
+        "IndexOutOfBoundsException": 0,
+        "connection is closed": 0,
+        "UndeliverableException": 0,
+        "not attached to a context": 0,
+        "NullPointerException": 0
+      }
+    }
+  ]
+}

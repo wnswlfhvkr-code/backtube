@@ -1,5 +1,49 @@
 # Android playback CI failure investigation — 2026-10-05
 
+
+## Final result
+
+**PASS** on tested source `7936e39e8f4e2f482d8f6b0785083e18e81a0990`:
+[full CI 37321883958](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37321883958).
+[Draft PR #3](https://github.com/wnswlfhvkr-code/backtube/pull/3) is stacked on
+Draft #2 and preserves the fixes/evidence without merging either PR. Subsequent
+commits in this branch only update verification documents/evidence.
+
+| Verification | Result |
+| --- | --- |
+| API 23 emulator, default full suite | PASS: XML 61 cases = 59 pass, 0 failure/error, 2 existing opt-in skips |
+| API 35 emulator, default full suite | PASS: XML 61 cases = 59 pass, 0 failure/error, 2 existing opt-in skips |
+| Remote JVM/build/lint and runner-check job | PASS |
+| Local debug APK + Android test APK | PASS, temporary installed Build Tools 37 override |
+| Local JVM tests | PASS: 185 tests, 0 failure/error/skip |
+| Checkstyle / ktlint / CI runner checks | PASS / PASS / 5 PASS |
+| Sonar job | SKIP: existing disabled job, unchanged |
+| Default Build Tools 36 local build | NOT RUN: toolchain absent; no SDK installation |
+| Physical Android device, real network media, screen-off/battery behavior | NOT RUN |
+
+Each Android report records 61 XML cases; the Gradle progress message says 63
+finished, so the XML cases above are the counted test results. The two skips are
+`networkPolicyReloadsCurrentAudioAndKeepsPausedPosition` (no `metered_wifi_id`)
+and `sessionAcrossProcessRestart` (no `session_restart_phase`). These pre-existing
+opt-in assumptions were not added or changed to obtain a passing run.
+
+Both full reports include PASS for the original related-list/removal tests, the
+detail timer test, the recommendation menu test and the new detached-preference
+regression. Full logcat on both APIs has zero occurrences of the investigated
+ACRA, bounds, closed-DB, undeliverable, detached-context and null-pointer crashes.
+This does not claim that every unrelated diagnostic message is absent.
+[API 23 XML](evidence/android-playback-ci-2026-10-05/final-full-api23.xml),
+[API 35 XML](evidence/android-playback-ci-2026-10-05/final-full-api35.xml),
+[runtime summary](evidence/android-playback-ci-2026-10-05/final-runtime-summary.json),
+[local results](evidence/android-playback-ci-2026-10-05/local-validation.json).
+
+Independent cumulative review of `dc03e7723..7936e39` found no blocker, assertion
+removal/weakening, production permission change or feature expansion. Product
+changes are limited to the three reproduced bugs; the remainder is CI diagnostics
+and fixture isolation/readiness. No merge, release, deployment or authentication
+change was performed. All persisted test data is synthetic; full raw diagnostics
+remain in CI artifacts rather than being copied into the repository.
+
 ## Scope and evidence before changes
 
 The user requested correction of the existing Android CI failure blocking runtime
@@ -225,3 +269,23 @@ changes (temporary Build Tools 37 override). The new Android regression's source
 was committed before the product guard at `0ebf5f1e95f29cbd535e073294d352c37545b28a`;
 [its selected RED run](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37321538652)
 is recorded separately from the ensuing full-suite verification.
+
+
+## Final RED/GREEN outcome
+
+The new detached-preference regression **FAILed** on API 35 before the guard at
+`0ebf5f1e95f29cbd535e073294d352c37545b28a`, with the exact `not attached to a
+context` exception ([RED XML](evidence/android-playback-ci-2026-10-05/preference-red-api35.xml)).
+The same selected run's timer and recommendation-menu tests passed on API 35.
+Its older API 23 diagnostic execution did not finish before the corrected full
+suite passed on both APIs; it was explicitly **CANCELLED** to stop the superseded
+work (run 37321538652: API 23 cancelled, API 35 expected RED, JVM PASS, sonar SKIP).
+It is not counted as PASS. The later full suite at `7936e39` independently
+verified the new regression and all existing tests on both APIs.
+
+The full GREEN reports also verify the paused local-media menu fixture on API 23
+and all timer actions after the accessibility corrections. Runtime checks cover
+setting, extending and cancelling the timer, dialog cancellation during paused
+and playing states, and rotation with the existing timer retained. These are
+emulator checks using generated local media, not physical-device or live-service
+certification. No additional source changes were made after this full pass.

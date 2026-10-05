@@ -1,0 +1,131 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="61" failures="0" errors="0" skipped="2" time="76.971" timestamp="2026-10-05T14:13:48" hostname="localhost">
+  <testsuite name="org.schabi.newpipe.database.DatabaseMigrationTest" tests="3" failures="0" errors="0" skipped="0" time="0.5" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="migrateDatabaseFrom2to3" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.295" />
+    <testcase name="migrateDatabaseFrom7to8" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.077" />
+    <testcase name="migrateDatabaseFrom8to9" classname="org.schabi.newpipe.database.DatabaseMigrationTest" time="0.128" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.database.FeedDAOTest" tests="2" failures="0" errors="0" skipped="0" time="0.079" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testUnlinkStreamsOlderThan_KeepMultiple" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.052" />
+    <testcase name="testUnlinkStreamsOlderThan_KeepOne" classname="org.schabi.newpipe.database.FeedDAOTest" time="0.027" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.error.ErrorInfoTest" tests="1" failures="0" errors="0" skipped="0" time="0.001" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="errorInfoTestParcelable" classname="org.schabi.newpipe.error.ErrorInfoTest" time="0.001" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.fragments.detail.VideoDetailFragmentPreferenceTest" tests="1" failures="0" errors="0" skipped="0" time="0.027" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="queuedPreferenceChangeAfterDetachDoesNotRequireContext" classname="org.schabi.newpipe.fragments.detail.VideoDetailFragmentPreferenceTest" time="0.027" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.history.HistoryRecordManagerTest" tests="6" failures="0" errors="0" skipped="0" time="0.161" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="onSearched" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.077" />
+    <testcase name="deleteCompleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.002" />
+    <testcase name="getRelatedSearches_emptyQuery_manyDuplicates" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="getRelatedSearched_nonEmptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.001" />
+    <testcase name="deleteSearchHistory" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+    <testcase name="getRelatedSearches_emptyQuery" classname="org.schabi.newpipe.local.history.HistoryRecordManagerTest" time="0.027" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" tests="3" failures="0" errors="0" skipped="0" time="0.028" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="createPlaylist" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.001" />
+    <testcase name="createPlaylist_nonExistentStreamsAreUpserted" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.026" />
+    <testcase name="createPlaylist_emptyPlaylistMustReturnEmpty" classname="org.schabi.newpipe.local.playlist.LocalPlaylistManagerTest" time="0.001" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" tests="2" failures="0" errors="0" skipped="0" time="0.605" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testInsert" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.328" />
+    <testcase name="testUpdateNotificationMode" classname="org.schabi.newpipe.local.subscription.SubscriptionManagerTest" time="0.277" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.player.PersonalPlaybackTest" tests="35" failures="0" errors="0" skipped="2" time="73.717" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="relatedListStartsWithActualNextAndHidesUsedSongs" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="4.876" />
+    <testcase name="networkPolicyReloadsCurrentAudioAndKeepsPausedPosition" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.053">
+      <skipped />
+    </testcase>
+    <testcase name="removedSongCanReturnUnlessExplicitlyExcluded" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.255" />
+    <testcase name="naturalEndAppendsRecommendationWhenAutoQueueEnabled" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.328" />
+    <testcase name="naturalEndTakesPrecedenceOverPendingPreview" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.378" />
+    <testcase name="nextFetchesRemainingPlaylistBeforeRecommendations" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.054" />
+    <testcase name="endOfItemTimerStopsBeforeTheNextAudioEvenWithRepeat" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.605" />
+    <testcase name="audioFocusCannotOverrideMuteOrTimerFade" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.454" />
+    <testcase name="naturalEndPlaysQueuedItemsAndStopsAtTailWhenAutoQueueDisabled" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="8.206" />
+    <testcase name="localAudioAutomaticallyAdvancesToTheNextQueueItem" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.379" />
+    <testcase name="repeatCycleAndNextNavigationUseTheLivePlayer" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.077" />
+    <testcase name="dataSaverBlocksMuxedFallbackAndGenericLiveManifest" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.076" />
+    <testcase name="sessionAcrossProcessRestart" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.052">
+      <skipped />
+    </testcase>
+    <testcase name="previewDoesNotPlayAndReplacementPreservesManualQueue" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.052" />
+    <testcase name="nextAtSingleVideoAndPlaylistTailChainsRecommendations" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.052" />
+    <testcase name="songSelectionPlaysImmediatelyAndPlayerSwitchKeepsPause" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="3.099" />
+    <testcase name="delayedDuplicateNextAdvancesOnceAndMissingRecommendationsDoNotWrap" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.304" />
+    <testcase name="savedLocalAudioSessionRestoresPausedThroughServiceAction" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.883" />
+    <testcase name="sleepTimerCanBeCancelledAndRearmedWhileAudioPlays" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="1.232" />
+    <testcase name="naturalEndActuallyPlaysRecommendedAudioThroughTheMediaSourceManager" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="12.269" />
+    <testcase name="failedPreviewCanRetryAndNextTakesPrecedenceOverLoading" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.102" />
+    <testcase name="changingRepeatModeCancelsPendingRecommendation" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.302" />
+    <testcase name="recommendedAudioActuallyPlaysThroughTheMediaSourceManager" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.253" />
+    <testcase name="qualityReloadKeepsPausedPositionAndDataSaverUiRenders" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="8.497" />
+    <testcase name="meteredSavingsOverrideQualityAndImagesWithoutOverwritingPreferences" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.078" />
+    <testcase name="detailTimerSharesStateAndDialogCancellationPreservesPlayback" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="14.355" />
+    <testcase name="endTimerStopsTheRealRecommendationChain" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="1.106" />
+    <testcase name="emptySavedSessionFinishesQueueScreenWithoutPlayer" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.204" />
+    <testcase name="pendingRecommendationIsCancelledByPauseAndDuplicateNextIsCoalesced" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.304" />
+    <testcase name="videoExclusionPersistsUntilUndoAndDoesNotTouchManualNext" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.052" />
+    <testcase name="sleepTimerPausesAudioAndRejectsAccidentalExoPlayerResume" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.681" />
+    <testcase name="timerFadeAndCancellationRespectMute" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.38" />
+    <testcase name="recommendationMenuSupportsExcludeUndoAndClear" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="3.796" />
+    <testcase name="channelExclusionSkipsSameUploaderAndMissingUploaderIsIgnored" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="0.051" />
+    <testcase name="queueOptionsAndTimerDialogRenderInPortraitAndLandscape" classname="org.schabi.newpipe.player.PersonalPlaybackTest" time="9.872" />
+  </testsuite>
+  <testsuite name="org.schabi.newpipe.util.StreamItemAdapterTest" tests="8" failures="0" errors="0" skipped="0" time="0.086" timestamp="2026-10-05T14:13:48" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554 - 6.0" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="videoStreams_Mixed" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.026" />
+    <testcase name="videoStreams_hasSecondaryStream" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.004" />
+    <testcase name="retrieveMediaFormatFromContentTypeHeader" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.027" />
+    <testcase name="retrieveMediaFormatFromFileTypeHeaders" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.001" />
+    <testcase name="audioStreams_noIcon" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.001" />
+    <testcase name="subtitleStreams_noIcon" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.026" />
+    <testcase name="retrieveMediaFormatFromContentDispositionHeader" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.001" />
+    <testcase name="videoStreams_noSecondaryStream" classname="org.schabi.newpipe.util.StreamItemAdapterTest" time="0.0" />
+  </testsuite>
+</testsuites>
