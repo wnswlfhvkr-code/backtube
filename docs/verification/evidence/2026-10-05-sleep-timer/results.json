@@ -1,0 +1,81 @@
+{
+  "observedAt": "2026-10-05T10:24:30+00:00",
+  "sourceBaseline": "84b4e0e85f02f29a8523486345db5fc5df9e395d",
+  "executedCheckoutCommit": "0f27dff854c39db6d313d1ae0fe53dc024dcccf9",
+  "sourceScope": "The executed checkout differs from main only in pre-existing handoff documents. Production and test files are unchanged.",
+  "sourceSha256": {
+    "app/src/main/java/org/schabi/newpipe/player/helper/SleepTimer.java": "2fe3ba9efd214e706fbab7604c8007293f36471a86d578d72234870371a78d25",
+    "app/src/test/java/org/schabi/newpipe/player/helper/SleepTimerTest.java": "683c2a53db4816d067823350386e235d68dbf2a7653587900c5218c7f782a3b8"
+  },
+  "standaloneJvm": {
+    "status": "PASS",
+    "suite": "org.schabi.newpipe.player.helper.SleepTimerTest",
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-05T10:20:20.557Z",
+    "testCases": [
+      {
+        "name": "disablingFadeRestoresGain",
+        "status": "PASS"
+      },
+      {
+        "name": "endOfItemModeFadesOnlyFromPlayerUpdatesAndExpiresOnItemEnd",
+        "status": "PASS"
+      },
+      {
+        "name": "elapsedTimeExpiryIsHandledAfterDeviceSleep",
+        "status": "PASS"
+      },
+      {
+        "name": "rejectsInvalidDurationsWithoutReplacingActiveTimer",
+        "status": "PASS"
+      },
+      {
+        "name": "expiresOnceAndCanBeCancelledOrReplaced",
+        "status": "PASS"
+      },
+      {
+        "name": "extendConvertsEndModeAndCapsAnActiveTimerAtTwentyFourHours",
+        "status": "PASS"
+      },
+      {
+        "name": "timedFadeKeepsReducedGainUntilExpiryCallbackThenRestoresIt",
+        "status": "PASS"
+      }
+    ],
+    "dependencies": {
+      "rxjava": "3.1.12",
+      "junit": "4.13.2"
+    },
+    "scope": "Unmodified SleepTimer.java and SleepTimerTest.java, real dependencies in temporary Java Gradle harness; no Android runtime."
+  },
+  "style": {
+    "status": "PASS",
+    "exitCode": 0,
+    "checkstyleViolations": 0,
+    "tasks": [
+      ":app:runCheckstyle",
+      ":app:runKtlint"
+    ],
+    "warnings": [
+      "Gradle deprecations",
+      "Android analytics settings directory is not writable"
+    ]
+  },
+  "appFocusedTestAndDebugBuild": {
+    "status": "FAIL_ENVIRONMENT",
+    "exitCode": 1,
+    "reason": "Failed to find Build Tools revision 36.0.0",
+    "appTestsExecuted": 0,
+    "debugApkBuilt": false,
+    "installedBuildTools": [
+      "37.0.0"
+    ]
+  },
+  "fullAppJvmAndReleaseBuild": "SKIP: same missing build-tools dependency",
+  "androidInstrumentation": "NOT_RUN: emulator and system images absent",
+  "realDeviceScreenOffAndBackgroundPlayback": "NOT_RUN",
+  "newFeatureOrProductionCodeChanges": false
+}
