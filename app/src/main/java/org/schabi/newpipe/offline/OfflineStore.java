@@ -11,15 +11,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.function.LongSupplier;
 
 /** Durable, local-only copies. The source file is never modified or deleted. */
 public final class OfflineStore {
     public static final long DEFAULT_LIMIT = 500_000_000L;
-    public static final long DEFAULT_LIFETIME = 7L * 24 * 60 * 60 * 1000;
     public static final String LOCAL_PREFIX = "backtube-offline:";
 
+    // EXPIRED is read only to migrate records written by older versions.
     public enum State { IMPORTING, DOWNLOADING, READY, INTERRUPTED, FAILED, EXPIRED }
+
+    public static final class StorageFullException extends IOException {
+        public StorageFullException() {
+            super("Not enough offline storage space; delete a saved item before saving more");
+        }
+    }
 
     public static final class Entry {
         public final String id;
@@ -30,6 +35,7 @@ public final class OfflineStore {
         public final String mime;
         public final State state;
         public final long bytes;
+        /** Legacy metadata field; zero means retained until explicitly deleted. */
         public final long expiresAt;
 
         @SuppressWarnings("ParameterNumber")
@@ -58,18 +64,13 @@ public final class OfflineStore {
 
     private final File directory;
     private final long limit;
-    private final long lifetime;
-    private final LongSupplier clock;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final Map<String, Integer> readers = new LinkedHashMap<>();
 
-    public OfflineStore(final File directory, final long limit, final long lifetime,
-                        final LongSupplier clock) throws IOException {
+    public OfflineStore(final File directory, final long limit) throws IOException {
         this.directory = directory;
         this.limit = limit;
-        this.lifetime = lifetime;
-        this.clock = clock;
-        if (limit <= 0 || lifetime <= 0 || (!directory.isDirectory() && !directory.mkdirs())) {
+        if (limit <= 0 || (!directory.isDirectory() && !directory.mkdirs())) {
             throw new IOException("Offline storage unavailable");
         }
         final File[] files = directory.listFiles();
@@ -102,10 +103,18 @@ public final class OfflineStore {
             }
         }
         for (final Entry entry : new ArrayList<>(entries.values())) {
-            if (entry.state == State.IMPORTING) {
+            if (entry.state == State.EXPIRED) {
+                // Old expiry may have run while a player still held the file open. Preserve
+                // those surviving complete bytes; already removed bytes cannot be restored.
+                final boolean complete = entry.bytes > 0 && file(entry).isFile()
+                        && file(entry).length() == entry.bytes;
+                save(entry.changed(complete ? State.READY : State.FAILED, entry.bytes, 0));
+            } else if (entry.state == State.IMPORTING) {
                 removeFile(part(entry.id));
                 removeFile(file(entry));
                 save(entry.changed(State.INTERRUPTED, 0, 0));
+            } else if (entry.expiresAt != 0) {
+                save(entry.changed(entry.state, entry.bytes, 0));
             }
         }
         // Crash between rename and metadata commit, or deletion and unlink, leaves only orphans.
@@ -123,6 +132,7 @@ public final class OfflineStore {
     public synchronized Entry beginDownload(final String title, final String origin,
                                             final int serviceId, final String mime)
             throws IOException {
+        requireCapacity();
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 "giga", mime, State.DOWNLOADING, 0, 0);
         save(entry);
@@ -141,7 +151,7 @@ public final class OfflineStore {
         final long growth = Math.max(0, targetLength - file(entry).length());
         if (growth > limit - usedBytes()
                 || directory.getUsableSpace() < growth + 1048576L) {
-            throw new IOException("Not enough offline storage space");
+            throw new StorageFullException();
         }
     }
 
@@ -154,11 +164,12 @@ public final class OfflineStore {
         if (entry.state != State.DOWNLOADING || size <= 0 || usedBytes() > limit) {
             throw new IOException("Incomplete or oversized download");
         }
-        save(entry.changed(State.READY, size, clock.getAsLong() + lifetime));
+        save(entry.changed(State.READY, size, 0));
     }
 
     public synchronized Entry create(final String title, final String origin, final int serviceId,
                                      final String source, final String mime) throws IOException {
+        requireCapacity();
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 source, mime, State.IMPORTING, 0, 0);
         save(entry);
@@ -190,7 +201,7 @@ public final class OfflineStore {
                     }
                     if (count > limit - usedBytes()
                             || directory.getUsableSpace() < count + 1048576L) {
-                        throw new IOException("Not enough offline storage space");
+                        throw new StorageFullException();
                     }
                     output.write(buffer, 0, count);
                     entries.put(id, entry.changed(State.IMPORTING, entry.bytes + count, 0));
@@ -205,7 +216,7 @@ public final class OfflineStore {
                 if (!part(id).renameTo(file(entry))) {
                     throw new IOException("Cannot finish offline copy");
                 }
-                save(entry.changed(State.READY, entry.bytes, clock.getAsLong() + lifetime));
+                save(entry.changed(State.READY, entry.bytes, 0));
             }
         } catch (final IOException error) {
             synchronized (this) {
@@ -285,7 +296,7 @@ public final class OfflineStore {
     public synchronized File retain(final String id) throws IOException {
         final Entry entry = get(id);
         if (entry == null || entry.state != State.READY) {
-            throw new IOException("Offline copy missing or expired");
+            throw new IOException("Offline copy unavailable");
         }
         readers.put(id, readers.getOrDefault(id, 0) + 1);
         return file(entry);
@@ -298,7 +309,7 @@ public final class OfflineStore {
         } else {
             readers.remove(id);
             final Entry entry = entries.get(id);
-            if (entry == null || entry.state != State.READY) {
+            if (entry == null) {
                 removeFile(new File(directory, id + ".media"));
             }
         }
@@ -319,9 +330,6 @@ public final class OfflineStore {
 
     private void refresh() throws IOException {
         for (final Entry entry : new ArrayList<>(entries.values())) {
-            if (entry.state == State.EXPIRED && !readers.containsKey(entry.id)) {
-                removeFile(file(entry));
-            }
             if (entry.state == State.DOWNLOADING) {
                 entries.put(entry.id, entry.changed(State.DOWNLOADING, file(entry).length(), 0));
                 continue;
@@ -329,14 +337,15 @@ public final class OfflineStore {
             if (entry.state != State.READY) {
                 continue;
             }
-            if (clock.getAsLong() >= entry.expiresAt) {
-                save(entry.changed(State.EXPIRED, entry.bytes, entry.expiresAt));
-                if (!readers.containsKey(entry.id)) {
-                    removeFile(file(entry));
-                }
-            } else if (!file(entry).isFile() || file(entry).length() != entry.bytes) {
-                save(entry.changed(State.FAILED, entry.bytes, entry.expiresAt));
+            if (!file(entry).isFile() || file(entry).length() != entry.bytes) {
+                save(entry.changed(State.FAILED, entry.bytes, 0));
             }
+        }
+    }
+
+    private void requireCapacity() throws StorageFullException {
+        if (usedBytes() >= limit || directory.getUsableSpace() < 1048576L) {
+            throw new StorageFullException();
         }
     }
 
@@ -365,7 +374,7 @@ public final class OfflineStore {
         properties.setProperty("expires", Long.toString(entry.expiresAt));
         final File pending = new File(directory, entry.id + ".new");
         try (FileOutputStream output = new FileOutputStream(pending)) {
-            properties.store(output, "backtube temporary media");
+            properties.store(output, "backtube saved media");
             output.getFD().sync();
         }
         if (!pending.renameTo(new File(directory, entry.id + ".properties"))) {

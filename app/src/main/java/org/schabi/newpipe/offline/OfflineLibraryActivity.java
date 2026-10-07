@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -36,8 +37,6 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.ThemeHelper;
 
 import java.io.IOException;
-import java.text.DateFormat;
-import java.util.Date;
 import java.util.List;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -109,6 +108,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         }
         toolbar.setNavigationOnClickListener(view -> finish());
         summary = new TextView(this);
+        summary.setId(R.id.offline_storage_summary);
         summary.setPadding(24, 16, 24, 16);
         content.addView(summary);
         final LinearLayout actions = new LinearLayout(this);
@@ -126,6 +126,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         content.addView(wifiOnly);
         final ScrollView scroll = new ScrollView(this);
         rows = new LinearLayout(this);
+        rows.setId(R.id.offline_saved_rows);
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(24, 8, 24, 24);
         scroll.addView(rows);
@@ -189,9 +190,16 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             if (mime == null || !(mime.startsWith("audio/") || mime.startsWith("video/"))) {
                 throw new IOException("Unsupported media");
             }
+            try (AssetFileDescriptor source = getContentResolver()
+                    .openAssetFileDescriptor(uri, "r")) {
+                if (source != null && source.getLength() > OfflineStore.DEFAULT_LIMIT
+                        - target.store().usedBytes()) {
+                    throw new OfflineStore.StorageFullException();
+                }
+            }
             return target.importUri(uri, title, origin == null ? "" : origin, serviceId, mime);
         }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(entry -> refresh(), error -> showError()));
+                .subscribe(entry -> refresh(), this::showError));
     }
 
     private void refresh() {
@@ -218,7 +226,8 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         final StringBuilder signature = new StringBuilder();
         for (final OfflineStore.Entry entry : entries) {
             signature.append(entry.id).append(entry.state).append(entry.bytes)
-                    .append(library.isCopying(entry.id));
+                    .append(library.isCopying(entry.id))
+                    .append(library.isCapacityFailure(entry.id));
             final DownloadMission mission = downloadManager == null ? null
                     : downloadManager.getOfflineMission(entry.id);
             if (mission != null) {
@@ -245,21 +254,22 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             title.setPadding(0, 20, 0, 8);
             rows.addView(title);
             final TextView status = new TextView(this);
-            final String expiry = entry.state == OfflineStore.State.READY
-                    ? " · " + getString(R.string.offline_expires,
-                    DateFormat.getDateTimeInstance().format(new Date(entry.expiresAt))) : "";
             final DownloadMission mission = downloadManager == null ? null
                     : downloadManager.getOfflineMission(entry.id);
-            String stateLabel = getString(stateText(entry.state));
+            String stateLabel = getString(library.isCapacityFailure(entry.id)
+                    ? R.string.offline_storage_full : stateText(entry.state));
             if (entry.state == OfflineStore.State.DOWNLOADING) {
                 stateLabel = getString(mission == null ? R.string.offline_recovery_wait
+                        : mission.errCode == DownloadMission.ERROR_INSUFFICIENT_STORAGE
+                        || mission.errObject instanceof OfflineStore.StorageFullException
+                        ? R.string.offline_storage_full
                         : mission.errCode != DownloadMission.ERROR_NOTHING ? R.string.offline_failed
                         : mission.running ? R.string.offline_downloading
                         : mission.enqueued ? R.string.offline_network_wait
                         : R.string.offline_interrupted);
             }
             status.setText(stateLabel + " · "
-                    + getString(R.string.offline_size, entry.bytes / 1_000_000.0) + expiry);
+                    + getString(R.string.offline_size, entry.bytes / 1_000_000.0));
             rows.addView(status);
             if (entry.state == OfflineStore.State.IMPORTING
                     || entry.state == OfflineStore.State.DOWNLOADING) {
@@ -300,7 +310,6 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             case READY: return R.string.offline_ready;
             case IMPORTING: return R.string.offline_copying;
             case INTERRUPTED: return R.string.offline_interrupted;
-            case EXPIRED: return R.string.offline_expired;
             default: return R.string.offline_failed;
         }
     }
@@ -341,11 +350,17 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             action.run();
             return true;
         }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(done -> refresh(), error -> showError()));
+                .subscribe(done -> refresh(), this::showError));
     }
 
-    private void showError() {
-        Toast.makeText(this, R.string.offline_storage_error, Toast.LENGTH_LONG).show();
+    private void showError(final Throwable error) {
+        if (error instanceof OfflineStore.StorageFullException) {
+            new AlertDialog.Builder(this).setTitle(R.string.offline_library)
+                    .setMessage(R.string.offline_storage_full)
+                    .setPositiveButton(android.R.string.ok, null).show();
+        } else {
+            Toast.makeText(this, R.string.offline_storage_error, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void button(final LinearLayout parent, final int text, final Runnable action) {

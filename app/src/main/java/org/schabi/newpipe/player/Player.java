@@ -259,6 +259,7 @@ public final class Player implements PlaybackListener, Listener {
     // audio only mode does not mean that player type is background, but that the player was
     // minimized to background but will resume automatically to the original player type
     private boolean isAudioOnly = false;
+    private boolean listeningMode;
     private boolean isPrepared = false;
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -531,7 +532,7 @@ public final class Player implements PlaybackListener, Listener {
             playerType = IntentCompat.getSerializableExtra(intent, PLAYER_TYPE, PlayerType.class);
         }
         initUIsForCurrentPlayerType();
-        isAudioOnly = audioPlayerSelected();
+        isAudioOnly = audioPlayerSelected() || listeningMode;
 
         if (intent.hasExtra(PLAYBACK_QUALITY)) {
             videoResolver.setPlaybackQuality(intent.getStringExtra(PLAYBACK_QUALITY));
@@ -3033,7 +3034,8 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        isAudioOnly = !videoAndSubtitlesEnabled;
+        final boolean enableVideo = videoAndSubtitlesEnabled && !listeningMode;
+        isAudioOnly = !enableVideo;
 
         final var item = playQueue.getItem();
         final boolean hasPendingRecovery =
@@ -3057,6 +3059,10 @@ public final class Player implements PlaybackListener, Listener {
                 reloadPlayQueueManager();
             }
         }, () -> {
+            // Direct local sources have no resolver/queue manager to reload.
+            if (playQueueManager == null) {
+                return;
+            }
             /*
             The current metadata may be null sometimes (for e.g. when using an unstable connection
             in livestreams) so we will be not able to execute the block above
@@ -3074,8 +3080,32 @@ public final class Player implements PlaybackListener, Listener {
         // Disable or enable video and subtitles renderers depending of the
         // videoAndSubtitlesEnabled value
         trackSelector.setParameters(trackSelector.buildUponParameters()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !videoAndSubtitlesEnabled)
-                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !videoAndSubtitlesEnabled));
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enableVideo)
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !enableVideo));
+    }
+
+    public boolean isListeningMode() {
+        return listeningMode;
+    }
+
+    public void setListeningMode(final boolean enabled) {
+        if (listeningMode == enabled) {
+            return;
+        }
+        listeningMode = enabled;
+        useVideoAndSubtitles(!enabled && !audioPlayerSelected() && isScreenOn());
+        UIs.call(PlayerUi::onListeningModeChanged);
+    }
+
+    /** Leave the activity without rebuilding playback or changing its play/pause intent. */
+    public void continueInBackgroundOnUiExit() {
+        if (!videoPlayerSelected() || exoPlayerIsNull()) {
+            return;
+        }
+        playerType = PlayerType.AUDIO;
+        isAudioOnly = true;
+        initUIsForCurrentPlayerType();
+        notifyPlaybackUpdateToListeners();
     }
 
     /**

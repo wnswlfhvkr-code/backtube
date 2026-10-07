@@ -67,6 +67,8 @@ adb shell svc wifi disable
 adb shell svc data disable
 run_phase restore -e session_restart_phase restore \
     -e class "$class_name#savedOfflineLifecycleAcrossProcessRestart"
+adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/offline-shelf-retained-after-restart.png" \
+    "$output_dir/offline-shelf-retained-after-restart.png"
 run_phase playback -e class "$class_name#savedOfflineCopyPlaysWithoutInfoCacheAndKeepsSleepTimerOnNetworkReturn,$class_name#savedOfflineQueueRestoresWithoutRemoteMetadata,$class_name#savedOfflineShelfImportsGeneratedFile"
 adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/offline-shelf-generated.png" \
     "$output_dir/offline-shelf-generated.png"
@@ -75,5 +77,12 @@ run_phase current-ui -e class org.schabi.newpipe.player.MiniPlayerUiTest
 for orientation in "" "-landscape"; do
     adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/backtube-current-track-generated${orientation}.png" \
         "$output_dir/backtube-current-track-generated${orientation}.png"
+done
+# Exercise real popup windows and retain orientation/control evidence before connectedCheck.
+navigation_class=org.schabi.newpipe.player.PlaybackNavigationTest
+run_phase popup-policy -e class "$navigation_class#popupExpansionKeepsPortraitPolicyAndControlsReachable,$navigation_class#popupExpansionKeepsLandscapePolicyAndControlsReachable,$navigation_class#popupExpansionKeepsLockedPortraitPolicyAndControlsReachable"
+for orientation in portrait landscape portrait-locked; do
+    adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/popup-expanded-${orientation}.png" \
+        "$output_dir/popup-expanded-${orientation}.png"
 done
 # Leave networking disabled for the subsequent local connected suite.

@@ -199,6 +199,8 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
     protected void initListeners() {
         binding.qualityTextView.setOnClickListener(makeOnClickListener(this::onQualityClicked));
+        binding.listeningMode.setOnClickListener(makeOnClickListener(
+                () -> player.setListeningMode(!player.isListeningMode())));
         binding.audioTrackTextView.setOnClickListener(
                 makeOnClickListener(this::onAudioTracksClicked));
         binding.playbackSpeed.setOnClickListener(makeOnClickListener(this::onPlaybackSpeedClicked));
@@ -277,6 +279,7 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
     protected void deinitListeners() {
         binding.qualityTextView.setOnClickListener(null);
+        binding.listeningMode.setOnClickListener(null);
         binding.audioTrackTextView.setOnClickListener(null);
         binding.playbackSpeed.setOnClickListener(null);
         binding.playbackSeekBar.setOnSeekBarChangeListener(null);
@@ -423,6 +426,7 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
     protected void setupElementsVisibility() {
         setMuteButton(player.isMuted());
+        updateListeningModeViews();
         animateRotation(binding.moreOptionsButton, DEFAULT_CONTROLS_DURATION, 0);
     }
 
@@ -435,6 +439,7 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
         binding.topControls.setPaddingRelative(controlsPad, playerTopPad, controlsPad, 0);
         binding.bottomControls.setPaddingRelative(controlsPad, 0, controlsPad, 0);
         binding.qualityTextView.setPadding(buttonsPad, buttonsPad, buttonsPad, buttonsPad);
+        binding.listeningMode.setPadding(buttonsPad, buttonsPad, buttonsPad, buttonsPad);
         binding.audioTrackTextView.setPadding(buttonsPad, buttonsPad, buttonsPad, buttonsPad);
         binding.playbackSpeed.setPadding(buttonsPad, buttonsPad, buttonsPad, buttonsPad);
         binding.playbackSpeed.setMinimumWidth(buttonsMinWidth);
@@ -1091,6 +1096,29 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
             buildPlaybackSpeedMenu();
             binding.playbackSpeed.setVisibility(View.VISIBLE);
         });
+        updateListeningModeViews();
+    }
+
+    @Override
+    public void onListeningModeChanged() {
+        updateStreamRelatedViews();
+    }
+
+    private void updateListeningModeViews() {
+        final boolean enabled = player.isListeningMode();
+        final boolean video = player.getCurrentStreamInfo()
+                .map(info -> org.schabi.newpipe.util.StreamTypeUtil.isVideo(info.getStreamType()))
+                .orElse(false);
+        binding.listeningMode.setVisibility(video || enabled ? View.VISIBLE : View.GONE);
+        binding.listeningMode.setSelected(enabled);
+        binding.listeningMode.setText(enabled
+                ? R.string.listening_mode_on : R.string.listening_mode);
+        binding.listeningMode.setContentDescription(context.getString(enabled
+                ? R.string.listening_mode_disable : R.string.listening_mode_enable));
+        if (video || enabled) {
+            binding.surfaceView.setVisibility(enabled ? View.GONE : View.VISIBLE);
+            binding.endScreen.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        }
     }
     //endregion
 

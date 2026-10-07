@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="listening_mode">Listen</string>
+    <string name="listening_mode_on">Listening ✓</string>
+    <string name="listening_mode_enable">Enable listening mode</string>
+    <string name="listening_mode_disable">Return to video</string>
     <string name="personal_open_current_player">Open current track player</string>
     <string name="personal_no_recommendation">No new recommended videos available.</string>
     <string name="personal_recommendation_failed">Could not load recommendations.</string>

@@ -31,13 +31,13 @@ public final class OfflineLibrary {
     private final OfflineStore store;
     private final ExecutorService copier = Executors.newSingleThreadExecutor();
     private final Set<String> jobs = ConcurrentHashMap.newKeySet();
+    private final Set<String> capacityFailures = ConcurrentHashMap.newKeySet();
     private final Context context;
 
     private OfflineLibrary(final Context context) throws IOException {
         this.context = context.getApplicationContext();
         store = new OfflineStore(new File(context.getFilesDir(), "offline"),
-                OfflineStore.DEFAULT_LIMIT, OfflineStore.DEFAULT_LIFETIME,
-                System::currentTimeMillis);
+                OfflineStore.DEFAULT_LIMIT);
     }
 
     public static synchronized OfflineLibrary get(final Context context) throws IOException {
@@ -55,6 +55,10 @@ public final class OfflineLibrary {
         return jobs.contains(id);
     }
 
+    public boolean isCapacityFailure(final String id) {
+        return capacityFailures.contains(id);
+    }
+
     public OfflineStore.Entry importUri(final Uri uri, final String title, final String origin,
                                         final int serviceId, final String mime) throws IOException {
         requireLocal(uri);
@@ -69,6 +73,7 @@ public final class OfflineLibrary {
         if (entry == null || entry.state == OfflineStore.State.READY || !jobs.add(id)) {
             return;
         }
+        capacityFailures.remove(id);
         final Uri uri = Uri.parse(entry.source);
         try {
             requireLocal(uri);
@@ -89,7 +94,11 @@ public final class OfflineLibrary {
                     }
                     store.copy(id, input);
                 }
+                OfflineSaveNotifications.showSaved(context, current.title);
             } catch (final IOException | SecurityException error) {
+                if (error instanceof OfflineStore.StorageFullException) {
+                    capacityFailures.add(id);
+                }
                 try {
                     store.fail(id);
                 } catch (final IOException ignored) {
@@ -127,7 +136,7 @@ public final class OfflineLibrary {
                         .setUri(Uri.fromFile(store.file(entry))).setMimeType(entry.mime).build());
     }
 
-    /** Keep the opened file alive through expiry/delete until ExoPlayer releases its reader. */
+    /** Keep a deleted file alive until ExoPlayer releases its reader. */
     private static final class SavedFileSource implements DataSource {
         private final OfflineStore store;
         private final String id;

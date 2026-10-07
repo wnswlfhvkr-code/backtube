@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="listening_mode">듣기모드</string>
+    <string name="listening_mode_on">듣기모드 ✓</string>
+    <string name="listening_mode_enable">듣기모드 켜기</string>
+    <string name="listening_mode_disable">영상으로 돌아가기</string>
     <string name="personal_open_current_player">현재 곡 재생 화면 열기</string>
     <string name="personal_no_recommendation">새로운 추천 영상이 없습니다.</string>
     <string name="personal_recommendation_failed">추천 영상을 불러오지 못했습니다.</string>

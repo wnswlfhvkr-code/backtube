@@ -192,6 +192,25 @@ public class DownloadDialog extends DialogFragment
     }
 
 
+    /**
+     * Uses the existing quality selector for an app-owned offline save.
+     * @param context context used to select the default media quality
+     * @param info available media streams
+     * @return a selector that saves to the offline library
+     */
+    public static DownloadDialog forOffline(@NonNull final Context context,
+                                             @NonNull final StreamInfo info) {
+        final DownloadDialog dialog = new DownloadDialog(context, info);
+        final Bundle arguments = new Bundle();
+        arguments.putBoolean("offline_save_only", true);
+        dialog.setArguments(arguments);
+        return dialog;
+    }
+
+    private boolean isOfflineSave() {
+        return getArguments() != null && getArguments().getBoolean("offline_save_only");
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
     // Android lifecycle
     //////////////////////////////////////////////////////////////////////////*/
@@ -204,7 +223,7 @@ public class DownloadDialog extends DialogFragment
                     + "savedInstanceState = [" + savedInstanceState + "]");
         }
 
-        if (!PermissionHelper.checkStoragePermissions(getActivity(),
+        if (!isOfflineSave() && !PermissionHelper.checkStoragePermissions(getActivity(),
                 PermissionHelper.DOWNLOAD_DIALOG_REQUEST_CODE)) {
             dismiss();
             return;
@@ -340,7 +359,7 @@ public class DownloadDialog extends DialogFragment
             Log.d(TAG, "initToolbar() called with: toolbar = [" + toolbar + "]");
         }
 
-        toolbar.setTitle(R.string.download_dialog_title);
+        toolbar.setTitle(isOfflineSave() ? R.string.offline_save : R.string.download_dialog_title);
         toolbar.setNavigationIcon(R.drawable.ic_arrow_back);
         toolbar.inflateMenu(R.menu.dialog_url);
         toolbar.setNavigationOnClickListener(v -> dismiss());
@@ -348,15 +367,15 @@ public class DownloadDialog extends DialogFragment
 
         okButton = toolbar.getMenu().findItem(R.id.okay);
         okButton.setEnabled(false); // disable until the download service connection is done
+        if (isOfflineSave()) {
+            okButton.setTitle(R.string.offline_save);
+            dialogBinding.fileName.setVisibility(View.GONE);
+            dialogBinding.fileNameTextView.setVisibility(View.GONE);
+        }
 
-        toolbar.getMenu().add(R.string.offline_save).setOnMenuItemClickListener(item -> {
-            saveOffline = true;
-            prepareSelectedDownload();
-            return true;
-        });
         toolbar.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == R.id.okay) {
-                saveOffline = false;
+                saveOffline = isOfflineSave();
                 prepareSelectedDownload();
                 return true;
             }
@@ -656,7 +675,8 @@ public class DownloadDialog extends DialogFragment
 
         final boolean isVideoStreamsAvailable = videoStreamsAdapter.getCount() > 0;
         final boolean isAudioStreamsAvailable = audioStreamsAdapter.getCount() > 0;
-        final boolean isSubtitleStreamsAvailable = subtitleStreamsAdapter.getCount() > 0;
+        final boolean isSubtitleStreamsAvailable = !isOfflineSave()
+                && subtitleStreamsAdapter.getCount() > 0;
 
         dialogBinding.audioButton.setVisibility(isAudioStreamsAvailable ? View.VISIBLE
                 : View.GONE);
@@ -819,7 +839,7 @@ public class DownloadDialog extends DialogFragment
                         org.schabi.newpipe.offline.OfflineLibrary.get(context);
                 if (size > 0 && size > org.schabi.newpipe.offline.OfflineStore.DEFAULT_LIMIT
                         - library.store().usedBytes()) {
-                    showFailedDialog(R.string.offline_storage_error);
+                    showFailedDialog(R.string.offline_storage_full);
                     return;
                 }
                 final org.schabi.newpipe.offline.OfflineStore.Entry entry =
@@ -830,7 +850,9 @@ public class DownloadDialog extends DialogFragment
                 continueSelectedDownload(storage);
                 org.schabi.newpipe.offline.OfflineLibraryActivity.open(context);
             } catch (final IOException error) {
-                showFailedDialog(R.string.offline_storage_error);
+                showFailedDialog(error
+                        instanceof org.schabi.newpipe.offline.OfflineStore.StorageFullException
+                        ? R.string.offline_storage_full : R.string.offline_storage_error);
             }
             return;
         }

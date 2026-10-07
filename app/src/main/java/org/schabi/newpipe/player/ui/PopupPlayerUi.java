@@ -171,6 +171,11 @@ public final class PopupPlayerUi extends VideoPlayerUi {
         binding.moreOptionsButton.setVisibility(View.GONE);
         binding.topControls.setOrientation(LinearLayout.HORIZONTAL);
         binding.primaryControls.getLayoutParams().width = WRAP_CONTENT;
+        final LinearLayout.LayoutParams scrollParams =
+                (LinearLayout.LayoutParams) binding.primaryControlsScroll.getLayoutParams();
+        scrollParams.width = 0;
+        scrollParams.weight = 1;
+        binding.primaryControlsScroll.setLayoutParams(scrollParams);
         binding.secondaryControls.setAlpha(1.0f);
         binding.secondaryControls.setVisibility(View.VISIBLE);
         binding.secondaryControls.setTranslationY(0);

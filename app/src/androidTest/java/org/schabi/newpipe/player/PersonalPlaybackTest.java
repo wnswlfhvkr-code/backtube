@@ -285,29 +285,37 @@ public class PersonalPlaybackTest {
         if ("seed".equals(restartPhase)) {
             final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.importUri(
                     Uri.fromFile(localAudio), "Generated saved WAV", "", 0, "audio/wav");
-            final org.schabi.newpipe.offline.OfflineStore.Entry expired = library.importUri(
-                    Uri.fromFile(localAudio), "Generated expired WAV", "", 0, "audio/wav");
+            final org.schabi.newpipe.offline.OfflineStore.Entry legacyExpired = library.importUri(
+                    Uri.fromFile(localAudio), "Generated legacy saved WAV", "", 0, "audio/wav");
             assertTrue("asynchronous save did not finish", waitFor(() -> callOnMain(() ->
                     library.store().get(saved.id).state
                             == org.schabi.newpipe.offline.OfflineStore.State.READY
-                    && library.store().get(expired.id).state
+                    && library.store().get(legacyExpired.id).state
                             == org.schabi.newpipe.offline.OfflineStore.State.READY), 15));
             assertTrue("saving removed original file", localAudio.isFile());
             new LastPlaybackSessionStore(PreferenceManager.getDefaultSharedPreferences(context))
                     .save(library.queue(saved), 1000, Player.REPEAT_MODE_ONE);
-            fixture.edit().putString("saved", saved.id).putString("expired", expired.id)
+            fixture.edit().putString("saved", saved.id).putString("legacyExpired", legacyExpired.id)
                     .putInt("seedPid", android.os.Process.myPid()).commit();
-            // Deterministic elapsed-retention fixture, re-read only in the next process.
-            final File metadata = new File(context.getFilesDir(),
-                    "offline/" + expired.id + ".properties");
-            final java.util.Properties properties = new java.util.Properties();
-            try (FileInputStream input = new FileInputStream(metadata)) {
-                properties.load(input);
-            }
-            properties.setProperty("expires", "1");
-            try (FileOutputStream output = new FileOutputStream(metadata)) {
-                properties.store(output, "generated expiry fixture");
-                output.getFD().sync();
+            // Both legacy deadlines passed over eight days ago. The next process must
+            // retain READY bytes and recover still-present EXPIRED bytes without networking.
+            for (final org.schabi.newpipe.offline.OfflineStore.Entry entry
+                    : new org.schabi.newpipe.offline.OfflineStore.Entry[]{saved, legacyExpired}) {
+                final File metadata = new File(context.getFilesDir(),
+                        "offline/" + entry.id + ".properties");
+                final java.util.Properties properties = new java.util.Properties();
+                try (FileInputStream input = new FileInputStream(metadata)) {
+                    properties.load(input);
+                }
+                properties.setProperty("expires", Long.toString(
+                        System.currentTimeMillis() - 9L * 24 * 60 * 60 * 1000));
+                if (entry == legacyExpired) {
+                    properties.setProperty("state", "EXPIRED");
+                }
+                try (FileOutputStream output = new FileOutputStream(metadata)) {
+                    properties.store(output, "generated legacy retention fixture");
+                    output.getFD().sync();
+                }
             }
             return;
         }
@@ -316,14 +324,40 @@ public class PersonalPlaybackTest {
         assertEquals("airplane mode must be enabled before restore", "1", shellCommand(
                 "settings get global airplane_mode_on").trim());
         final String savedId = fixture.getString("saved", "");
-        final String expiredId = fixture.getString("expired", "");
+        final String legacyExpiredId = fixture.getString("legacyExpired", "");
         final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.store().get(savedId);
-        final org.schabi.newpipe.offline.OfflineStore.Entry expired =
-                library.store().get(expiredId);
+        final org.schabi.newpipe.offline.OfflineStore.Entry legacyExpired =
+                library.store().get(legacyExpiredId);
         assertTrue("completed save missing after restart", saved != null);
-        assertEquals(org.schabi.newpipe.offline.OfflineStore.State.EXPIRED, expired.state);
-        assertFalse("expired media bytes retained", library.store().file(expired).exists());
-        assertNull("expired item still playable", library.source(library.queue(expired).getItem()));
+        assertEquals(org.schabi.newpipe.offline.OfflineStore.State.READY, saved.state);
+        assertEquals(0, saved.expiresAt);
+        assertEquals(org.schabi.newpipe.offline.OfflineStore.State.READY, legacyExpired.state);
+        assertEquals(0, legacyExpired.expiresAt);
+        assertTrue("legacy saved bytes removed", library.store().file(legacyExpired).exists());
+        assertTrue("legacy saved source unavailable",
+                library.source(library.queue(legacyExpired).getItem()) != null);
+        final android.app.Activity shelf = InstrumentationRegistry.getInstrumentation()
+                .startActivitySync(new Intent(context,
+                        org.schabi.newpipe.offline.OfflineLibraryActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            assertTrue("aged saved items absent from the shelf after restart", waitFor(
+                    () -> callOnMain(() -> {
+                        for (final String title : new String[]{saved.title, legacyExpired.title}) {
+                            final java.util.ArrayList<android.view.View> matches =
+                                    new java.util.ArrayList<>();
+                            shelf.findViewById(android.R.id.content).findViewsWithText(matches,
+                                    title, android.view.View.FIND_VIEWS_WITH_TEXT);
+                            if (matches.isEmpty()) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }), 10));
+            captureScreen(context, "offline-shelf-retained-after-restart.png");
+        } finally {
+            runOnMain(shelf::finish);
+        }
         final LastPlaybackSessionStore.Snapshot snapshot = new LastPlaybackSessionStore(
                 PreferenceManager.getDefaultSharedPreferences(context)).load();
         assertTrue("saved queue lost across restart", snapshot != null);
@@ -352,7 +386,7 @@ public class PersonalPlaybackTest {
         runOnMain(service::destroyPlayerAndStopService);
         assertTrue("deleted bytes not removed after reader release", waitFor(
                 () -> !savedFile.exists(), 10));
-        library.store().delete(expired.id);
+        library.store().delete(legacyExpired.id);
         fixture.edit().clear().commit();
     }
 

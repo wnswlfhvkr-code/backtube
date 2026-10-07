@@ -437,13 +437,10 @@ public final class NavigationHelper {
             if (switchingPlayers && TextUtils.equals(detailFragment.getUrl(), url)) {
                 // Situation when user switches from players to main player. All needed data is
                 // here, we can start watching (assuming newQueue equals playQueue).
-                // Starting directly in fullscreen if the previous player type was popup.
-                detailFragment.openVideoPlayer(playerType == PlayerType.POPUP
-                        || PlayerHelper.isStartMainPlayerFullscreenEnabled(context));
+                // Expanding a popup must not override the device's orientation policy.
+                detailFragment.openVideoPlayer(
+                        PlayerHelper.isStartMainPlayerFullscreenEnabled(context));
             } else {
-                if (switchingPlayers && playerType == PlayerType.POPUP) {
-                    detailFragment.setForceFullscreen(true);
-                }
                 detailFragment.selectAndLoadVideo(serviceId, url, title, playQueue,
                         playImmediately && !switchingPlayers);
             }

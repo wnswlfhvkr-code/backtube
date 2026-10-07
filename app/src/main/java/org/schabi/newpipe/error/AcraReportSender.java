@@ -1,13 +1,18 @@
 package org.schabi.newpipe.error;
 
 import android.content.Context;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 
 import org.acra.ReportField;
 import org.acra.data.CrashReportData;
 import org.acra.sender.ReportSender;
+import org.schabi.newpipe.BuildConfig;
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.error.autoreport.AppFaultRecorder;
+
+import java.io.File;
 
 /*
  * Created by Christian Schabesberger  on 13.09.16.
@@ -33,6 +38,14 @@ public class AcraReportSender implements ReportSender {
 
     @Override
     public void send(@NonNull final Context context, @NonNull final CrashReportData report) {
+        try {
+            AppFaultRecorder.record(report.getString(ReportField.STACK_TRACE),
+                    BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT,
+                    new File(context.getNoBackupFilesDir(), "sanitized-app-faults"),
+                    System.currentTimeMillis());
+        } catch (final RuntimeException ignored) {
+            // Optional local capture must not interfere with the existing manual report screen.
+        }
         ErrorUtil.openActivity(context, new ErrorInfo(
                 new String[]{report.getString(ReportField.STACK_TRACE)},
                 UserAction.UI_ERROR,

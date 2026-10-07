@@ -20,7 +20,7 @@ public final class OfflineFirst {
             }
         }
         if (localOnly) {
-            throw new IOException("Offline copy missing or expired");
+            throw new IOException("Offline copy unavailable");
         }
         return remote.call();
     }

@@ -1,5 +1,11 @@
 # Temporary offline library
 
+Historical first-increment specification. The later user request in
+[playback feedback](../plans/2026-10-07-playback-feedback.md) supersedes the
+seven-day expiry and Download-dialog-only entry described below: saved media
+now requires indefinite retention until explicit deletion and independent list
+access, retaining the 500 MB cap. The original scope is preserved here for audit.
+
 Provide per-content temporary offline storage, progress, interruption/retry, a saved-items shelf, same-app playback and storage management. The interaction is a conventional offline library, without copying another service's brand or content.
 
 Implement general local storage/playback infrastructure in cloud only. Connect completed Giga audio/video downloads and user-selected local documents to an app-private shelf. Never add extraction, authentication, DRM or download-block bypasses; never fetch or test protected service media. This is not the YouTube official offline API. Only generated media is used for validation. Service terms and technical capability are distinct.

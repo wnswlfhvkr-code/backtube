@@ -274,7 +274,10 @@ public class DownloadManagerService extends Service {
         switch (msg.what) {
             case MESSAGE_FINISHED:
                 if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
-                    mManager.setFinished(mission);
+                    if (mManager.setFinished(mission) && mDownloadNotificationEnable) {
+                        org.schabi.newpipe.offline.OfflineSaveNotifications.showSavedEntry(this,
+                                org.schabi.newpipe.offline.OfflineDownloads.id(mission));
+                    }
                     updateForegroundState(mManager.runMissions());
                     break;
                 }

@@ -13,8 +13,7 @@ public class OfflineFileStreamTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
     @Test public void randomAccessOutputCannotGrowPastSharedQuota() throws Exception {
-        final OfflineStore store = new OfflineStore(temporary.newFolder(), 100, 1000,
-                () -> 1000);
+        final OfflineStore store = new OfflineStore(temporary.newFolder(), 100);
         final OfflineStore.Entry first = store.beginDownload("One", "", 0, "audio/wav");
         final OfflineStore.Entry second = store.beginDownload("Two", "", 0, "audio/wav");
         try (OfflineFileStream one = new OfflineFileStream(store.file(first), store, first.id);
@@ -30,8 +29,7 @@ public class OfflineFileStreamTest {
     }
 
     @Test public void deletedDownloadCannotWriteMoreBytes() throws Exception {
-        final OfflineStore store = new OfflineStore(temporary.newFolder(), 100, 1000,
-                () -> 1000);
+        final OfflineStore store = new OfflineStore(temporary.newFolder(), 100);
         final OfflineStore.Entry entry = store.beginDownload("One", "", 0, "audio/wav");
         try (OfflineFileStream output = new OfflineFileStream(store.file(entry), store, entry.id)) {
             output.write(new byte[20]);

@@ -124,7 +124,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -557,6 +556,7 @@ public final class VideoDetailFragment
                         dialog -> dialog.show(getParentFragmentManager(), TAG)));
             }
         }));
+        binding.detailControlsOfflineSave.setOnClickListener(v -> openOfflineSaveDialog());
         binding.detailControlsDownload.setOnClickListener(v -> {
             if (PermissionHelper.checkStoragePermissions(activity,
                     PermissionHelper.DOWNLOAD_DIALOG_REQUEST_CODE)) {
@@ -757,57 +757,15 @@ public final class VideoDetailFragment
             Log.d(TAG, "onBackPressed() called");
         }
 
-        // If we are in fullscreen mode just exit from it via first back press
-        if (isFullscreen()) {
-            if (!DeviceUtils.isTablet(activity)) {
-                player.pause();
-            }
-            restoreDefaultOrientation();
-            setAutoPlay(false);
-            return true;
-        }
-
-        // If we have something in history of played items we replay it here
-        if (isPlayerAvailable()
-                && player.getPlayQueue() != null
-                && player.videoPlayerSelected()
-                && player.getPlayQueue().previous()) {
-            return true; // no code here, as previous() was used in the if
-        }
-
-        // That means that we are on the start of the stack,
-        if (stack.size() <= 1) {
-            restoreDefaultOrientation();
-            return false; // let MainActivity handle the onBack (e.g. to minimize the mini player)
-        }
-
-        // Remove top
-        stack.pop();
-        // Get stack item from the new top
-        setupFromHistoryItem(Objects.requireNonNull(stack.peek()));
-
-        return true;
+        // Back is UI navigation; queue/history navigation belongs to playback controls.
+        restoreDefaultOrientation();
+        return false;
     }
 
-    private void setupFromHistoryItem(final StackItem item) {
-        setAutoPlay(false);
-        hideMainPlayerOnLoadingNewStream();
-
-        setInitialData(item.getServiceId(), item.getUrl(),
-                item.getTitle() == null ? "" : item.getTitle(), item.getPlayQueue());
-        startLoading(false);
-
-        // Maybe an item was deleted in background activity
-        if (item.getPlayQueue().getItem() == null) {
-            return;
-        }
-
-        final PlayQueueItem playQueueItem = item.getPlayQueue().getItem();
-        // Update title, url, uploader from the last item in the stack (it's current now)
-        final boolean isPlayerStopped = !isPlayerAvailable() || player.isStopped();
-        if (playQueueItem != null && isPlayerStopped) {
-            updateOverlayData(playQueueItem.getTitle(),
-                    playQueueItem.getUploader(), playQueueItem.getThumbnails());
+    /** Detach the video UI before task removal without stopping playback or its timer. */
+    public void prepareForUiExit() {
+        if (isPlayerAvailable()) {
+            player.continueInBackgroundOnUiExit();
         }
     }
 
@@ -1491,8 +1449,7 @@ public final class VideoDetailFragment
             toggleFullscreenIfInFullscreenMode();
         }
 
-        // This will show systemUI and pause the player.
-        // User can tap on Play button and video will be in fullscreen mode again
+        // Restore the device orientation policy when returning to the main screen.
         // Note for tablet: trying to avoid orientation changes since it's not easy
         // to physically rotate the tablet every time
         if (activity != null && !DeviceUtils.isTablet(activity)) {
@@ -1657,6 +1614,8 @@ public final class VideoDetailFragment
 
         binding.detailControlsDownload.setVisibility(
                 StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
+        binding.detailControlsOfflineSave.setVisibility(
+                StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
 
         final boolean noVideoStreams =
                 info.getVideoStreams().isEmpty() && info.getVideoOnlyStreams().isEmpty();
@@ -1716,6 +1675,19 @@ public final class VideoDetailFragment
         CoilHelper.INSTANCE.loadAvatar(binding.detailUploaderThumbnailView,
                 info.getUploaderAvatars());
         binding.detailUploaderThumbnailView.setVisibility(View.VISIBLE);
+    }
+
+    private void openOfflineSaveDialog() {
+        if (currentInfo == null) {
+            return;
+        }
+        try {
+            DownloadDialog.forOffline(activity, currentInfo)
+                    .show(getParentFragmentManager(), "offline_save");
+        } catch (final Exception e) {
+            ErrorUtil.showSnackbar(activity, new ErrorInfo(e, UserAction.DOWNLOAD_OPEN_DIALOG,
+                    "Showing offline save dialog", currentInfo));
+        }
     }
 
     public void openDownloadDialog() {

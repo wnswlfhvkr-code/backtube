@@ -5,6 +5,7 @@ import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
@@ -22,23 +23,40 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
     public CustomBottomSheetBehavior(@NonNull final Context context,
                                      @Nullable final AttributeSet attrs) {
         super(context, attrs);
+        downwardDrag = new DownwardDrag(ViewConfiguration.get(context).getScaledTouchSlop());
     }
 
-    Rect globalRect = new Rect();
+    private final Rect globalRect = new Rect();
+    private final DownwardDrag downwardDrag;
+    private boolean startedOnPlaybackButton;
     private boolean skippingInterception = false;
     private final List<Integer> skipInterceptionOfElements = List.of(
             R.id.detail_content_root_layout, R.id.relatedItemsLayout,
             R.id.itemsListPanel, R.id.view_pager, R.id.tab_layout, R.id.bottomControls,
+            R.id.playbackSeekBar);
+    private final List<Integer> playbackButtons = List.of(
             R.id.playPauseButton, R.id.playPreviousButton, R.id.playNextButton);
 
     @Override
     public boolean onInterceptTouchEvent(@NonNull final CoordinatorLayout parent,
                                          @NonNull final FrameLayout child,
                                          @NonNull final MotionEvent event) {
-        // Drop following when action ends
-        if (event.getAction() == MotionEvent.ACTION_CANCEL
-                || event.getAction() == MotionEvent.ACTION_UP) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             skippingInterception = false;
+            startedOnPlaybackButton = false;
+            downwardDrag.start(event.getX(), event.getY());
+        } else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL
+                || event.getActionMasked() == MotionEvent.ACTION_UP) {
+            final boolean protectedGesture = skippingInterception || startedOnPlaybackButton;
+            skippingInterception = false;
+            startedOnPlaybackButton = false;
+            final boolean intercepted = super.onInterceptTouchEvent(parent, child, event);
+            return !protectedGesture && intercepted;
+        }
+
+        if (startedOnPlaybackButton
+                && !downwardDrag.move(event.getX(), event.getY())) {
+            return false;
         }
 
         // Found that user still swiping, continue following
@@ -57,6 +75,17 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
         // Don't need to do anything if bottomSheet isn't expanded
         if (getState() == BottomSheetBehavior.STATE_EXPANDED
                 && event.getAction() == MotionEvent.ACTION_DOWN) {
+            for (final int element : playbackButtons) {
+                final View button = child.findViewById(element);
+                if (button != null && button.getGlobalVisibleRect(globalRect)
+                        && globalRect.contains((int) event.getRawX(), (int) event.getRawY())) {
+                    startedOnPlaybackButton = true;
+                    // Prime the drag helper while leaving DOWN/taps with the button. A downward
+                    // MOVE can then capture the sheet and cancel the button's click normally.
+                    super.onInterceptTouchEvent(parent, child, event);
+                    return false;
+                }
+            }
             // Without overriding scrolling will not work when user touches these elements
             for (final int element : skipInterceptionOfElements) {
                 final View view = child.findViewById(element);

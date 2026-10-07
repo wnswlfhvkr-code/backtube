@@ -31,6 +31,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -59,6 +60,7 @@ import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.snackbar.Snackbar;
 
 import org.schabi.newpipe.databinding.ActivityMainBinding;
 import org.schabi.newpipe.databinding.DrawerHeaderBinding;
@@ -77,6 +79,7 @@ import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
 import org.schabi.newpipe.fragments.list.comments.CommentRepliesFragment;
 import org.schabi.newpipe.fragments.list.search.SearchFragment;
 import org.schabi.newpipe.local.feed.notifications.NotificationWorker;
+import org.schabi.newpipe.offline.OfflineLibraryActivity;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.event.OnKeyDownListener;
 import org.schabi.newpipe.player.helper.PlayerHolder;
@@ -91,6 +94,7 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.PeertubeHelper;
 import org.schabi.newpipe.util.PermissionHelper;
 import org.schabi.newpipe.util.ReleaseVersionUtil;
+import org.schabi.newpipe.util.RootBackExit;
 import org.schabi.newpipe.util.SerializedCache;
 import org.schabi.newpipe.util.ServiceHelper;
 import org.schabi.newpipe.util.StateSaver;
@@ -125,6 +129,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int ITEM_ID_BOOKMARKS = -3;
     private static final int ITEM_ID_DOWNLOADS = -4;
     private static final int ITEM_ID_HISTORY = -5;
+    private static final int ITEM_ID_OFFLINE_LIBRARY = -6;
+
+    private final RootBackExit rootBackExit = new RootBackExit();
+    private final Handler exitHandler = new Handler(Looper.getMainLooper());
+    private Snackbar exitNotice;
     private static final int ITEM_ID_SETTINGS = 0;
     private static final int ITEM_ID_DONATION = 1;
     private static final int ITEM_ID_ABOUT = 2;
@@ -172,6 +181,7 @@ public class MainActivity extends AppCompatActivity {
                 .getHeaderView(0));
         toolbarLayoutBinding = mainBinding.toolbarLayout;
         setContentView(mainBinding.getRoot());
+        getSupportFragmentManager().addOnBackStackChangedListener(this::resetRootBackExit);
 
         if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
             initFragments();
@@ -234,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onStop() {
+        resetRootBackExit();
         super.onStop();
         sharedPrefEditor.putBoolean(KEY_IS_IN_BACKGROUND, true).apply();
         Log.d(TAG, "App moved to background");
@@ -287,6 +298,9 @@ public class MainActivity extends AppCompatActivity {
                 .setIcon(R.drawable.ic_bookmark);
         drawerLayoutBinding.navigation.getMenu()
                 .add(R.id.menu_tabs_group, ITEM_ID_DOWNLOADS, ORDER, R.string.downloads)
+                .setIcon(R.drawable.ic_file_download);
+        drawerLayoutBinding.navigation.getMenu()
+                .add(R.id.menu_tabs_group, ITEM_ID_OFFLINE_LIBRARY, ORDER, R.string.offline_library)
                 .setIcon(R.drawable.ic_file_download);
         drawerLayoutBinding.navigation.getMenu()
                 .add(R.id.menu_tabs_group, ITEM_ID_HISTORY, ORDER, R.string.action_history)
@@ -352,6 +366,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void tabSelected(final MenuItem item) {
+        resetRootBackExit();
         switch (item.getItemId()) {
             case ITEM_ID_SUBSCRIPTIONS:
                 NavigationHelper.openSubscriptionFragment(getSupportFragmentManager());
@@ -361,6 +376,9 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case ITEM_ID_BOOKMARKS:
                 NavigationHelper.openBookmarksFragment(getSupportFragmentManager());
+                break;
+            case ITEM_ID_OFFLINE_LIBRARY:
+                OfflineLibraryActivity.open(this);
                 break;
             case ITEM_ID_DOWNLOADS:
                 NavigationHelper.openDownloads(this);
@@ -562,6 +580,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onNewIntent(final Intent intent) {
+        resetRootBackExit();
         if (DEBUG) {
             Log.d(TAG, "onNewIntent() called with: intent = [" + intent + "]");
         }
@@ -600,11 +619,10 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "onBackPressed() called");
         }
 
-        if (DeviceUtils.isTv(this)) {
-            if (mainBinding.getRoot().isDrawerOpen(drawerLayoutBinding.navigation)) {
-                mainBinding.getRoot().closeDrawers();
-                return;
-            }
+        if (mainBinding.getRoot().isDrawerOpen(drawerLayoutBinding.navigation)) {
+            resetRootBackExit();
+            mainBinding.getRoot().closeDrawers();
+            return;
         }
 
         // In case bottomSheet is not visible on the screen or collapsed we can assume that the user
@@ -617,6 +635,7 @@ public class MainActivity extends AppCompatActivity {
             // delegate the back press to it
             if (fragment instanceof BackPressable) {
                 if (((BackPressable) fragment).onBackPressed()) {
+                    resetRootBackExit();
                     return;
                 }
             } else if (fragment instanceof CommentRepliesFragment) {
@@ -629,6 +648,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
         } else {
+            resetRootBackExit();
             final Fragment fragmentPlayer = getSupportFragmentManager()
                     .findFragmentById(R.id.fragment_player_holder);
             // If current fragment implements BackPressable (i.e. can/wanna handle back press)
@@ -642,10 +662,48 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        if (getSupportFragmentManager().getBackStackEntryCount() == 1) {
-            finish();
+        if (getSupportFragmentManager().getBackStackEntryCount() <= 1) {
+            if (rootBackExit.press(SystemClock.uptimeMillis())) {
+                final Fragment detail = getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder);
+                if (detail instanceof VideoDetailFragment) {
+                    ((VideoDetailFragment) detail).prepareForUiExit();
+                }
+                resetRootBackExit();
+                finishAndRemoveTask();
+            } else {
+                showRootExitNotice();
+            }
         } else {
+            resetRootBackExit();
             super.onBackPressed();
+        }
+    }
+
+    private void showRootExitNotice() {
+        if (exitNotice != null) {
+            exitNotice.dismiss();
+        }
+        final long generation = rootBackExit.generation();
+        final Snackbar notice = Snackbar.make(mainBinding.getRoot(),
+                R.string.back_again_to_exit, (int) RootBackExit.WINDOW_MILLIS);
+        exitNotice = notice;
+        notice.show();
+        exitHandler.postDelayed(() -> {
+            rootBackExit.dismiss(generation);
+            notice.dismiss();
+            if (exitNotice == notice) {
+                exitNotice = null;
+            }
+        }, RootBackExit.WINDOW_MILLIS);
+    }
+
+    private void resetRootBackExit() {
+        rootBackExit.reset();
+        exitHandler.removeCallbacksAndMessages(null);
+        if (exitNotice != null) {
+            exitNotice.dismiss();
+            exitNotice = null;
         }
     }
 
