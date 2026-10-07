@@ -136,3 +136,19 @@ passed again (/tmp/backtube-feedback-fixture-fixes.log). A new runtime run is
 required; the first APK is not delivered as a validated build. Environment/model
 disconnects are separate from these observed test failures. The cloud worktree
 and remote checkpoint remained available and matched when rechecked.
+
+## Second remote run and remaining fixture corrections
+
+[Run 37660911317](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37660911317)
+at f4d0569a3 passed APK/JVM/lint. Both full Android suites ran 122 tests, with
+three popup tests failing and the three existing opt-in skips. The previous
+listening, shelf access and Back/gesture fixture failures were resolved.
+API23 also had one failure in the separate current-track UI phase.
+
+The popup fixture called Player.handleIntent directly, omitting the service's
+handleIntentPost callback that attaches the popup window. It now uses the same
+NavigationHelper.playOnPopupPlayer service path as the app. The API23 landscape
+fixture could accept the old activity's updated configuration before rotation
+recreation finished; it now requires the replacement activity before checking
+layout/artwork. No assertions were weakened and no production behavior changed
+in these corrections. Another runtime run is needed before delivery.

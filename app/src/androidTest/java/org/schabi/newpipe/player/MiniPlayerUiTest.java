@@ -224,13 +224,7 @@ public class MiniPlayerUiTest {
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
         onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated.png");
-        onMain(() -> active(PlayQueueActivity.class).setRequestedOrientation(
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
-        await(() -> active(PlayQueueActivity.class) != null
-                && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE
-                && currentRowLaidOut()
-                && Integer.valueOf(Color.RED).equals(artworkColor()));
+        rotateQueueToLandscape();
         onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated-landscape.png");
         onMain(() -> {
@@ -307,13 +301,7 @@ public class MiniPlayerUiTest {
 
     @Test
     public void landscapeVisibleMetadataAcceptsScreenCoordinateSwipe() throws Exception {
-        onMain(() -> active(PlayQueueActivity.class).setRequestedOrientation(
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
-        await(() -> active(PlayQueueActivity.class) != null
-                && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE
-                && currentRowLaidOut()
-                && Integer.valueOf(Color.RED).equals(artworkColor()));
+        rotateQueueToLandscape();
         final Rect row = new Rect();
         final PlayQueue[] original = new PlayQueue[1];
         onMain(() -> {
@@ -348,6 +336,24 @@ public class MiniPlayerUiTest {
                 .findViewById(R.id.fragment_player_holder)).getState()
                 == BottomSheetBehavior.STATE_EXPANDED);
         onMain(() -> assertSame(original[0], player.getPlayQueue()));
+    }
+
+    private void rotateQueueToLandscape() throws Exception {
+        final PlayQueueActivity[] previous = new PlayQueueActivity[1];
+        final boolean[] recreationExpected = new boolean[1];
+        onMain(() -> {
+            previous[0] = active(PlayQueueActivity.class);
+            recreationExpected[0] = previous[0].getResources().getConfiguration().orientation
+                    != Configuration.ORIENTATION_LANDSCAPE;
+            previous[0].setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        });
+        // Resources can report landscape on the old activity before recreation completes.
+        await(() -> active(PlayQueueActivity.class) != null
+                && (!recreationExpected[0] || active(PlayQueueActivity.class) != previous[0])
+                && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE
+                && currentRowLaidOut()
+                && Integer.valueOf(Color.RED).equals(artworkColor()));
     }
 
     private boolean currentRowLaidOut() {

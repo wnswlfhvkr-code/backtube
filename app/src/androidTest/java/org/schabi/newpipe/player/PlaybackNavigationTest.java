@@ -311,10 +311,10 @@ public class PlaybackNavigationTest {
             }
             final int policy = lock ? ActivityInfo.SCREEN_ORIENTATION_LOCKED : requested;
             prepareOrientationVideo();
-            onMain(() -> player.handleIntent(NavigationHelper.getPlayerIntent(context,
-                    PlayerService.class, player.getPlayQueue(), PlayerIntentType.AllOthers)
-                    .putExtra(Player.PLAYER_TYPE, PlayerType.POPUP)
-                    .putExtra(Player.PLAY_WHEN_READY, true)));
+            // Use the service path, which calls handleIntentPost to attach the popup window.
+            // A direct handleIntent call only creates its UI object and never attaches it.
+            onMain(() -> NavigationHelper.playOnPopupPlayer(activity,
+                    player.getPlayQueue(), false));
             await(() -> player.UIs().get(PopupPlayerUi.class)
                     .map(ui -> ui.getBinding().getRoot().isAttachedToWindow()).orElse(false));
             onMain(() -> player.UIs().get(PopupPlayerUi.class).orElseThrow()
