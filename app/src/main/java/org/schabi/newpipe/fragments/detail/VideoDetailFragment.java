@@ -179,6 +179,10 @@ public final class VideoDetailFragment
 
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceChangeListener =
             (sharedPreferences, key) -> {
+                // A notification queued before unregistering can arrive after detachment.
+                if (getContext() == null) {
+                    return;
+                }
                 if (getString(R.string.show_comments_key).equals(key)) {
                     showComments = sharedPreferences.getBoolean(key, true);
                     tabSettingsChanged = true;

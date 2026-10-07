@@ -108,7 +108,7 @@ jobs:
             ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
             bash scripts/verify-offline-android.sh
             # Keep this verification local: the excluded legacy class fetches live YouTube channels.
-            ./gradlew connectedCheck --stacktrace -Pandroid.testInstrumentationRunnerArguments.notClass=org.schabi.newpipe.local.subscription.SubscriptionManagerTest
+            bash scripts/run-local-android-regressions.sh
 
       - name: Report offline runtime result
         if: always()

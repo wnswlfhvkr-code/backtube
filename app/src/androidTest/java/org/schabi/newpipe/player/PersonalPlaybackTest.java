@@ -1233,6 +1233,9 @@ public class PersonalPlaybackTest {
 
     @Test
     public void recommendationMenuSupportsExcludeUndoAndClear() throws Exception {
+        // A paused real source avoids leaving the fixture in its loading animation.
+        prepareAndPlayLocalAudio();
+        runOnMain(player::pause);
         final StreamInfo info = recommendationInfo("A", "B");
         info.setRelatedItems(List.of(recommendationItem("B", "channel-b"),
                 recommendationItem("C", "channel-c")));
@@ -1752,7 +1755,7 @@ public class PersonalPlaybackTest {
         AccessibilityNodeInfo match = null;
         for (final AccessibilityNodeInfo node : nodes) {
             if (match == null && node.isVisibleToUser() && fullyVisibleInList(node)
-                    && text.equals(String.valueOf(node.getText()))) {
+                    && text.equalsIgnoreCase(String.valueOf(node.getText()))) {
                 match = node;
             } else {
                 node.recycle();
@@ -1821,15 +1824,23 @@ public class PersonalPlaybackTest {
 
     private void finishQueueActivity() {
         runOnMain(() -> {
-            for (final android.app.Activity activity : List.copyOf(
-                    ActivityLifecycleMonitorRegistry.getInstance()
-                            .getActivitiesInStage(Stage.RESUMED))) {
-                if (activity instanceof PlayQueueActivity || activity instanceof MainActivity) {
+            final java.util.Set<android.app.Activity> activities = new java.util.HashSet<>();
+            for (final Stage stage : Stage.values()) {
+                if (stage != Stage.PRE_ON_CREATE && stage != Stage.DESTROYED) {
+                    activities.addAll(ActivityLifecycleMonitorRegistry.getInstance()
+                            .getActivitiesInStage(stage));
+                }
+            }
+            for (final android.app.Activity activity : activities) {
+                if (!activity.isFinishing() && (activity instanceof PlayQueueActivity
+                        || activity instanceof MainActivity
+                        || activity instanceof org.schabi.newpipe.offline.OfflineLibraryActivity)) {
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                     activity.finish();
                 }
             }
         });
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
     }
 
     private void initPlayerForLocalAudio() throws Exception {

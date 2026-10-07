@@ -8,7 +8,7 @@
 ## Constraints and decisions
 
 - Cloud development; generated media only for validation. No new extraction, authentication, DRM or access-control bypass.
-- Separate branch based on main `84b4e0e85f02f29a8523486345db5fc5df9e395d`. PR2/3 remain separate.
+- Separate branch based on main `84b4e0e85f02f29a8523486345db5fc5df9e395d`. PR2/3 remain unmerged; confirmed baseline regression fixes from PR3 are selectively ported for full CI validation.
 - Reuse existing downloader, foreground services and sleep timer; no account/server.
 - App-private copies: 500,000,000 bytes, seven-day expiry, default unmetered validated Wi-Fi. Wi-Fi restriction can be disabled; cap and lifetime are fixed in this increment.
 - Local document copying restarts from its source after interruption. Existing Giga resumption remains responsible for managed downloads.
