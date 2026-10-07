@@ -19,7 +19,17 @@ Regression evidence: pause-during-open, restart expiry and online-fallback tests
 
 ## Runtime boundaries
 
-A cloud Android 35 x86_64 emulator was installed and launched without KVM (`-accel off`). App and test APKs installed. Wi-Fi/data were disabled for the generated-media tests. The first instrumentation attempt aborted with `INSTRUMENTATION_ABORTED: System has crashed`; Android logs showed system failure and `DeadSystemException`, not a completed app test assertion. The second attempt ended with `shortMsg=Process crashed`; ActivityManager reported that the app failed to complete startup and killed it for ANR, alongside system-app startup ANRs. Neither attempt reached a successful test result. The final strengthened network-refresh assertion was compiled but not run on-device. Device playback and UI validation remain open.
+A cloud Android 35 x86_64 emulator was installed and launched without KVM (`-accel off`). App and test APKs installed. Wi-Fi/data were disabled for the generated-media tests. The first instrumentation attempt aborted with `INSTRUMENTATION_ABORTED: System has crashed`; Android logs showed system failure and `DeadSystemException`, not a completed app test assertion. The second attempt ended with `shortMsg=Process crashed`; ActivityManager reported that the app failed to complete startup and killed it for ANR, alongside system-app startup ANRs. Neither attempt reached a successful test result. At that checkpoint, device playback/UI validation was unverified. The cloud CI follow-up below supersedes this local-only checkpoint.
+
+## Follow-up runtime investigation
+
+The local instance was reused rather than duplicated. After stopping the Gradle daemon, disabling Bluetooth and animations, and retrying instrumentation, app/system process startup ANRs persisted. `emulator -accel-check` returned code 3 with `KVM requires a CPU that supports vmx or svm`; `/dev/kvm` is absent. The emulator log recorded a 398-second boot, and Android CPU pressure accompanied system-app startup failures. The instance was terminated after this bounded recovery attempt. This environment cannot provide a reliable accelerated Android run. [Android's acceleration documentation](https://developer.android.com/studio/run/emulator-acceleration) explains the slow software translation path when no hypervisor is available.
+
+CI at implementation head `9d127ce70703c35d70764778e30a65515c4ac330` finished: JVM/build/lint succeeded, Android 35 failed, Android 23 was cancelled by the matrix's original fail-fast behavior. [Initial CI run](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37581297719). The API exposed job results, but the cloud proxy returned HTTP 403 when fetching redirected Azure logs/artifacts; the detailed Android assertion could not be recovered from that run.
+
+Follow-up CI reuses each existing KVM emulator, runs the generated-media lifecycle script before the full connected suite, preserves both API results with `fail-fast: false`, and publishes concise test outcomes/failures as check annotations as well as artifacts. No extra emulator job or Windows environment is introduced. The lifecycle's expiry fixture changes a generated item's stored deadline to the past before process termination; this verifies restart enforcement without waiting seven days. It does not simulate Android background expiry scheduling.
+
+The new script is [verify-offline-android.sh](../../scripts/verify-offline-android.sh). It checks instrumentation's textual result because `am instrument` can exit zero after a process crash. A fixture reflection target was corrected to the app Player rather than the imported ExoPlayer interface.
 
 ## Product and operational limits
 
@@ -35,11 +45,29 @@ YouTube's official Premium offline experience is an application feature describe
 
 The implementation supplies local storage/playback infrastructure around the existing pathway; whether a specific source permits saving remains separate from whether its bytes can be stored technically. [Android foreground-service timeout guidance](https://developer.android.com/develop/background-work/services/fgs/timeout) motivates handling `onTimeout` by pausing downloader work and stopping the service. This was compiled, not duration-tested.
 
-## Final execution results
+## Initial implementation execution results
 
 - `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --console=plain`: **BUILD SUCCESSFUL** on the final source/test tree. Checkstyle is included by the build.
 - JUnit XML totals: **201 tests, 0 failures, 0 errors, 0 skipped**, including 23 offline store/routing/output/queue/completion tests.
 - `git diff --check`: passed.
-- Android instrumentation: **blocked before successful test execution**, with the two failures described above. No UI screenshot or successful playback claim is supplied.
+- Android instrumentation: **blocked before successful test execution**, with the two failures described above. This describes the initial local checkpoint; see the cloud CI follow-up for later runtime evidence.
 - Fresh `origin/main` fetch still resolved to the stated base; PR2/3 were left untouched.
 - Machine-readable counts and source/test digest: [evidence summary](evidence/offline-library-2026-10-07/summary.json). Raw execution logs and generated media are intentionally excluded from the PR.
+
+## Cloud runtime checkpoint
+
+At test head `006cef3f942f44ed2c5cc9c62e3a9caad0d4e489`, [CI run 37582213174](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37582213174) produced:
+
+| Check | Android 35 | Android 23 |
+| --- | --- | --- |
+| Asynchronous generated-WAV import to READY | Passed | Passed |
+| Force-stop, new PID, airplane-mode restore | Passed | Fixture failure before playback |
+| Offline playback advances, timer pauses | Passed | Blocked by fixture |
+| Expired copy rejected/deleted; active copy deletion cleaned after release | Passed | Blocked by fixture |
+| Empty InfoCache local playback; network-refresh guard | Passed | Not reached |
+| Paused saved queue reconstruction | Passed | Not reached |
+| Shelf import and UI play | Button lookup failed | Not reached |
+
+The Android 23 failure identified an existing test helper's `FileInputStream.readAllBytes()` call, unavailable on that OS. The helper now reads in a small buffered loop. The shelf test previously required an exact, fully visible accessibility label; it now locates the rendered Button by its view text, scrolls it into view, verifies visibility and invokes its real click action. These are test-fixture changes, not production playback changes. Their subsequent result is available in the [PR checks](https://github.com/wnswlfhvkr-code/backtube/pull/4/checks); do not infer a pass from this checkpoint alone.
+
+The current script runs five explicit cases per Android version: seed, restore, and three normal playback/UI cases. Full `connectedCheck` follows on the same emulator after those pass. It does not fetch YouTube media. Screenshots contain only the generated shelf item and are included in the `offline-runtime-api23`/`offline-runtime-api35` CI artifacts when the UI case completes.

@@ -226,10 +226,20 @@ public class PersonalPlaybackTest {
         try {
             assertTrue("shelf import did not complete", waitFor(() -> callOnMain(() ->
                     library.store().find(0, origin) != null), 15));
-            assertTrue("shelf did not show saved playback action", waitFor(() ->
-                    findNodeByText(context.getString(R.string.offline_play)) != null, 10));
+            assertTrue("shelf did not render saved playback action", waitFor(() -> callOnMain(() ->
+                    offlinePlayButton(shelf) != null), 10));
+            runOnMain(() -> {
+                final android.widget.Button play = offlinePlayButton(shelf);
+                play.requestRectangleOnScreen(new Rect(0, 0, play.getWidth(), play.getHeight()),
+                        true);
+            });
             captureScreen("offline-shelf-generated.png");
-            clickAccessibilityText(context.getString(R.string.offline_play));
+            runOnMain(() -> {
+                final android.widget.Button play = offlinePlayButton(shelf);
+                assertTrue("saved playback action not visible", play.getGlobalVisibleRect(
+                        new Rect()));
+                assertTrue("saved playback action not clickable", play.performClick());
+            });
             assertTrue("shelf action did not start local playback", waitFor(() -> callOnMain(() ->
                     player.isPlaying() && player.getCurrentMetadata()
                             instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
@@ -242,6 +252,18 @@ public class PersonalPlaybackTest {
             }
             runOnMain(shelf::finish);
         }
+    }
+
+    private android.widget.Button offlinePlayButton(final android.app.Activity shelf) {
+        final java.util.ArrayList<android.view.View> matches = new java.util.ArrayList<>();
+        shelf.findViewById(android.R.id.content).findViewsWithText(matches,
+                context.getString(R.string.offline_play), android.view.View.FIND_VIEWS_WITH_TEXT);
+        for (final android.view.View match : matches) {
+            if (match instanceof android.widget.Button && match.isShown()) {
+                return (android.widget.Button) match;
+            }
+        }
+        return null;
     }
 
     @Test
@@ -712,7 +734,13 @@ public class PersonalPlaybackTest {
         try (android.os.ParcelFileDescriptor descriptor = InstrumentationRegistry
                 .getInstrumentation().getUiAutomation().executeShellCommand(command);
              FileInputStream input = new FileInputStream(descriptor.getFileDescriptor())) {
-            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            final java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            final byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+            }
+            return output.toString(java.nio.charset.StandardCharsets.UTF_8.name());
         }
     }
 
