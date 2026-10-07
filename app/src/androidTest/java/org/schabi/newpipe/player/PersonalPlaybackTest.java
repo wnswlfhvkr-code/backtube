@@ -192,7 +192,7 @@ public class PersonalPlaybackTest {
             runOnMain(() -> {
                 PreferenceManager.getDefaultSharedPreferences(context).edit()
                         .putBoolean(context.getString(R.string.data_saver_key), true).commit();
-                final java.lang.reflect.Field quality = Player.class
+                final java.lang.reflect.Field quality = org.schabi.newpipe.player.Player.class
                         .getDeclaredField("observedAudioQuality");
                 quality.setAccessible(true);
                 quality.set(player, "offline-network-change-test");
@@ -210,6 +210,119 @@ public class PersonalPlaybackTest {
         } finally {
             library.store().delete(entry.id);
         }
+    }
+
+    @Test
+    public void savedOfflineShelfImportsGeneratedFile() throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final String origin = "https://example.invalid/generated-shelf-test";
+        final android.app.Activity shelf = InstrumentationRegistry.getInstrumentation()
+                .startActivitySync(new Intent(context,
+                        org.schabi.newpipe.offline.OfflineLibraryActivity.class)
+                        .setData(Uri.fromFile(localAudio)).putExtra("title", "Generated shelf WAV")
+                        .putExtra("origin", origin).putExtra("service", 0)
+                        .putExtra("mime", "audio/wav").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            assertTrue("shelf import did not complete", waitFor(() -> callOnMain(() ->
+                    library.store().find(0, origin) != null), 15));
+            assertTrue("shelf did not show saved playback action", waitFor(() ->
+                    findNodeByText(context.getString(R.string.offline_play)) != null, 10));
+            captureScreen("offline-shelf-generated.png");
+            clickAccessibilityText(context.getString(R.string.offline_play));
+            assertTrue("shelf action did not start local playback", waitFor(() -> callOnMain(() ->
+                    player.isPlaying() && player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+            assertTrue("import changed original file", localAudio.isFile());
+        } finally {
+            final org.schabi.newpipe.offline.OfflineStore.Entry saved =
+                    library.store().find(0, origin);
+            if (saved != null) {
+                library.store().delete(saved.id);
+            }
+            runOnMain(shelf::finish);
+        }
+    }
+
+    @Test
+    public void savedOfflineLifecycleAcrossProcessRestart() throws Exception {
+        org.junit.Assume.assumeTrue(!restartPhase.isEmpty());
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final android.content.SharedPreferences fixture = context.getSharedPreferences(
+                "offline-lifecycle-test", Context.MODE_PRIVATE);
+        if ("seed".equals(restartPhase)) {
+            final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.importUri(
+                    Uri.fromFile(localAudio), "Generated saved WAV", "", 0, "audio/wav");
+            final org.schabi.newpipe.offline.OfflineStore.Entry expired = library.importUri(
+                    Uri.fromFile(localAudio), "Generated expired WAV", "", 0, "audio/wav");
+            assertTrue("asynchronous save did not finish", waitFor(() -> callOnMain(() ->
+                    library.store().get(saved.id).state
+                            == org.schabi.newpipe.offline.OfflineStore.State.READY
+                    && library.store().get(expired.id).state
+                            == org.schabi.newpipe.offline.OfflineStore.State.READY), 15));
+            assertTrue("saving removed original file", localAudio.isFile());
+            new LastPlaybackSessionStore(PreferenceManager.getDefaultSharedPreferences(context))
+                    .save(library.queue(saved), 1000, Player.REPEAT_MODE_ONE);
+            fixture.edit().putString("saved", saved.id).putString("expired", expired.id)
+                    .putInt("seedPid", android.os.Process.myPid()).commit();
+            // Deterministic elapsed-retention fixture, re-read only in the next process.
+            final File metadata = new File(context.getFilesDir(),
+                    "offline/" + expired.id + ".properties");
+            final java.util.Properties properties = new java.util.Properties();
+            try (FileInputStream input = new FileInputStream(metadata)) {
+                properties.load(input);
+            }
+            properties.setProperty("expires", "1");
+            try (FileOutputStream output = new FileOutputStream(metadata)) {
+                properties.store(output, "generated expiry fixture");
+                output.getFD().sync();
+            }
+            return;
+        }
+        assertTrue("test requires a different app process",
+                fixture.getInt("seedPid", -1) != android.os.Process.myPid());
+        assertEquals("airplane mode must be enabled before restore", "1", shellCommand(
+                "settings get global airplane_mode_on").trim());
+        final String savedId = fixture.getString("saved", "");
+        final String expiredId = fixture.getString("expired", "");
+        final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.store().get(savedId);
+        final org.schabi.newpipe.offline.OfflineStore.Entry expired =
+                library.store().get(expiredId);
+        assertTrue("completed save missing after restart", saved != null);
+        assertEquals(org.schabi.newpipe.offline.OfflineStore.State.EXPIRED, expired.state);
+        assertFalse("expired media bytes retained", library.store().file(expired).exists());
+        assertNull("expired item still playable", library.source(library.queue(expired).getItem()));
+        final LastPlaybackSessionStore.Snapshot snapshot = new LastPlaybackSessionStore(
+                PreferenceManager.getDefaultSharedPreferences(context)).load();
+        assertTrue("saved queue lost across restart", snapshot != null);
+        InfoCache.getInstance().clearCache();
+        runOnMain(() -> {
+            final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                    "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                    boolean.class);
+            init.setAccessible(true);
+            init.invoke(player, snapshot.getQueue(), true);
+            player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
+        });
+        assertTrue("restarted offline playback did not advance", waitFor(() -> callOnMain(() ->
+                player.isPlaying() && player.getCurrentMetadata()
+                        instanceof org.schabi.newpipe.offline.OfflineMediaTag
+                        && player.getExoPlayer().getCurrentPosition() > 1000), 15));
+        runOnMain(() -> player.setSleepTimer(1500));
+        assertTrue("offline timer did not pause playback", waitFor(() -> callOnMain(() ->
+                !player.getPlayWhenReady() && player.getSleepTimerRemainingMillis() == 0), 8));
+        assertEquals(saved.localUrl(), callOnMain(player::getVideoUrl));
+        runOnMain(player::play);
+        assertTrue(waitFor(() -> callOnMain(player::isPlaying), 5));
+        final File savedFile = library.store().file(saved);
+        library.store().delete(saved.id);
+        assertNull(library.store().get(saved.id));
+        runOnMain(service::destroyPlayerAndStopService);
+        assertTrue("deleted bytes not removed after reader release", waitFor(
+                () -> !savedFile.exists(), 10));
+        library.store().delete(expired.id);
+        fixture.edit().clear().commit();
     }
 
     @Test
