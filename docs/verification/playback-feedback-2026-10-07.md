@@ -1,4 +1,10 @@
-# Playback feedback verification — in progress
+# Playback feedback verification — completed
+
+Verified implementation: 2063f70c2948f47c1156d74be78c0a20cfd7e8ec.
+Final CI: run 37664959997, attempt 2, success. API23 and API35 each completed
+123 scheduled tests with zero failures and three existing opt-in skips. JVM:
+266 tests, zero failures/errors/skips. APK build, lint, Checkstyle, signature
+and alignment checks passed. Later commits in this PR only record evidence.
 
 Baseline: integration/approved-updates 896fa7aa5, verified implementation b5b6e3111.
 New branch: feat/playback-feedback. Main 84b4e0e85 and PR3 bff8f4a44 are distinct
@@ -84,7 +90,7 @@ updates is cheap if drag alone causes interruption; buffer changes need proven
 underruns and trade responsiveness; replacement DSP has higher regression cost.
 No DSP or playback-speed behavior change is made in this task.
 
-## Local verification and pending runtime
+## Local verification before device CI
 
 Initial integrated local run: 266 JVM tests, zero failures/errors/skips, debug
 app and Android test APK compilation passed. First Checkstyle run found 19
@@ -101,8 +107,8 @@ tests and targeted style checks. Independent read-only review found no remaining
 actionable issue in retention, saved-list access, task removal, listening state,
 gesture intent or sanitized reporting. Review is not device runtime evidence.
 
-Android API23/API35 runtime and exact APK provenance remain pending. There is
-no /dev/kvm in this executor; GitHub KVM runners will own device validation.
+There is no /dev/kvm in this executor; GitHub KVM runners performed device
+validation. Final Android results and exact APK provenance are recorded below.
 
 Listening mode is session state, retained through UI recreation but not a new
 persisted preference across process death. Muxed media can still contain video
@@ -170,3 +176,54 @@ intent, expand through the real button, and await READY before asserting play
 state/orientation/control geometry. A fourth case preserves a deliberate pause.
 Independent source review confirmed the transition cause and paused behavior.
 No timeout or existing assertions were relaxed. The failed-run APK is withheld.
+
+## Final candidate and environment retry
+
+Candidate 2063f70c2948f47c1156d74be78c0a20cfd7e8ec passed the full local
+JVM/build/style command (/tmp/backtube-feedback-popup-final-local.log).
+[Run 37664959997](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37664959997)
+built merge a194d1e7df3dbbca78cf1141703e1666ac6b45bd. Its tree and the source
+commit's tree both equal f2bb235817055304d8bf80f884b9890756fcb1f6.
+
+The first API23 attempt failed before launching the emulator or running app
+tests: sdkmanager reported `Error on ZipFile unknown archive` while installing
+the Android 23 system image. This is an environment installation failure.
+GitHub rejected rerunning that job while other jobs were still running, so the
+retry must follow their completion without duplicating or interrupting them.
+
+API35 passed all 123 scheduled tests (zero failures, three existing opt-in skips),
+plus dedicated timer/seed/restart/playback/current-UI/popup phases. Retained files
+and portrait/landscape/locked-portrait popup screenshots were inspected. The
+normal portrait and landscape captures show quality and listening controls;
+the locked portrait capture records orientation after controls auto-hide, with
+control visibility/bounds established by the instrumentation assertions.
+Only the API23 job was rerun after the other jobs finished.
+
+Candidate APK artifact: 11503785329, 11,598,631 bytes, package
+`org.schabi.newpipe.continuous.featplaybackfeedback`, version code 1015,
+version name 0.29.1. SHA-256:
+`5da9665f081f93f871e9a43ae510e67714b08a0f33ecfa77931d47b9fc02e3e9`.
+Signer certificate SHA-256:
+`8f68d0dcab46d9e4c95cda82a9e2af78961731f782d7e65050fdf794adb6e9df`.
+apksigner verify and zipalign checks returned zero. This is a separate test
+package from the earlier integration/personal APKs, with isolated app data.
+It does not import their existing private saved files or replace their install.
+No old app was uninstalled, no data reset, and no signing key copied or changed.
+
+The API23 retry succeeded: 123 scheduled tests, zero failures, three existing
+opt-in skips, and all six dedicated runtime phases passed. The final workflow
+conclusion is success (attempt 2); APK/JVM and API35 results were retained from
+attempt 1 rather than rerun. Runtime artifacts: API23 11503388217, API35
+11503091546. Only generated local media was used.
+
+Delivered `/backtube-playback-feedback-2063f70c2.apk` to Library as a new item,
+preserving previous APKs. Library ID `libfile_3703e5804d088191969c82bac04cda92`,
+file ID `file_00000000bf2481fb81147f0e995016d3`. Local copy:
+`/workspace/backtube-delivery/backtube-playback-feedback-2063f70c2.apk`.
+Hash was unchanged after Library metadata persistence.
+
+Remaining limits: public GitHub report delivery needs an approved app-safe
+authentication path; low-speed audible stutter needs affected-device testing.
+Silent generated media does not establish real-world audio quality. Saved-file
+migration is verified within the same application datastore; this separate test
+package does not transfer private files from other installed package names.
