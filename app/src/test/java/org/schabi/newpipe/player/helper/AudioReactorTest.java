@@ -243,6 +243,8 @@ public class AudioReactorTest {
         set(controller, "audioReactor", reactor);
         set(controller, "playQueue", mock(PlayQueue.class));
         set(controller, "sleepTimer", mock(SleepTimer.class));
+        set(controller, "playbackRecovery", new PlaybackRecovery());
+        set(controller, "recoveryRequest", new io.reactivex.rxjava3.disposables.SerialDisposable());
         set(controller, "UIs", new PlayerUiList());
         when(player.getPlaybackState())
                 .thenReturn(com.google.android.exoplayer2.Player.STATE_READY);

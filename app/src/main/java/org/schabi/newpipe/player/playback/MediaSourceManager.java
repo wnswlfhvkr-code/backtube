@@ -121,6 +121,7 @@ public class MediaSourceManager {
 
     @NonNull
     private final AtomicBoolean isBlocked;
+    private volatile boolean disposed;
 
     @NonNull
     private ManagedMediaSourcePlaylist playlist;
@@ -181,6 +182,8 @@ public class MediaSourceManager {
      * Dispose the manager and releases all message buses and loaders.
      */
     public void dispose() {
+        disposed = true;
+        removeMediaSourceHandler.removeCallbacksAndMessages(null);
         if (DEBUG) {
             Log.d(TAG, "close() called.");
         }
@@ -221,6 +224,9 @@ public class MediaSourceManager {
     }
 
     private void onPlayQueueChanged(final PlayQueueEvent event) {
+        if (disposed) {
+            return;
+        }
         if (playQueue.isEmpty() && playQueue.isComplete()) {
             playbackListener.onPlaybackShutdown();
             return;
@@ -351,6 +357,9 @@ public class MediaSourceManager {
     }
 
     private synchronized void maybeSynchronizePlayer() {
+        if (disposed) {
+            return;
+        }
         if (isPlayQueueReady() && isPlaybackReady()) {
             final boolean isBlockReleased = maybeUnblock();
             maybeSync(isBlockReleased);
@@ -381,6 +390,9 @@ public class MediaSourceManager {
     }
 
     private void loadImmediate() {
+        if (disposed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "MediaSource - loadImmediate() called");
         }
@@ -470,6 +482,9 @@ public class MediaSourceManager {
 
     private void onMediaSourceReceived(@NonNull final PlayQueueItem item,
                                        @NonNull final ManagedMediaSource mediaSource) {
+        if (disposed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "MediaSource - Loaded=[" + item.getTitle()
                     + "] with url=[" + item.getUrl() + "]");

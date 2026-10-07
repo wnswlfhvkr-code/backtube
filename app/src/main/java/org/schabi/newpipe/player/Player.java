@@ -89,6 +89,7 @@ import com.google.android.exoplayer2.text.CueGroup;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
+import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.video.VideoSize;
 
 import org.schabi.newpipe.MainActivity;
@@ -114,11 +115,14 @@ import org.schabi.newpipe.player.helper.LoadController;
 import org.schabi.newpipe.player.helper.LastPlaybackSessionStore;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
+import org.schabi.newpipe.player.helper.PlaybackRecovery;
 import org.schabi.newpipe.player.helper.RecommendationExclusions;
 import org.schabi.newpipe.player.helper.SleepTimer;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineMediaTag;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
+import org.schabi.newpipe.player.mediaitem.ExceptionTag;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationPlayerUi;
 import org.schabi.newpipe.player.playback.MediaSourceManager;
@@ -138,6 +142,7 @@ import org.schabi.newpipe.player.ui.VideoPlayerUi;
 import org.schabi.newpipe.util.DependentPreferenceHelper;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.ListHelper;
+import org.schabi.newpipe.util.InfoCache;
 import org.schabi.newpipe.util.DataSaver;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource.AudioOnlyUnavailableException;
@@ -290,6 +295,12 @@ public final class Player implements PlaybackListener, Listener {
     private final Handler networkHandler = new Handler(Looper.getMainLooper());
     private String observedAudioQuality;
     private boolean destroyed;
+    private final PlaybackRecovery playbackRecovery = new PlaybackRecovery();
+    private final SerialDisposable recoveryRequest = new SerialDisposable();
+    private boolean recoveryFailed;
+    private boolean recoveryReloading;
+    private boolean recoveryRefreshingSource;
+    private boolean recoveryCanceled;
     private Network audioQualityNetwork;
     private final ConnectivityManager.NetworkCallback networkCallback =
             new ConnectivityManager.NetworkCallback() {
@@ -830,6 +841,12 @@ public final class Player implements PlaybackListener, Listener {
     //region Destroy and recovery
 
     private void destroyPlayer() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
+        recoveryReloading = false;
         sessionQueueChanges.set(null);
         recommendationRequest.set(null);
         if (DEBUG) {
@@ -1254,7 +1271,12 @@ public final class Player implements PlaybackListener, Listener {
             sleepTimer.onItemEnded();
         }
         if (!playWhenReady) {
+            // Audio focus can pause ExoPlayer directly. Keep its recovery source available
+            // for a valid focus gain; explicit pause/stop/timer actions cancel separately.
             recommendationRequest.set(null);
+        }
+        if (playWhenReady) {
+            recoveryCanceled = false;
         }
         if (playWhenReady && sleepTimer.expireIfDue()) {
             return;
@@ -1312,6 +1334,13 @@ public final class Player implements PlaybackListener, Listener {
                 }
                 break;
             case com.google.android.exoplayer2.Player.STATE_READY: //3
+                if (currentMetadata != null && !(currentMetadata instanceof ExceptionTag)
+                        && !recoveryFailed) {
+                    recoveryReloading = false;
+                    recoveryRefreshingSource = false;
+                    recoveryRequest.set(null);
+                    playbackRecovery.recovered();
+                }
                 if (!isPrepared) {
                     isPrepared = true;
                     onPrepared(playWhenReady);
@@ -1626,16 +1655,15 @@ public final class Player implements PlaybackListener, Listener {
                     .anyMatch(AudioOnlyUnavailableException.class::isInstance)) {
                 Toast.makeText(context, R.string.data_saver_audio_unavailable,
                         Toast.LENGTH_LONG).show();
+            } else if (currentMetadata instanceof ExceptionTag
+                    && (recoveryRefreshingSource || currentMetadata.getErrors().stream().anyMatch(
+                            FailedMediaSource.FailedMediaSourceException.class::isInstance))) {
+                // Extractor/access failures are delivered as a short silence source, not as
+                // onPlayerError. Stop it before it can advance the queue or show a report UI.
+                finishPlaybackRecovery();
+                return;
             } else if (!currentMetadata.getErrors().isEmpty()) {
-                // new errors might have been added even if previousInfo == tag.getMaybeStreamInfo()
-                final ErrorInfo errorInfo = new ErrorInfo(
-                        currentMetadata.getErrors(),
-                        UserAction.PLAY_STREAM,
-                        "Loading failed for [" + currentMetadata.getTitle()
-                                + "]: " + currentMetadata.getStreamUrl(),
-                        currentMetadata.getServiceId(),
-                        currentMetadata.getStreamUrl());
-                ErrorUtil.createNotification(context, errorInfo);
+                Log.w(TAG, "Stream metadata contains reported errors");
             }
 
             currentMetadata.getMaybeStreamInfo().ifPresent(info -> {
@@ -1755,30 +1783,10 @@ public final class Player implements PlaybackListener, Listener {
 
     /**
      * Process exceptions produced by {@link com.google.android.exoplayer2.ExoPlayer ExoPlayer}.
-     * <p>There are multiple types of errors:</p>
-     * <ul>
-     * <li>{@link PlaybackException#ERROR_CODE_BEHIND_LIVE_WINDOW BEHIND_LIVE_WINDOW}:
-     * If the playback on livestreams are lagged too far behind the current playable
-     * window. Then we seek to the latest timestamp and restart the playback.
-     * This error is <b>catchable</b>.
-     * </li>
-     * <li>From {@link PlaybackException#ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE BAD_IO} to
-     * {@link PlaybackException#ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED UNSUPPORTED_FORMATS}:
-     * If the stream source is validated by the extractor but not recognized by the player,
-     * then we can try to recover playback by signalling an error on the {@link PlayQueue}.</li>
-     * <li>For {@link PlaybackException#ERROR_CODE_TIMEOUT PLAYER_TIMEOUT},
-     * {@link PlaybackException#ERROR_CODE_IO_UNSPECIFIED MEDIA_SOURCE_RESOLVER_TIMEOUT} and
-     * {@link PlaybackException#ERROR_CODE_IO_NETWORK_CONNECTION_FAILED NO_NETWORK}:
-     * We can keep set the recovery record and keep to player at the current state until
-     * it is ready to play by restarting the {@link MediaSourceManager}.</li>
-     * <li>On any ExoPlayer specific issue internal to its device interaction, such as
-     * {@link PlaybackException#ERROR_CODE_DECODER_INIT_FAILED DECODER_ERROR}:
-     * We terminate the playback.</li>
-     * <li>For any other unspecified issue internal: We set a recovery and try to restart
-     * the playback.</li>
-     * For any error above that is <b>not</b> explicitly <b>catchable</b>, the player will
-     * create a notification so users are aware.
-     * </ul>
+     * Recoverable transport failures receive bounded retries; ambiguous rejected media URLs
+     * receive at most one ordinary metadata refresh. Source failures retain the current queue
+     * item and finish paused with a manual retry notice. Device/renderer failures retain their
+     * existing shutdown and diagnostic handling. Behind-live-window errors seek to the live edge.
      *
      * @see com.google.android.exoplayer2.Player.Listener#onPlayerError(PlaybackException)
      */
@@ -1812,19 +1820,16 @@ public final class Player implements PlaybackListener, Listener {
             case ERROR_CODE_PARSING_MANIFEST_MALFORMED:
             case ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
             case ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED:
-                // Source errors, signal on playQueue and move on:
-                if (!exoPlayerIsNull() && playQueue != null) {
-                    playQueue.error();
-                }
+                recoverPlayback(error);
+                isCatchableException = true;
                 break;
             case ERROR_CODE_TIMEOUT:
             case ERROR_CODE_IO_UNSPECIFIED:
             case ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
             case ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
             case ERROR_CODE_UNSPECIFIED:
-                // Reload playback on unexpected errors:
-                setRecovery();
-                reloadPlayQueueManager();
+                recoverPlayback(error);
+                isCatchableException = true;
                 break;
             default:
                 // API, remote and renderer errors belong here:
@@ -1838,6 +1843,119 @@ public final class Player implements PlaybackListener, Listener {
 
         if (fragmentListener != null) {
             fragmentListener.onPlayerError(error, isCatchableException);
+        }
+    }
+
+    private void cancelPlaybackRecovery() {
+        recoveryRequest.set(null);
+        playbackRecovery.cancel();
+    }
+
+    private void retireRecoverySourceManager() {
+        if (recoveryReloading && !exoPlayerIsNull()) {
+            simpleExoPlayer.stop();
+        }
+        if (recoveryReloading && playQueueManager != null) {
+            // A canceled metadata request must not prepare or retry from a late result.
+            playQueueManager.dispose();
+            playQueueManager = null;
+        }
+        recoveryReloading = false;
+        recoveryRefreshingSource = false;
+    }
+
+    private void recoverPlayback(final PlaybackException error) {
+        if (destroyed || exoPlayerIsNull() || playQueue == null || playQueue.getItem() == null) {
+            return;
+        }
+        if (recoveryFailed || recoveryCanceled) {
+            return;
+        }
+        if (recoveryRefreshingSource
+                && (currentMetadata == null || currentMetadata instanceof ExceptionTag)) {
+            finishPlaybackRecovery();
+            return;
+        }
+        final PlayQueue queue = playQueue;
+        final PlayQueueItem item = queue.getItem();
+        final boolean localOnly = currentMetadata instanceof OfflineMediaTag
+                || item.getUrl().startsWith(OfflineStore.LOCAL_PREFIX);
+        final PlaybackRecovery.Attempt attempt = playbackRecovery.next(item,
+                simpleExoPlayer.getCurrentPosition(), getPlayWhenReady(),
+                recoveryFailure(error), localOnly);
+        if (attempt == null) {
+            finishPlaybackRecovery();
+            return;
+        }
+        // Do not call play() in an asynchronous callback: current intent, focus and timer
+        // state remain authoritative throughout a source replacement.
+        changeState(STATE_BUFFERING);
+        recoveryRequest.set(Observable.timer(attempt.delayMillis, MILLISECONDS,
+                        AndroidSchedulers.mainThread())
+                .subscribe(ignored -> {
+                    if (destroyed || exoPlayerIsNull() || playQueue != queue
+                            || !playbackRecovery.isCurrent(attempt, queue.getItem())
+                            || sleepTimer.expireIfDue() || sleepTimerExpired) {
+                        return;
+                    }
+                    queue.setRecovery(queue.getIndex(), attempt.positionMillis);
+                    if (attempt.refreshSource) {
+                        InfoCache.getInstance().removeInfo(item.getServiceId(), item.getUrl(),
+                                InfoCache.Type.STREAM);
+                    }
+                    recoveryReloading = true;
+                    recoveryRefreshingSource = attempt.refreshSource;
+                    reloadPlayQueueManager();
+                }, ignored -> finishPlaybackRecovery()));
+    }
+
+    private static PlaybackRecovery.Failure recoveryFailure(final PlaybackException error) {
+        // Known extraction failures include login, geo and bot challenges. They are not
+        // transient transport failures and must never be retried as such.
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof org.schabi.newpipe.extractor.exceptions.ExtractionException) {
+                return PlaybackRecovery.Failure.PERMANENT;
+            }
+        }
+        if (error.errorCode == ERROR_CODE_IO_BAD_HTTP_STATUS) {
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                    return PlaybackRecovery.classifyHttpStatus(
+                            ((HttpDataSource.InvalidResponseCodeException) cause).responseCode);
+                }
+            }
+            return PlaybackRecovery.Failure.PERMANENT;
+        }
+        switch (error.errorCode) {
+            case ERROR_CODE_TIMEOUT:
+            case ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
+            case ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
+                return PlaybackRecovery.Failure.TEMPORARY;
+            case ERROR_CODE_IO_UNSPECIFIED:
+                for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                    if (cause instanceof java.net.SocketException
+                            || cause instanceof java.net.SocketTimeoutException
+                            || cause instanceof java.net.UnknownHostException) {
+                        return PlaybackRecovery.Failure.TEMPORARY;
+                    }
+                }
+                return PlaybackRecovery.Failure.PERMANENT;
+            default:
+                return PlaybackRecovery.Failure.PERMANENT;
+        }
+    }
+
+    private void finishPlaybackRecovery() {
+        cancelPlaybackRecovery();
+        if (exoPlayerIsNull()) {
+            return;
+        }
+        pause();
+        simpleExoPlayer.stop();
+        changeState(STATE_PAUSED);
+        if (!recoveryFailed) {
+            recoveryFailed = true;
+            Toast.makeText(context, R.string.playback_recovery_failed, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1918,6 +2036,7 @@ public final class Player implements PlaybackListener, Listener {
                 || !currentItem.getUrl().equals(item.getUrl());
 
         currentItem = item;
+        recoveryFailed = false;
 
         if (playQueueIndex != playQueue.getIndex()) {
             // wrong window (this should be impossible, as this method is called with
@@ -2001,6 +2120,14 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        final long retryPosition = playbackRecovery.positionFor(playQueue.getItem(),
+                simpleExoPlayer.getCurrentPosition());
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
+
         if (currentState == STATE_COMPLETED) {
             if (playQueue.getIndex() == 0) {
                 seekToDefault();
@@ -2010,9 +2137,7 @@ public final class Player implements PlaybackListener, Listener {
         }
 
         if (isStopped()) {
-            // Some phones suspend a paused player after 10 minutes. This causes the player to
-            // enter STATE_IDLE, causing playback to fail. So we try to recover from that here.
-            setRecovery();
+            playQueue.setRecovery(playQueue.getIndex(), retryPosition);
             reloadPlayQueueManager();
         }
 
@@ -2099,6 +2224,9 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void pause() {
+        recoveryCanceled |= recoveryReloading || recoveryRequest.get() != null;
+        cancelPlaybackRecovery();
+        retireRecoverySourceManager();
         recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "pause() called");
@@ -2109,7 +2237,20 @@ public final class Player implements PlaybackListener, Listener {
 
         audioReactor.abandonAudioFocus();
         simpleExoPlayer.pause();
+        if (isStopped()) {
+            changeState(STATE_PAUSED);
+        }
         saveStreamProgressState();
+    }
+
+    /** Stop requested by the media session, preserving ExoPlayer's stop semantics. */
+    public void stop() {
+        recoveryCanceled = true;
+        cancelPlaybackRecovery();
+        retireRecoverySourceManager();
+        if (!exoPlayerIsNull()) {
+            simpleExoPlayer.stop();
+        }
     }
 
     public void playPause() {
@@ -2127,6 +2268,11 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void playPrevious() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "onPlayPrevious() called");
@@ -2149,6 +2295,11 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void playNext() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         if (sleepTimer.isEndOfItem()) {
             cancelSleepTimer();
         }
@@ -2645,6 +2796,11 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void selectQueueItem(final PlayQueueItem item) {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         if (sleepTimer.isEndOfItem()) {
             cancelSleepTimer();
         }
