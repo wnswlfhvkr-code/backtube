@@ -10,6 +10,8 @@ result=$?
 adb logcat -d -s ACRA AndroidRuntime App System.err Player AudioFocusReactor \
     VideoDetailFragment MediaSourceManager BaseStateFragment MediaSessUi PlayerService \
     ExoPlayerImpl MediaSessionService > "$output_dir/regression-errors.log" || true
+# Keep the final focus stack for real cross-UID handoff diagnostics.
+adb shell dumpsys audio > "$output_dir/regression-audio-state.txt" || true
 if grep -Eq 'IndexOutOfBoundsException|NullPointerException|not attached to a context|connection pool has been closed' \
         "$output_dir/regression-errors.log"; then
     echo '::error::Android runtime emitted a bounds, null, detached-context or closed-database error'
