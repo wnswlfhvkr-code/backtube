@@ -152,3 +152,21 @@ fixture could accept the old activity's updated configuration before rotation
 recreation finished; it now requires the replacement activity before checking
 layout/artwork. No assertions were weakened and no production behavior changed
 in these corrections. Another runtime run is needed before delivery.
+
+## Third remote run: popup playback intent regression
+
+[Run 37663048248](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37663048248)
+at c813dbfeb passed APK/JVM/lint and all tests except the three popup cases on
+both Android versions (122 total, three existing skips). The separate current
+UI rotation checks now passed. Actual popup windows attached and orientation
+assertions passed; the next playing assertion exposed a production defect.
+
+API35 log at 18:02:44.444 records playWhenReady=true while preparing. Expansion
+then sent MAIN play_when_ready=false at 18:02:44.601 because NavigationHelper
+used PlayerHolder.isPlaying() rather than the user's playback intent. The new
+getPlayWhenReady query preserves buffering playback and deliberate pauses.
+Popup fixtures now settle initial playback, stop the engine while retaining
+intent, expand through the real button, and await READY before asserting play
+state/orientation/control geometry. A fourth case preserves a deliberate pause.
+Independent source review confirmed the transition cause and paused behavior.
+No timeout or existing assertions were relaxed. The failed-run APK is withheld.

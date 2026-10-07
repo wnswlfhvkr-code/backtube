@@ -74,6 +74,14 @@ public final class PlayerHolder {
         return getPlayer().map(Player::isPlaying).orElse(false);
     }
 
+    /**
+     * Preserve playback intent across UI changes, including while buffering.
+     * @return whether the player should resume when it is ready
+     */
+    public boolean getPlayWhenReady() {
+        return getPlayer().map(Player::getPlayWhenReady).orElse(false);
+    }
+
     public boolean isPlayerOpen() {
         return getPlayer().isPresent();
     }

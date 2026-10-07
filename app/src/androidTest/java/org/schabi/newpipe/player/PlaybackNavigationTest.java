@@ -275,23 +275,30 @@ public class PlaybackNavigationTest {
     @Test
     public void popupExpansionKeepsPortraitPolicyAndControlsReachable() throws Exception {
         assertPopupExpansionOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-                Configuration.ORIENTATION_PORTRAIT, false);
+                Configuration.ORIENTATION_PORTRAIT, false, true);
     }
 
     @Test
     public void popupExpansionKeepsLandscapePolicyAndControlsReachable() throws Exception {
         assertPopupExpansionOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
-                Configuration.ORIENTATION_LANDSCAPE, false);
+                Configuration.ORIENTATION_LANDSCAPE, false, true);
     }
 
     @Test
     public void popupExpansionKeepsLockedPortraitPolicyAndControlsReachable() throws Exception {
         assertPopupExpansionOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-                Configuration.ORIENTATION_PORTRAIT, true);
+                Configuration.ORIENTATION_PORTRAIT, true, true);
+    }
+
+    @Test
+    public void popupExpansionPreservesDeliberatePause() throws Exception {
+        assertPopupExpansionOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                Configuration.ORIENTATION_PORTRAIT, false, false);
     }
 
     private void assertPopupExpansionOrientation(final int requested, final int configuration,
-                                                final boolean lock) throws Exception {
+                                                final boolean lock,
+                                                final boolean playWhenReady) throws Exception {
         // Disposable emulator setup only. Restore the exact app-op mode even on assertion failure;
         // system auto-rotation and the user's orientation preference are never changed.
         final String operation = "appops set " + context.getPackageName() + " SYSTEM_ALERT_WINDOW ";
@@ -315,21 +322,33 @@ public class PlaybackNavigationTest {
             // A direct handleIntent call only creates its UI object and never attaches it.
             onMain(() -> NavigationHelper.playOnPopupPlayer(activity,
                     player.getPlayQueue(), false));
-            await(() -> player.UIs().get(PopupPlayerUi.class)
+            await(() -> player.isPlaying() && player.UIs().get(PopupPlayerUi.class)
                     .map(ui -> ui.getBinding().getRoot().isAttachedToWindow()).orElse(false));
-            onMain(() -> player.UIs().get(PopupPlayerUi.class).orElseThrow()
-                    .getBinding().fullScreenButton.performClick());
+            onMain(() -> {
+                // Hold playback in a non-playing state while preserving the user's play intent.
+                // Expansion must not turn preparation/buffering into a deliberate pause.
+                player.getExoPlayer().stop();
+                player.getExoPlayer().setPlayWhenReady(playWhenReady);
+                assertEquals(playWhenReady, player.getPlayWhenReady());
+                assertFalse(player.isPlaying());
+                player.UIs().get(PopupPlayerUi.class).orElseThrow()
+                        .getBinding().fullScreenButton.performClick();
+            });
             await(() -> refreshActivity(configuration) && player.getPlayerType() == PlayerType.MAIN
                     && player.UIs().get(MainPlayerUi.class).isPresent()
-                    && activity.findViewById(R.id.listeningMode) != null);
+                    && activity.findViewById(R.id.listeningMode) != null
+                    && player.getExoPlayer().getPlaybackState()
+                    == com.google.android.exoplayer2.Player.STATE_READY);
             onMain(() -> {
                 assertEquals(policy, activity.getRequestedOrientation());
                 assertEquals(configuration, activity.getResources().getConfiguration().orientation);
-                assertTrue(player.isPlaying());
+                assertEquals(playWhenReady, player.getPlayWhenReady());
+                assertEquals(playWhenReady, player.isPlaying());
                 player.UIs().get(MainPlayerUi.class).orElseThrow().showControls(0);
             });
             assertControlsReachable();
-            captureOrientationScreen(lock ? "popup-expanded-portrait-locked.png"
+            captureOrientationScreen(!playWhenReady ? "popup-expanded-paused.png"
+                    : lock ? "popup-expanded-portrait-locked.png"
                     : configuration == Configuration.ORIENTATION_PORTRAIT
                     ? "popup-expanded-portrait.png" : "popup-expanded-landscape.png");
         } finally {

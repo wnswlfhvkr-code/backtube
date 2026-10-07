@@ -427,7 +427,7 @@ public final class NavigationHelper {
                                                final boolean switchingPlayers,
                                                final boolean playImmediately) {
         @Nullable final PlayerType playerType = PlayerHolder.getInstance().getType();
-        final boolean autoPlay = switchingPlayers ? PlayerHolder.getInstance().isPlaying()
+        final boolean autoPlay = switchingPlayers ? PlayerHolder.getInstance().getPlayWhenReady()
                 : playImmediately || ((playerType == null || playerType == PlayerType.MAIN)
                     && PlayerHelper.isAutoplayAllowedByUser(context));
 
