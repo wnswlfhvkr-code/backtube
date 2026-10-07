@@ -402,11 +402,19 @@ public class PersonalPlaybackTest {
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
                     null, false));
-            assertTrue("passive details did not load", waitFor(() -> callOnMain(() -> {
+            final boolean passiveDetailsLoaded = waitFor(() -> callOnMain(() -> {
                 final android.widget.TextView title = activity.findViewById(
                         R.id.detail_video_title_view);
                 return title != null && "offline-C".contentEquals(title.getText());
-            }), 5));
+            }), 5);
+            assertTrue("passive details did not load: " + playbackDiagnostics()
+                    + callOnMain(() -> {
+                        final android.widget.TextView title = activity.findViewById(
+                                R.id.detail_video_title_view);
+                        return ", detailTitle=" + (title == null ? "missing" : title.getText())
+                                + ", activity=" + ActivityLifecycleMonitorRegistry.getInstance()
+                                        .getLifecycleStageOf(activity);
+                    }), passiveDetailsLoaded);
             assertTrue("opening details changed the paused queue", callOnMain(
                     () -> !player.getPlayWhenReady()
                             && "offline-A".equals(player.getVideoUrl())));
@@ -758,9 +766,11 @@ public class PersonalPlaybackTest {
             setField("currentMetadata", StreamInfoTag.of(recommendationInfo("A", "B")));
             player.getExoPlayer().seekTo(3800);
         });
-        assertTrue("natural end did not request a recommendation", waitFor(
+        final boolean advanced = waitFor(
                 () -> callOnMain(() -> player.getPlayQueue().getIndex() == 1),
-                PLAYBACK_TIMEOUT_SECONDS));
+                PLAYBACK_TIMEOUT_SECONDS);
+        assertTrue("natural end did not request a recommendation: " + playbackDiagnostics(),
+                advanced);
         assertEquals("B", callOnMain(() -> player.getPlayQueue().getItem().getUrl()));
     }
 
@@ -1160,9 +1170,23 @@ public class PersonalPlaybackTest {
             init.setAccessible(true);
             init.invoke(player, new SinglePlayQueue(first), true);
         });
-        assertTrue("offline chain A did not start", waitFor(
-                () -> callOnMain(() -> player.isPlaying()
-                        && "offline-A".equals(player.getVideoUrl())), 10));
+        final boolean started = waitFor(() -> callOnMain(() -> player.isPlaying()
+                && "offline-A".equals(player.getVideoUrl())), 10);
+        assertTrue("offline chain A did not start: " + playbackDiagnostics(), started);
+    }
+
+    private String playbackDiagnostics() {
+        return callOnMain(() -> {
+            final com.google.android.exoplayer2.Player exo = player.getExoPlayer();
+            return "url=" + player.getVideoUrl() + ", playing=" + player.isPlaying()
+                    + ", ready=" + exo.getPlayWhenReady() + ", state=" + exo.getPlaybackState()
+                    + ", position=" + exo.getCurrentPosition() + ", duration=" + exo.getDuration()
+                    + ", repeat=" + exo.getRepeatMode() + ", error=" + exo.getPlayerError()
+                    + ", autoQueue=" + player.isAutoQueueEnabled()
+                    + ", recommendation=" + player.getRecommendationStatus()
+                    + ", queueIndex=" + player.getPlayQueue().getIndex()
+                    + ", queueSize=" + player.getPlayQueue().size();
+        });
     }
 
     private void cacheOfflineRecommendationChain() {

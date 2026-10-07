@@ -20,7 +20,6 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.NumberPicker;
 import android.widget.SeekBar;
@@ -31,6 +30,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -45,6 +46,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.fragments.OnScrollBelowItemsListener;
 import org.schabi.newpipe.local.dialog.PlaylistDialog;
 import org.schabi.newpipe.player.event.PlayerEventListener;
+import org.schabi.newpipe.player.gesture.SwipeUpToOpenListener;
 import org.schabi.newpipe.player.helper.PlaybackParameterDialog;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
@@ -84,8 +86,7 @@ public final class PlayQueueActivity extends AppCompatActivity
     private final Handler playbackOptionsHandler = new Handler(Looper.getMainLooper());
     private boolean playbackOptionsUpdatesActive;
     private boolean updatingAutoQueueControl;
-    @Nullable
-    private String recommendationThumbnailUrl;
+    private boolean openingPlaybackScreen;
     private final Runnable playbackOptionsUpdater = new Runnable() {
         @Override
         public void run() {
@@ -214,8 +215,7 @@ public final class PlayQueueActivity extends AppCompatActivity
             startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS));
             return true;
         } else if (itemId == R.id.action_switch_main) {
-            this.player.setRecovery();
-            NavigationHelper.playOnMainPlayer(this, player.getPlayQueue(), true);
+            openPlaybackScreen();
             return true;
         } else if (itemId == R.id.action_switch_popup) {
             if (PermissionHelper.isPopupEnabledElseAsk(this)) {
@@ -247,6 +247,7 @@ public final class PlayQueueActivity extends AppCompatActivity
     @Override
     protected void onResume() {
         super.onResume();
+        openingPlaybackScreen = false;
         playbackOptionsUpdatesActive = true;
         updatePlaybackOptionsUpdates();
     }
@@ -356,8 +357,26 @@ public final class PlayQueueActivity extends AppCompatActivity
 
     private void buildMetadata() {
         queueControlBinding.metadata.setOnClickListener(this);
+        queueControlBinding.metadata.setOnTouchListener(new SwipeUpToOpenListener(
+                queueControlBinding.metadata, this::openPlaybackScreen));
+        ViewCompat.replaceAccessibilityAction(queueControlBinding.metadata,
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_EXPAND,
+                getString(R.string.personal_open_current_player), (view, arguments) -> {
+                    openPlaybackScreen();
+                    return true;
+                });
         queueControlBinding.songName.setSelected(true);
         queueControlBinding.artistName.setSelected(true);
+    }
+
+    private void openPlaybackScreen() {
+        if (player == null || player.getPlayQueue() == null
+                || player.getPlayQueue().getItem() == null || openingPlaybackScreen) {
+            return;
+        }
+        openingPlaybackScreen = true;
+        player.setRecovery();
+        NavigationHelper.playOnMainPlayer(this, player.getPlayQueue(), true);
     }
 
     private void buildSeekBar() {
@@ -619,6 +638,8 @@ public final class PlayQueueActivity extends AppCompatActivity
         if (info != null) {
             queueControlBinding.songName.setText(info.getName());
             queueControlBinding.artistName.setText(info.getUploaderName());
+            CoilHelper.INSTANCE.loadThumbnail(queueControlBinding.currentTrackThumbnail,
+                    info.getThumbnails());
 
             queueControlBinding.endTime.setVisibility(View.GONE);
             queueControlBinding.liveSync.setVisibility(View.GONE);
@@ -771,7 +792,6 @@ public final class PlayQueueActivity extends AppCompatActivity
     private void updateRecommendationPreview() {
         final Player.RecommendationStatus status = player.getRecommendationStatus();
         final PlayQueueItem nextItem = player.getNextRecommendation();
-        final ImageView thumbnail = queueControlBinding.recommendationThumbnail;
         final String title;
         final int buttonText;
         boolean buttonEnabled = true;
@@ -781,19 +801,10 @@ public final class PlayQueueActivity extends AppCompatActivity
                 title = getString(R.string.personal_recommendation_loading);
                 buttonText = R.string.personal_recommendation_loading;
                 buttonEnabled = false;
-                clearRecommendationThumbnail(thumbnail);
                 break;
             case READY:
                 title = nextItem == null ? getString(R.string.personal_no_recommendation)
                         : getString(R.string.personal_next_item) + ": " + nextItem.getTitle();
-                if (nextItem != null) {
-                    if (!nextItem.getUrl().equals(recommendationThumbnailUrl)) {
-                        CoilHelper.INSTANCE.loadThumbnail(thumbnail, nextItem.getThumbnails());
-                        recommendationThumbnailUrl = nextItem.getUrl();
-                    }
-                } else {
-                    clearRecommendationThumbnail(thumbnail);
-                }
                 if (player.canReplaceNextRecommendation()) {
                     buttonText = R.string.personal_recommendation_replace;
                 } else {
@@ -804,14 +815,12 @@ public final class PlayQueueActivity extends AppCompatActivity
             case ERROR:
                 title = getString(R.string.personal_recommendation_failed);
                 buttonText = R.string.personal_recommendation_retry;
-                clearRecommendationThumbnail(thumbnail);
                 break;
             case EMPTY:
             case IDLE:
             default:
                 title = getString(R.string.personal_no_recommendation);
                 buttonText = R.string.personal_recommendation_load;
-                clearRecommendationThumbnail(thumbnail);
                 break;
         }
 
@@ -824,13 +833,6 @@ public final class PlayQueueActivity extends AppCompatActivity
                         && player.canReplaceNextRecommendation() ? View.VISIBLE : View.GONE);
         queueControlBinding.recommendationPreview.setContentDescription(getString(
                 R.string.personal_recommendation_next) + ": " + title);
-    }
-
-    private void clearRecommendationThumbnail(final ImageView thumbnail) {
-        if (recommendationThumbnailUrl != null || thumbnail.getDrawable() == null) {
-            thumbnail.setImageResource(R.drawable.placeholder_thumbnail_video);
-            recommendationThumbnailUrl = null;
-        }
     }
 
     private void onRecommendationClick() {
