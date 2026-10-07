@@ -240,9 +240,11 @@ public class PersonalPlaybackTest {
                         new Rect()));
                 assertTrue("saved playback action not clickable", play.performClick());
             });
-            assertTrue("shelf action did not start local playback", waitFor(() -> callOnMain(() ->
+            final boolean started = waitFor(() -> callOnMain(() ->
                     player.isPlaying() && player.getCurrentMetadata()
-                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10);
+            assertTrue("shelf action did not start local playback: " + playbackDiagnostics(),
+                    started);
             assertTrue("import changed original file", localAudio.isFile());
         } finally {
             final org.schabi.newpipe.offline.OfflineStore.Entry saved =
@@ -1184,8 +1186,10 @@ public class PersonalPlaybackTest {
                     + ", repeat=" + exo.getRepeatMode() + ", error=" + exo.getPlayerError()
                     + ", autoQueue=" + player.isAutoQueueEnabled()
                     + ", recommendation=" + player.getRecommendationStatus()
-                    + ", queueIndex=" + player.getPlayQueue().getIndex()
-                    + ", queueSize=" + player.getPlayQueue().size();
+                    + ", queueIndex=" + (player.getPlayQueue() == null
+                            ? -1 : player.getPlayQueue().getIndex())
+                    + ", queueSize=" + (player.getPlayQueue() == null
+                            ? 0 : player.getPlayQueue().size());
         });
     }
 

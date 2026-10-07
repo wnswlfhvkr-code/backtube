@@ -2034,9 +2034,12 @@ public final class Player implements PlaybackListener, Listener {
         final boolean removeThumbnailBeforeSync = currentItem == null
                 || currentItem.getServiceId() != item.getServiceId()
                 || !currentItem.getUrl().equals(item.getUrl());
+        final boolean switchingItem = currentItem != null && currentItem != item;
 
         currentItem = item;
-        recoveryFailed = false;
+        if (switchingItem) {
+            recoveryFailed = false;
+        }
 
         if (playQueueIndex != playQueue.getIndex()) {
             // wrong window (this should be impossible, as this method is called with
@@ -2069,6 +2072,11 @@ public final class Player implements PlaybackListener, Listener {
                 playQueue.unsetRecovery(playQueueIndex);
             } else {
                 simpleExoPlayer.seekToDefaultPosition(playQueueIndex);
+            }
+            // Selecting another item after an error only seeks the already loaded playlist.
+            // A stopped ExoPlayer also needs prepare(), retaining its current play intent.
+            if (switchingItem && !recoveryFailed && !recoveryCanceled && isStopped()) {
+                simpleExoPlayer.prepare();
             }
         }
     }

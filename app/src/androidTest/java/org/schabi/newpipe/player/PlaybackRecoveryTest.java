@@ -266,6 +266,22 @@ public class PlaybackRecoveryTest {
     }
 
     @Test
+    public void skipAfterFailurePreparesNextItemWithoutChangingPausedIntent() throws Exception {
+        onMain(() -> {
+            fail(403);
+            player.playNext();
+        });
+        await(() -> player.getPlayQueue().getIndex() == 1
+                && player.getExoPlayer().getPlaybackState()
+                        == com.google.android.exoplayer2.Player.STATE_READY);
+        onMain(() -> {
+            assertEquals("recovery-B", player.getPlayQueue().getItem().getUrl());
+            assertFalse(player.getPlayWhenReady());
+            assertFalse(player.isPlaying());
+        });
+    }
+
+    @Test
     public void stopCancelsDelayedRecovery() throws Exception {
         final int before = loads.get();
         onMain(() -> {

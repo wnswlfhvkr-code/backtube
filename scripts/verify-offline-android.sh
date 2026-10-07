@@ -3,6 +3,15 @@
 set -euo pipefail
 output_dir=app/build/reports/offline-runtime
 mkdir -p "$output_dir"
+capture_failure() {
+    local result=$?
+    if (( result != 0 )); then
+        adb logcat -d > "$output_dir/offline-failure-logcat.log" || true
+        adb exec-out screencap -p > "$output_dir/offline-failure-screen.png" || true
+    fi
+    exit "$result"
+}
+trap capture_failure EXIT
 app_id=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/debug/output-metadata.json"))["applicationId"])')
 runner="$app_id.test/androidx.test.runner.AndroidJUnitRunner"
 class_name=org.schabi.newpipe.player.PersonalPlaybackTest
@@ -19,6 +28,7 @@ adb shell settings put global animator_duration_scale 0
 run_phase() {
     local phase="$1"
     shift
+    adb logcat -c
     adb shell am instrument -w -r "$@" "$runner" | tee "$output_dir/$phase.txt"
     # am instrument may return exit 0 for test failures or a crashed process.
     grep -Eq 'OK \([0-9]+ tests?\)' "$output_dir/$phase.txt"

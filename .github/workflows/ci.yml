@@ -104,11 +104,7 @@ jobs:
           api-level: ${{ matrix.api-level }}
           target: ${{ matrix.target }}
           arch: ${{ matrix.arch }}
-          script: |
-            ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
-            bash scripts/verify-offline-android.sh
-            # Keep this verification local: the excluded legacy class fetches live YouTube channels.
-            bash scripts/run-local-android-regressions.sh
+          script: bash scripts/run-android-verification.sh
 
       - name: Report offline runtime result
         if: always()
