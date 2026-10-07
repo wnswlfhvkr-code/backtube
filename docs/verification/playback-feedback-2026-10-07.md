@@ -110,3 +110,29 @@ bytes in the fetched container even when video/text tracks are disabled. Tests
 use generated black video and silent AAC, so they establish pipeline/navigation
 behavior, not perceived audio quality. Popup tests temporarily grant overlay
 permission only inside disposable emulators and restore the prior app-op mode.
+
+## First remote run and fixture corrections
+
+[Run 37656280463](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37656280463)
+at 297da5612 passed the continuous APK/JVM/lint job. Both API23/API35 suites ran
+122 tests with 11 failures in the new fixtures. Existing timer, seed/restart,
+saved playback and current-track UI dedicated phases passed on both versions.
+The retained-after-restart screenshot shows both legacy entries available.
+
+Three setup defects were identified from logs, without weakening assertions:
+
+- Listening tests inflated with application context instead of the production
+  PlayerService's themed context, failing before the track assertions.
+- Drawer test searched `navigation`, but the layout include overrides its root
+  ID with `drawer_layout`; the corrected test waits for the actual drawer.
+- Navigation setup sent both a direct Player intent and a detail navigation
+  request before initial loading settled. Logs show fragment stop/reuse and a
+  completed-state Play resetting index 1 to 0. Setup now uses one actual user
+  navigation request with explicit immediate playback, preserving index-1 and
+  all Back/gesture/task-removal assertions.
+
+After these test-only corrections, the full local JVM/build/style command
+passed again (/tmp/backtube-feedback-fixture-fixes.log). A new runtime run is
+required; the first APK is not delivered as a validated build. Environment/model
+disconnects are separate from these observed test failures. The cloud worktree
+and remote checkpoint remained available and matched when rechecked.

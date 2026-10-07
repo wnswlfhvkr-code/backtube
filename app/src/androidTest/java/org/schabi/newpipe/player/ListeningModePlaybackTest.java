@@ -117,7 +117,8 @@ public class ListeningModePlaybackTest {
             info.setRelatedItems(List.of());
             final SinglePlayQueue queue = new SinglePlayQueue(info);
             queue.init();
-            binding = PlayerBinding.inflate(LayoutInflater.from(context));
+            // PlayerService applies the same AppCompat theme used by the real player UI.
+            binding = PlayerBinding.inflate(LayoutInflater.from(player.getContext()));
             ui = new MainPlayerUi(player, binding);
             player.UIs().addAndPrepare(ui);
             set("playQueue", queue);
@@ -194,7 +195,7 @@ public class ListeningModePlaybackTest {
             assertTrue(player.getTrackSelector().getParameters().disabledTrackTypes.contains(
                     C.TRACK_TYPE_VIDEO));
             player.UIs().destroyAll(MainPlayerUi.class);
-            binding = PlayerBinding.inflate(LayoutInflater.from(context));
+            binding = PlayerBinding.inflate(LayoutInflater.from(player.getContext()));
             ui = new MainPlayerUi(player, binding);
             player.UIs().addAndPrepare(ui);
             ui.onMetadataChanged(info);

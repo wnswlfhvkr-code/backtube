@@ -144,10 +144,10 @@ public class PlaybackNavigationTest {
                     new StreamInfoItem(1, "navigation-A", "navigation-A", StreamType.AUDIO_STREAM),
                     new StreamInfoItem(1, "navigation-B", "navigation-B", StreamType.AUDIO_STREAM)),
                     1);
-            player.handleIntent(NavigationHelper.getPlayerIntent(context, PlayerService.class,
-                    queue, PlayerIntentType.AllOthers).putExtra(Player.PLAY_WHEN_READY, true));
+            // Start through the same single navigation request as a user selection. Sending a
+            // second direct player intent first races fragment stop/reuse against initial loading.
             NavigationHelper.openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
-                    1, "navigation-B", "navigation-B", queue, false);
+                    1, "navigation-B", "navigation-B", queue, false, true);
         });
         await(() -> player.isPlaying() && "navigation-B".equals(player.getVideoUrl())
                 && sheetState() == BottomSheetBehavior.STATE_EXPANDED

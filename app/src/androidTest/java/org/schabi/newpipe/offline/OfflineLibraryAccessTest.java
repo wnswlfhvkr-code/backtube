@@ -22,7 +22,6 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
 
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -113,12 +112,20 @@ public class OfflineLibraryAccessTest {
     @Test
     public void mainDrawerOpensSavedListWithoutADownloadDialog() throws Exception {
         launchMain();
+        await(() -> {
+            final MainActivity activity = active(MainActivity.class);
+            final View drawer = activity == null ? null
+                    : activity.findViewById(R.id.drawer_layout);
+            return drawer != null && drawer.isAttachedToWindow()
+                    && drawer.getWidth() > 0 && drawer.getParent() instanceof DrawerLayout;
+        });
         main(() -> {
-            final View drawer = active(MainActivity.class).findViewById(R.id.navigation);
-            ((DrawerLayout) drawer.getParent()).openDrawer(GravityCompat.START);
+            // The include in activity_main overrides the NavigationView root's navigation ID.
+            final View drawer = active(MainActivity.class).findViewById(R.id.drawer_layout);
+            ((DrawerLayout) drawer.getParent()).openDrawer(drawer, false);
             return null;
         });
-        tapText(R.string.offline_library, R.id.navigation);
+        tapText(R.string.offline_library, R.id.drawer_layout);
         awaitShelf();
         assertTrue(source.isFile());
         assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
@@ -273,7 +280,12 @@ public class OfflineLibraryAccessTest {
     private void tapText(final int stringId, final int rootId) throws Exception {
         final Rect[] screen = new Rect[1];
         await(() -> {
-            final View root = active(MainActivity.class).findViewById(rootId);
+            final MainActivity activity = active(MainActivity.class);
+            final View root = activity == null ? null : activity.findViewById(rootId);
+            if (root == null || !root.isShown() || root.isLayoutRequested()
+                    || !((DrawerLayout) root.getParent()).isDrawerOpen(root)) {
+                return false;
+            }
             final ArrayList<View> matches = new ArrayList<>();
             root.findViewsWithText(matches, context.getString(stringId), View.FIND_VIEWS_WITH_TEXT);
             for (final View view : matches) {
