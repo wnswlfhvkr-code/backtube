@@ -116,6 +116,8 @@ public class DownloadDialog extends DialogFragment
     private MenuItem okButton = null;
     private Context context = null;
     private boolean askForSavePath;
+    @State
+    boolean saveOffline;
 
     private AudioTrackAdapter audioTrackAdapter;
     private StreamItemAdapter<AudioStream, Stream> audioStreamsAdapter;
@@ -347,8 +349,14 @@ public class DownloadDialog extends DialogFragment
         okButton = toolbar.getMenu().findItem(R.id.okay);
         okButton.setEnabled(false); // disable until the download service connection is done
 
+        toolbar.getMenu().add(R.string.offline_save).setOnMenuItemClickListener(item -> {
+            saveOffline = true;
+            prepareSelectedDownload();
+            return true;
+        });
         toolbar.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == R.id.okay) {
+                saveOffline = false;
                 prepareSelectedDownload();
                 return true;
             }
@@ -798,6 +806,33 @@ public class DownloadDialog extends DialogFragment
             }
         } else {
             throw new RuntimeException("No stream selected");
+        }
+
+        if (saveOffline) {
+            if (checkedRadioButtonId == R.id.subtitle_button || downloadManager == null
+                    || mimeTmp == null) {
+                showFailedDialog(R.string.offline_media_only);
+                return;
+            }
+            try {
+                final org.schabi.newpipe.offline.OfflineLibrary library =
+                        org.schabi.newpipe.offline.OfflineLibrary.get(context);
+                if (size > 0 && size > org.schabi.newpipe.offline.OfflineStore.DEFAULT_LIMIT
+                        - library.store().usedBytes()) {
+                    showFailedDialog(R.string.offline_storage_error);
+                    return;
+                }
+                final org.schabi.newpipe.offline.OfflineStore.Entry entry =
+                        library.store().beginDownload(currentInfo.getName(), currentInfo.getUrl(),
+                                currentInfo.getServiceId(), mimeTmp);
+                final StoredFileHelper storage = new StoredFileHelper(context, null,
+                        Uri.fromFile(library.store().file(entry)), "offline:" + entry.id);
+                continueSelectedDownload(storage);
+                org.schabi.newpipe.offline.OfflineLibraryActivity.open(context);
+            } catch (final IOException error) {
+                showFailedDialog(R.string.offline_storage_error);
+            }
+            return;
         }
 
         if (!askForSavePath && (mainStorage == null

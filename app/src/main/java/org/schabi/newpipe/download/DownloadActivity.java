@@ -83,6 +83,10 @@ public class DownloadActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(final MenuItem item) {
+        if (item.getItemId() == R.id.offline_library) {
+            org.schabi.newpipe.offline.OfflineLibraryActivity.open(this);
+            return true;
+        }
         switch (item.getItemId()) {
             case android.R.id.home:
                 onBackPressed();

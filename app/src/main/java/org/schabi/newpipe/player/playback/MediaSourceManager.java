@@ -11,6 +11,8 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
+import org.schabi.newpipe.offline.OfflineFirst;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource;
 import org.schabi.newpipe.player.mediasource.LoadedMediaSource;
 import org.schabi.newpipe.player.mediasource.ManagedMediaSource;
@@ -420,7 +422,17 @@ public class MediaSourceManager {
     }
 
     private Single<ManagedMediaSource> getLoadedMediaSource(@NonNull final PlayQueueItem stream) {
-        return stream.getStream()
+        return Single.defer(() -> OfflineFirst.select(() -> {
+            final com.google.android.exoplayer2.source.MediaSource local =
+                    playbackListener.localSourceOf(stream);
+            if (local == null) {
+                return null;
+            }
+            final MediaItemTag tag = MediaItemTag.from(local.getMediaItem())
+                    .orElseThrow(() -> new IllegalStateException("Missing local metadata"));
+            return Single.<ManagedMediaSource>just(
+                    new LoadedMediaSource(local, tag, stream, Long.MAX_VALUE));
+        }, () -> stream.getStream()
                 .map(streamInfo -> Optional
                         .ofNullable(playbackListener.sourceOf(stream, streamInfo))
                         .<ManagedMediaSource>flatMap(source ->
@@ -442,7 +454,8 @@ public class MediaSourceManager {
                             return FailedMediaSource.of(stream,
                                     new MediaSourceResolutionException(message));
                         })
-                )
+                ), stream.getUrl().startsWith(OfflineStore.LOCAL_PREFIX)))
+                .subscribeOn(Schedulers.io())
                 .onErrorReturn(throwable -> {
                     if (throwable instanceof ExtractionException) {
                         return FailedMediaSource.of(stream, new StreamInfoLoadException(throwable));

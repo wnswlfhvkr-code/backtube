@@ -169,6 +169,84 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void savedOfflineCopyPlaysWithoutInfoCacheAndKeepsSleepTimerOnNetworkReturn()
+            throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final org.schabi.newpipe.offline.OfflineStore.Entry entry = library.store().create(
+                "Generated offline WAV", "https://example.invalid/owned-recording", 0,
+                Uri.fromFile(localAudio).toString(), "audio/wav");
+        try {
+            library.store().copy(entry.id, new FileInputStream(localAudio));
+            InfoCache.getInstance().clearCache();
+            runOnMain(() -> {
+                final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                        "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                        boolean.class);
+                init.setAccessible(true);
+                init.invoke(player, library.queue(entry), true);
+            });
+            assertTrue("saved local source did not play", waitFor(() -> callOnMain(() ->
+                    player.isPlaying() && player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+            runOnMain(() -> {
+                PreferenceManager.getDefaultSharedPreferences(context).edit()
+                        .putBoolean(context.getString(R.string.data_saver_key), true).commit();
+                final java.lang.reflect.Field quality = Player.class
+                        .getDeclaredField("observedAudioQuality");
+                quality.setAccessible(true);
+                quality.set(player, "offline-network-change-test");
+                player.setSleepTimer(1200);
+                final Method refresh = org.schabi.newpipe.player.Player.class
+                        .getDeclaredMethod("refreshNetworkAudioQuality");
+                refresh.setAccessible(true);
+                refresh.invoke(player);
+                assertEquals("offline-network-change-test", quality.get(player));
+                assertTrue(player.getSleepTimerRemainingMillis() > 0);
+            });
+            assertTrue("offline sleep timer did not pause", waitFor(() -> callOnMain(() ->
+                    !player.getPlayWhenReady() && player.getSleepTimerRemainingMillis() == 0), 5));
+            assertEquals(entry.localUrl(), callOnMain(player::getVideoUrl));
+        } finally {
+            library.store().delete(entry.id);
+        }
+    }
+
+    @Test
+    public void savedOfflineQueueRestoresWithoutRemoteMetadata() throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final org.schabi.newpipe.offline.OfflineStore.Entry entry = library.store().create(
+                "Generated restore WAV", "", 0, Uri.fromFile(localAudio).toString(), "audio/wav");
+        final android.content.SharedPreferences preferences = context.getSharedPreferences(
+                "offline-restore-test", Context.MODE_PRIVATE);
+        try {
+            library.store().copy(entry.id, new FileInputStream(localAudio));
+            new LastPlaybackSessionStore(preferences).save(library.queue(entry), 1500,
+                    com.google.android.exoplayer2.Player.REPEAT_MODE_OFF);
+            final LastPlaybackSessionStore.Snapshot snapshot =
+                    new LastPlaybackSessionStore(preferences).load();
+            assertTrue(snapshot != null);
+            InfoCache.getInstance().clearCache();
+            runOnMain(() -> {
+                final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                        "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                        boolean.class);
+                init.setAccessible(true);
+                init.invoke(player, snapshot.getQueue(), false);
+            });
+            assertTrue("restored saved source never prepared", waitFor(() -> callOnMain(() ->
+                    player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+            assertFalse(callOnMain(player::getPlayWhenReady));
+            assertEquals(entry.localUrl(), callOnMain(player::getVideoUrl));
+        } finally {
+            preferences.edit().clear().commit();
+            library.store().delete(entry.id);
+        }
+    }
+
+    @Test
     public void songSelectionPlaysImmediatelyAndPlayerSwitchKeepsPause() throws Exception {
         final String autoplayKey = context.getString(R.string.autoplay_key);
         final String original = player.getPrefs().getString(autoplayKey,

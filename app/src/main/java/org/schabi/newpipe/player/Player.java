@@ -116,6 +116,8 @@ import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.helper.RecommendationExclusions;
 import org.schabi.newpipe.player.helper.SleepTimer;
+import org.schabi.newpipe.offline.OfflineLibrary;
+import org.schabi.newpipe.offline.OfflineMediaTag;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationPlayerUi;
@@ -452,7 +454,8 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private void refreshNetworkAudioQuality() {
-        if (destroyed || !DataSaver.isEnabled(context)) {
+        if (destroyed || currentMetadata instanceof OfflineMediaTag
+                || !DataSaver.isEnabled(context)) {
             return;
         }
         final String quality = DataSaver.getAudioQuality(context);
@@ -1470,7 +1473,8 @@ public final class Player implements PlaybackListener, Listener {
 
         if (playQueue.getIndex() < playQueue.size() - 1) {
             playQueue.offsetIndex(+1);
-        } else if (getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
+        } else if (!(currentMetadata instanceof OfflineMediaTag)
+                && getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
                 && getRepeatMode() == REPEAT_MODE_OFF) {
             requestNextRecommendation(false);
         }
@@ -2247,7 +2251,9 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        maybeAutoQueueNextStream(info);
+        if (!(currentMetadata instanceof OfflineMediaTag)) {
+            maybeAutoQueueNextStream(info);
+        }
 
         loadCurrentThumbnail(info.getThumbnails());
         registerStreamViewed();
@@ -2483,6 +2489,11 @@ public final class Player implements PlaybackListener, Listener {
 
     @SuppressWarnings("MethodLength")
     private void requestRecommendation(final RecommendationAction action) {
+        if (currentMetadata instanceof OfflineMediaTag) {
+            recommendationStatus = RecommendationStatus.EMPTY;
+            triggerProgressUpdate();
+            return;
+        }
         syncRecommendationContext();
         final boolean advance = action == RecommendationAction.NEXT
                 || action == RecommendationAction.AUTO_NEXT;
@@ -2653,6 +2664,12 @@ public final class Player implements PlaybackListener, Listener {
     public void onPlayQueueEdited() {
         notifyPlaybackUpdateToListeners();
         UIs.call(PlayerUi::onPlayQueueEdited);
+    }
+
+    @Override
+    @Nullable
+    public MediaSource localSourceOf(final PlayQueueItem item) throws java.io.IOException {
+        return OfflineLibrary.get(context).source(item);
     }
 
     @Override // own playback listener

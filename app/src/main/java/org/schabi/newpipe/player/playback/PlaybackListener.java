@@ -10,6 +10,16 @@ import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 
 public interface PlaybackListener {
     /**
+     * Local source lookup runs before remote metadata extraction, on an I/O scheduler.
+     * @param item requested queue item
+     * @return saved source, or null to use the existing online path
+     */
+    @Nullable
+    default MediaSource localSourceOf(final PlayQueueItem item) throws java.io.IOException {
+        return null;
+    }
+
+    /**
      * Called to check if the currently playing stream is approaching the end of its playback.
      * Implementation should return true when the current playback position is progressing within
      * timeToEndMillis or less to its playback during.

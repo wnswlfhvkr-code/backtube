@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offline_library">Saved offline</string>
+    <string name="offline_saved_copy">Saved copy</string>
+    <string name="offline_save">Save offline copy</string>
+    <string name="offline_import">Import media file</string>
+    <string name="offline_delete_all">Delete all</string>
+    <string name="offline_summary">%1$.1f / 500 MB · Copies expire after 7 days</string>
+    <string name="offline_empty">Add a completed download from its menu, or import your own media file.</string>
+    <string name="offline_ready">Available offline</string>
+    <string name="offline_copying">Saving local copy…</string>
+    <string name="offline_interrupted">Interrupted · Retry copies again from the source</string>
+    <string name="offline_expired">Expired</string>
+    <string name="offline_failed">Save failed · Check the source and free space</string>
+    <string name="offline_play">Play saved copy</string>
+    <string name="offline_expires">Expires %1$s</string>
+    <string name="offline_size">%1$.1f MB</string>
+    <string name="offline_storage_error">Could not save or read this file. Check free space and access to the source media.</string>
+    <string name="offline_delete_title">Delete saved copy?</string>
+    <string name="offline_delete_message">Only offline copies are removed. Original downloads are kept. An already open copy is removed when playback releases it.</string>
+    <string name="offline_media_only">Choose audio or video for offline playback.</string>
+    <string name="offline_wifi_only">Save over unmetered Wi-Fi only</string>
+    <string name="offline_downloading">Downloading / processing…</string>
+    <string name="offline_network_wait">Waiting for allowed network / download queue</string>
+    <string name="offline_recovery_wait">Reconnecting download · Reopen the content if recovery is unavailable</string>
+</resources>
