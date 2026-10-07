@@ -76,3 +76,37 @@ require that playback remains paused without a new request until explicit Play.
 It must not turn the documentation's usual callback sequence into a universal
 platform assertion. The explicit-abandon test still verifies the no-GAIN path.
 Both changes affect tests only. Revalidation is required before integration.
+
+## Pre-integration verified checkpoint: d6d84955c
+
+[Run 37602506632](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37602506632)
+passed JVM/build and both API23/35 jobs. Each connected suite had 104 cases,
+zero failures/errors, and the same three opt-in skips; all seven cross-UID focus
+cases passed. Dedicated generated local lifecycle phases (1+1+3) and current UI
+tests (4) also passed. Production source still matched PR4's 19b4522 exactly.
+The tests observe app gain and unchanged system-volume setting, not acoustic
+loudness or a user's physical device. API37 remains untested.
+
+The diagnostic `dumpsys audio` file used `.txt`, which the report step treated
+as instrumentation output and incorrectly annotated as an error. Change it to
+`.log` for subsequent runs; the actual Android test jobs passed.
+
+## Integration implementation and local checks
+
+Restored PR2's shared SleepTimerDialog/detail button and final PR3 detail-timer
+scenario. Removed the redundant detail Background button and its now-unused
+private handlers; automatic background continuation was not altered. The current
+artwork/swipe binding, offline source/store, AudioReactor and recovery code remain
+unchanged. The PR2 merge conflict was limited to obsolete widget imports.
+
+Restored 12-attempt short-landscape scrolling and the real notification denial
+path. A dedicated phase launches a fresh emulator app process, clicks Deny and
+asserts the denied state through timer operation before the usual permission
+grant. The activity request flag is asserted false beforehand, preventing a
+silent skip. Portrait/landscape timer screenshots are retained. Shared test UI
+helpers moved into PlaybackTestUi to preserve the 2000-line Checkstyle limit.
+
+Timer layout contract first failed both cases against the unintegrated resources
+(missing timer and missing horizontal scroll container). After integration,
+full JVM tests, debug app/test APK builds and Checkstyle passed locally. Exact
+integrated Android results will be recorded against the committed head.

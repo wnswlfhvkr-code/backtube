@@ -18,9 +18,6 @@ class_name=org.schabi.newpipe.player.PersonalPlaybackTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 api_level=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
-if (( api_level >= 33 )); then
-    adb shell pm grant "$app_id" android.permission.POST_NOTIFICATIONS
-fi
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
@@ -37,6 +34,25 @@ run_phase() {
         return 1
     fi
 }
+
+# Exercise the real denial dialog in a fresh emulator app process before the usual grant.
+adb shell am force-stop "$app_id"
+if (( api_level >= 33 )); then
+    adb shell pm revoke "$app_id" android.permission.POST_NOTIFICATIONS
+    adb shell pm clear-permission-flags "$app_id" android.permission.POST_NOTIFICATIONS user-set user-fixed
+    run_phase detail-timer -e expect_notification_denied true \
+        -e class "$class_name#detailTimerSharesStateAndDialogCancellationPreservesPlayback"
+else
+    run_phase detail-timer \
+        -e class "$class_name#detailTimerSharesStateAndDialogCancellationPreservesPlayback"
+fi
+for orientation in "" "-landscape"; do
+    adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/backtube-detail-timer-generated${orientation}.png" \
+        "$output_dir/backtube-detail-timer-generated${orientation}.png"
+done
+if (( api_level >= 33 )); then
+    adb shell pm grant "$app_id" android.permission.POST_NOTIFICATIONS
+fi
 
 run_phase seed -e session_restart_phase seed \
     -e class "$class_name#savedOfflineLifecycleAcrossProcessRestart"

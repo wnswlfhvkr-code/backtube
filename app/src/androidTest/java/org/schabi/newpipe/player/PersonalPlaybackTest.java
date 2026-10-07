@@ -1,22 +1,28 @@
 package org.schabi.newpipe.player;
 
+import static org.schabi.newpipe.player.PlaybackTestUi.captureScreen;
+import static org.schabi.newpipe.player.PlaybackTestUi.clickAccessibilityText;
+import static org.schabi.newpipe.player.PlaybackTestUi.findNodeByText;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.Manifest;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
-import android.view.MotionEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.appcompat.widget.AppCompatButton;
@@ -35,6 +41,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.schabi.newpipe.App;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.MainActivity;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
@@ -83,7 +90,6 @@ import java.util.concurrent.TimeUnit;
 public class PersonalPlaybackTest {
     private static final long SERVICE_TIMEOUT_SECONDS = 10;
     private static final long PLAYBACK_TIMEOUT_SECONDS = 5;
-    private static final String SCREENSHOT_DIRECTORY = "personal-playback-test";
 
     private final Context context = InstrumentationRegistry.getInstrumentation()
             .getTargetContext();
@@ -233,7 +239,7 @@ public class PersonalPlaybackTest {
                 play.requestRectangleOnScreen(new Rect(0, 0, play.getWidth(), play.getHeight()),
                         true);
             });
-            captureScreen("offline-shelf-generated.png");
+            captureScreen(context, "offline-shelf-generated.png");
             runOnMain(() -> {
                 final android.widget.Button play = offlinePlayButton(shelf);
                 assertTrue("saved playback action not visible", play.getGlobalVisibleRect(
@@ -426,7 +432,7 @@ public class PersonalPlaybackTest {
             assertTrue("song selection required an extra play-button press", waitFor(
                     () -> callOnMain(() -> player.isPlaying()
                             && "offline-B".equals(player.getVideoUrl())), 10));
-            captureScreen("backtube-selection-autoplay.png");
+            captureScreen(context, "backtube-selection-autoplay.png");
             runOnMain(() -> {
                 player.pause();
                 player.getExoPlayer().seekTo(1200);
@@ -568,7 +574,7 @@ public class PersonalPlaybackTest {
         assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null), 5));
         runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
                 .findViewById(R.id.toolbar)).showOverflowMenu());
-        captureScreen("backtube-data-saver-menu-portrait.png");
+        captureScreen(context, "backtube-data-saver-menu-portrait.png");
         runOnMain(() -> {
             setField("playerType", org.schabi.newpipe.player.PlayerType.MAIN);
             setField("isAudioOnly", false);
@@ -586,12 +592,12 @@ public class PersonalPlaybackTest {
         assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
                 && activeQueueActivity().getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_PORTRAIT), 5));
-        captureScreen("backtube-data-saver-portrait.png");
+        captureScreen(context, "backtube-data-saver-portrait.png");
         runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
                 .findViewById(R.id.toolbar)).showOverflowMenu());
         clickAccessibilityText(context.getString(R.string.audio_quality_current,
                 context.getString(DataSaver.getQualityLabel(context))));
-        captureScreen("backtube-audio-quality-dialog.png");
+        captureScreen(context, "backtube-audio-quality-dialog.png");
         clickAccessibilityText(context.getString(R.string.audio_quality_high));
         assertTrue("quality selection did not persist", waitFor(() -> DataSaver.HIGH.equals(
                 player.getPrefs().getString(context.getString(R.string.audio_quality_key), "")),
@@ -603,7 +609,7 @@ public class PersonalPlaybackTest {
         assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
                 && activeQueueActivity().getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE), 5));
-        captureScreen("backtube-data-saver-landscape.png");
+        captureScreen(context, "backtube-data-saver-landscape.png");
     }
 
     @Test
@@ -1022,7 +1028,7 @@ public class PersonalPlaybackTest {
                     callOnMain(() -> player.getNextRecommendation().getUrl()),
                     callOnMain(() -> relatedListUrls(activity).get(0)));
             assertFalse(callOnMain(() -> relatedListUrls(activity).contains("offline-A")));
-            captureScreen("backtube-next-list-aligned.png");
+            captureScreen(context, "backtube-next-list-aligned.png");
             runOnMain(player::replaceNextRecommendation);
             assertTrue("replacement did not reach the first visible position", waitFor(
                     () -> callOnMain(() -> !relatedListUrls(activity).isEmpty()
@@ -1043,7 +1049,7 @@ public class PersonalPlaybackTest {
                     + " / next=" + player.getNextRecommendation()), rotationAligned);
             runOnMain(() -> ((com.google.android.material.appbar.AppBarLayout) activeMainActivity()
                     .findViewById(R.id.app_bar_layout)).setExpanded(false, false));
-            captureScreen("backtube-next-list-landscape.png");
+            captureScreen(context, "backtube-next-list-landscape.png");
             runOnMain(() -> assertTrue(player.excludeNextRecommendation(false)));
             assertTrue("explicitly excluded song remained in the list", waitFor(
                     () -> callOnMain(() -> relatedListUrls(activeMainActivity()).isEmpty()), 5));
@@ -1079,6 +1085,48 @@ public class PersonalPlaybackTest {
         });
         awaitRecommendation("offline-C");
         assertTrue(new RecommendationExclusions(player.getPrefs()).excludes(1, "offline-A", null));
+    }
+
+    private MainActivity launchMainActivity() throws InterruptedException {
+        final boolean expectsNotificationPrompt = Build.VERSION.SDK_INT >= 33
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+                && !App.getInstance().getNotificationsRequested();
+        if (expectsNotificationPrompt) {
+            final android.app.UiAutomation automation = InstrumentationRegistry
+                    .getInstrumentation().getUiAutomation();
+            final AccessibilityServiceInfo info = automation.getServiceInfo();
+            info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+            automation.setServiceInfo(info);
+        }
+        final MainActivity activity = (MainActivity) InstrumentationRegistry
+                .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        if (expectsNotificationPrompt) {
+            // Exercise the notification-denied path; playback controls do not require a grant.
+            assertTrue("notification permission prompt did not appear", waitFor(() -> {
+                final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                        .getUiAutomation().getRootInActiveWindow();
+                if (root == null) {
+                    return false;
+                }
+                final List<AccessibilityNodeInfo> buttons = root.findAccessibilityNodeInfosByViewId(
+                        root.getPackageName() + ":id/permission_deny_button");
+                root.recycle();
+                boolean clicked = false;
+                for (final AccessibilityNodeInfo button : buttons) {
+                    if (!clicked && button.isVisibleToUser()) {
+                        clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                    button.recycle();
+                }
+                return clicked;
+            }, PLAYBACK_TIMEOUT_SECONDS));
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        return activity;
     }
 
     private MainActivity activeMainActivity() {
@@ -1254,7 +1302,7 @@ public class PersonalPlaybackTest {
                 callOnMain(() -> activeQueueActivity() != null
                         && "00:01".contentEquals(((android.widget.TextView) activeQueueActivity()
                         .findViewById(R.id.current_time)).getText())), 5));
-        captureScreen("personal-session-restored.png");
+        captureScreen(context, "personal-session-restored.png");
         runOnMain(player::play);
         assertTrue(waitFor(() -> callOnMain(player::isPlaying), 5));
     }
@@ -1279,7 +1327,7 @@ public class PersonalPlaybackTest {
                 .performClick());
         assertTrue(waitFor(() -> findNodeByText(
                 context.getString(R.string.personal_exclude_channel)) != null, 5));
-        captureScreen("personal-recommendation-menu.png");
+        captureScreen(context, "personal-recommendation-menu.png");
         clickAccessibilityText(context.getString(R.string.personal_exclude_video));
         awaitRecommendation("C");
         clickAccessibilityText(context.getString(R.string.personal_exclusion_undo));
@@ -1612,6 +1660,102 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void detailTimerSharesStateAndDialogCancellationPreservesPlayback() throws Exception {
+        final boolean expectDenied = "true".equals(InstrumentationRegistry.getArguments()
+                .getString("expect_notification_denied", "false"));
+        if (expectDenied) {
+            assertTrue(Build.VERSION.SDK_INT >= 33);
+            assertFalse("fixture must start in a fresh application process",
+                    App.getInstance().getNotificationsRequested());
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+        startOfflineRecommendationChain(false);
+        runOnMain(() -> {
+            player.pause();
+            player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
+        });
+        final MainActivity launched = launchMainActivity();
+        if (expectDenied) {
+            assertTrue(App.getInstance().getNotificationsRequested());
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+        runOnMain(() -> NavigationHelper.openVideoDetailFragment(launched,
+                launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
+                player.getPlayQueue(), false));
+        assertTrue("detail timer did not connect", waitFor(() -> callOnMain(() ->
+                activeMainActivity() != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder) != null
+                        && activeMainActivity().getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder).isResumed()
+                        && activeMainActivity().findViewById(
+                                R.id.detail_controls_sleep_timer) != null
+                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                        .isEnabled()), 5));
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
+        assertTrue("15 minute selection did not set the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 14 * 60_000L), 5));
+        assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
+                callOnMain(() -> ((android.widget.TextView) activeMainActivity().findViewById(
+                        R.id.detail_controls_sleep_timer)).getText().toString()));
+        assertFalse("setting a timer resumed paused playback", callOnMain(player::isPlaying));
+
+        captureScreen(context, "backtube-detail-timer-generated.png");
+        for (final boolean playing : new boolean[]{false, true}) {
+            runOnMain(() -> {
+                if (playing) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+            });
+            assertTrue(waitFor(() -> callOnMain(() -> player.isPlaying() == playing), 5));
+            runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                    .performClick());
+            clickAccessibilityText(context.getString(R.string.personal_sleep_timer_custom));
+            clickAccessibilityText(context.getString(R.string.cancel));
+            assertEquals("dialog cancellation changed playback", playing,
+                    (boolean) callOnMain(player::isPlaying));
+            assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
+        }
+
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_extend));
+        assertTrue("extend selection did not add 15 minutes", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() > 29 * 60_000L), 5));
+        runOnMain(() -> {
+            player.pause();
+            activeMainActivity().findViewById(R.id.detail_controls_sleep_timer).performClick();
+            activeMainActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        });
+        assertTrue("rotated detail screen did not reconnect", waitFor(() -> callOnMain(() ->
+                activeMainActivity() != null && activeMainActivity().getResources()
+                        .getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
+                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                        .isEnabled()), 5));
+        assertNull("old timer dialog survived rotation", findNodeByText(
+                context.getString(R.string.personal_sleep_timer_minutes, 15)));
+        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+        captureScreen(context, "backtube-detail-timer-generated-landscape.png");
+        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
+                .performClick());
+        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_cancel_timer));
+        assertTrue("cancel selection did not stop the timer", waitFor(() -> callOnMain(
+                () -> player.getSleepTimerRemainingMillis() == 0), 5));
+        assertEquals(0, (long) callOnMain(player::getSleepTimerRemainingMillis));
+        assertFalse("cancelling timer resumed playback", callOnMain(player::isPlaying));
+        if (expectDenied) {
+            assertEquals(PackageManager.PERMISSION_DENIED,
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+        }
+    }
+
+    @Test
     public void queueOptionsAndTimerDialogRenderInPortraitAndLandscape() throws Exception {
         runOnMain(() -> setField("playQueue", twoItemQueue()));
         prepareAndPlayTwoLocalAudioItems();
@@ -1653,7 +1797,7 @@ public class PersonalPlaybackTest {
                 () -> findNodeByText(context.getString(
                         R.string.personal_sleep_timer_minutes, 15)) != null,
                 PLAYBACK_TIMEOUT_SECONDS));
-        captureScreen("personal-playback-portrait.png");
+        captureScreen(context, "personal-playback-portrait.png");
         clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
         assertTrue("sleep timer choice was not applied", waitFor(
                 () -> callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L),
@@ -1661,7 +1805,7 @@ public class PersonalPlaybackTest {
         assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
                 callOnMain(() -> ((AppCompatButton) activeQueueActivity().findViewById(
                         R.id.control_sleep_timer)).getText().toString()));
-        captureScreen("personal-playback-controls-portrait.png");
+        captureScreen(context, "personal-playback-controls-portrait.png");
         assertTrue("elapsed time was hidden when opening a paused player", callOnMain(
                 () -> activeQueueActivity().findViewById(R.id.current_time).getWidth() > 0));
 
@@ -1685,10 +1829,10 @@ public class PersonalPlaybackTest {
                 () -> callOnMain(() -> activeQueueActivity() != null
                         && activeQueueActivity().getResources().getConfiguration().orientation
                         == Configuration.ORIENTATION_LANDSCAPE), PLAYBACK_TIMEOUT_SECONDS));
-        captureScreen("personal-playback-landscape.png");
+        captureScreen(context, "personal-playback-landscape.png");
         runOnMain(() -> activeQueueActivity().findViewById(R.id.control_sleep_timer)
                 .performClick());
-        captureScreen("personal-playback-timer-landscape.png");
+        captureScreen(context, "personal-playback-timer-landscape.png");
         clickAccessibilityText(context.getString(R.string.cancel));
     }
 
@@ -1731,123 +1875,6 @@ public class PersonalPlaybackTest {
             }
         }
         return null;
-    }
-
-    private void clickAccessibilityText(final String text) {
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        SystemClock.sleep(300);
-        for (int attempt = 0; attempt < 6; attempt++) {
-            final AccessibilityNodeInfo visible = findNodeByText(text);
-            if (visible != null) {
-                visible.recycle();
-                break;
-            }
-            final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
-                    .getUiAutomation().getRootInActiveWindow();
-            if (root != null) {
-                scrollForward(root);
-                root.recycle();
-            }
-            SystemClock.sleep(300);
-        }
-        // Wait for native ListView scrolling to settle before reading touch coordinates.
-        SystemClock.sleep(800);
-        final AccessibilityNodeInfo node = findNodeByText(text);
-        assertTrue("missing accessibility text: " + text, node != null);
-        final Rect bounds = new Rect();
-        node.getBoundsInScreen(bounds);
-        node.recycle();
-        assertFalse("empty accessibility bounds: " + text, bounds.isEmpty());
-        final long now = SystemClock.uptimeMillis();
-        final MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN,
-                bounds.centerX(), bounds.centerY(), 0);
-        final MotionEvent up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP,
-                bounds.centerX(), bounds.centerY(), 0);
-        try {
-            InstrumentationRegistry.getInstrumentation().sendPointerSync(down);
-            InstrumentationRegistry.getInstrumentation().sendPointerSync(up);
-        } finally {
-            down.recycle();
-            up.recycle();
-        }
-    }
-
-    private AccessibilityNodeInfo findNodeByText(final String text) {
-        final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
-                .getUiAutomation().getRootInActiveWindow();
-        if (root == null) {
-            return null;
-        }
-        final List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText(text);
-        root.recycle();
-        AccessibilityNodeInfo match = null;
-        for (final AccessibilityNodeInfo node : nodes) {
-            if (match == null && node.isVisibleToUser() && fullyVisibleInList(node)
-                    && text.equalsIgnoreCase(String.valueOf(node.getText()))) {
-                match = node;
-            } else {
-                node.recycle();
-            }
-        }
-        return match;
-    }
-
-    private boolean fullyVisibleInList(final AccessibilityNodeInfo node) {
-        final Rect bounds = new Rect();
-        node.getBoundsInScreen(bounds);
-        AccessibilityNodeInfo parent = node.getParent();
-        while (parent != null) {
-            if (parent.isScrollable()) {
-                final Rect viewport = new Rect();
-                parent.getBoundsInScreen(viewport);
-                parent.recycle();
-                return viewport.contains(bounds);
-            }
-            final AccessibilityNodeInfo next = parent.getParent();
-            parent.recycle();
-            parent = next;
-        }
-        return true;
-    }
-
-    private boolean scrollForward(final AccessibilityNodeInfo node) {
-        if (node.isScrollable()
-                && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
-            return true;
-        }
-        for (int index = 0; index < node.getChildCount(); index++) {
-            final AccessibilityNodeInfo child = node.getChild(index);
-            if (child != null) {
-                final boolean scrolled = scrollForward(child);
-                child.recycle();
-                if (scrolled) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private void captureScreen(final String name) throws IOException {
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        // Surface rotation/dialog animations can outlive the activity's idle queue.
-        SystemClock.sleep(800);
-        final Bitmap screenshot = InstrumentationRegistry.getInstrumentation()
-                .getUiAutomation().takeScreenshot();
-        assertTrue("could not capture screen", screenshot != null);
-        final File externalFiles = context.getExternalFilesDir(null);
-        assertTrue("external files directory was unavailable", externalFiles != null);
-        final File directory = new File(externalFiles, SCREENSHOT_DIRECTORY);
-        assertTrue("could not create screenshot directory",
-                directory.exists() || directory.mkdirs());
-        final File output = new File(directory, name);
-        try (FileOutputStream stream = new FileOutputStream(output)) {
-            assertTrue("could not write screenshot", screenshot.compress(
-                    Bitmap.CompressFormat.PNG, 100, stream));
-        } finally {
-            screenshot.recycle();
-        }
-        assertTrue("screenshot was empty", output.length() > 0);
     }
 
     private void finishQueueActivity() {
