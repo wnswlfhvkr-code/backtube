@@ -168,6 +168,7 @@ public class MiniPlayerUiTest {
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_PORTRAIT
+                && currentRowLaidOut()
                 && tracks.get(0).getName().contentEquals(((TextView) active(
                         PlayQueueActivity.class).findViewById(R.id.song_name)).getText()));
     }
@@ -219,6 +220,7 @@ public class MiniPlayerUiTest {
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_PORTRAIT
+                && currentRowLaidOut()
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
         onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated.png");
@@ -227,6 +229,7 @@ public class MiniPlayerUiTest {
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE
+                && currentRowLaidOut()
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
         onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated-landscape.png");
@@ -309,6 +312,7 @@ public class MiniPlayerUiTest {
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE
+                && currentRowLaidOut()
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
         final Rect row = new Rect();
         final PlayQueue[] original = new PlayQueue[1];
@@ -346,6 +350,20 @@ public class MiniPlayerUiTest {
         onMain(() -> assertSame(original[0], player.getPlayQueue()));
     }
 
+    private boolean currentRowLaidOut() {
+        final PlayQueueActivity activity = active(PlayQueueActivity.class);
+        if (activity == null || !activity.hasWindowFocus()
+                || activity.getWindow().getDecorView().isLayoutRequested()) {
+            return false;
+        }
+        final View row = activity.findViewById(R.id.metadata);
+        // Cached artwork can arrive before the recreated activity's first layout.
+        return row.isAttachedToWindow() && row.isShown() && row.isLaidOut()
+                && row.getWindowVisibility() == View.VISIBLE && !row.isLayoutRequested()
+                && row.getWidth() > 0 && row.getHeight() > 0
+                && row.getGlobalVisibleRect(new Rect());
+    }
+
     private void assertCurrentRowVisible() {
         final PlayQueueActivity activity = active(PlayQueueActivity.class);
         final Rect row = fullyVisibleBounds(activity.findViewById(R.id.metadata), "current row");
@@ -363,7 +381,9 @@ public class MiniPlayerUiTest {
 
     private static Rect fullyVisibleBounds(final View view, final String name) {
         final Rect bounds = new Rect();
-        assertTrue(name + " is hidden or empty", view.isShown() && view.getWidth() > 0
+        assertTrue(name + " is hidden or empty: shown=" + view.isShown()
+                + ", size=" + view.getWidth() + "x" + view.getHeight(),
+                view.isShown() && view.getWidth() > 0
                 && view.getHeight() > 0 && view.getGlobalVisibleRect(bounds));
         assertEquals(name + " is clipped horizontally", view.getWidth(), bounds.width());
         assertEquals(name + " is clipped vertically", view.getHeight(), bounds.height());

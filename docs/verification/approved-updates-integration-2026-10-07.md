@@ -158,3 +158,23 @@ video/audio settings. Tests explicitly cover enabled and disabled states. The
 user's installed-device setting is unknown, and it was not changed. This can
 explain an absent transient auto-resume when disabled, but does not establish the
 cause of the user's reported quiet audio or behavior on their physical device.
+
+## Integrated fixture rerun: 19f7bec4e
+
+[Run 37607670381](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37607670381)
+passed JVM/build and API35. Both APIs completed the 105-case connected suite with
+zero failures/errors and three opt-in skips. The repaired detail timer and direct
+recovery cases passed; portrait/landscape timer screenshots now show visible
+controls and successful generated content on both APIs.
+
+API23's separate four-case current-UI phase failed one assertion immediately
+after landscape rotation: `landscapeVisibleMetadataAcceptsScreenCoordinateSwipe`
+found the current row hidden or empty. The test awaited orientation and cached
+artwork but did not await the recreated activity's layout. Its log records the
+new activity resuming and cached artwork arriving during window/layout setup;
+the same case passed later in the connected suite. Require window focus and an
+attached, shown, measured row without pending layout within the existing bounded
+wait before strict geometry assertions. Preserve clipping/overlap and actual
+screen-coordinate swipe checks; do not retry the test or change production UI.
+Add measured dimensions to a remaining geometry failure for diagnosis. The APK
+from this run was inspected but not delivered as the final verified build.
