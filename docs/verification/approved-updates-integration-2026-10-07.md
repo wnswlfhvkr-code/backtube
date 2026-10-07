@@ -1,6 +1,6 @@
 # Backtube prior-update integration and real audio focus verification
 
-Status: investigation/test preparation; no new runtime success claimed yet.
+Status: pre-integration real-focus tests compile; Android runtime pending.
 
 ## Report provenance
 
@@ -42,3 +42,18 @@ and timer expiry. Do not download remote media or change user device settings.
 
 PR4's original source, passing run and delivered APK remain unchanged while this
 work proceeds on `integration/approved-updates`.
+
+## Pre-integration local validation
+
+Added seven `RealAudioFocusHandoffTest` cases, a framework-only
+`AudioFocusOwnerActivity` in the instrumentation APK manifest, and generated WAV
+support. The test asserts that the owner's UID differs from the instrumented
+Backtube UID. Both real focus requests and OS callbacks are logged. The seventh
+case explicitly retains an app duck of 0.2 through user pause/abandon, then checks
+that manual Play restores 1.0 without an intervening GAIN callback.
+
+`assembleDebug assembleDebugAndroidTest runCheckstyle` passed; after the seventh
+case was added, `assembleDebugAndroidTest runCheckstyle` passed again.
+`testDebugUnitTest`: 233 tests, zero failures/errors/skips (37 XML reports).
+Diff whitespace and shell syntax checks passed. These are local compilation and
+JVM results; the seven new tests still require actual Android execution.

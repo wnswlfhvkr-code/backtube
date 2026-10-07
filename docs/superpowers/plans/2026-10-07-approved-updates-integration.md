@@ -53,6 +53,13 @@ tests must be integrated selectively. Live SubscriptionManagerTest remains
 excluded from the network-disabled regression suite. Old PR3 workflow/scripts
 must not replace PR4's later aggregate status and diagnostic handling.
 
+Independent read-only audit additionally identified PR3's 12-attempt scrolling
+helper (current copy has six) and actual notification-permission denial coverage
+as missing. Restore both: the current lifecycle runner pre-grants notifications,
+so merely adding a conditional denial helper would leave that branch untested.
+PR1 is documentation/verification of the existing timer, not a separate engine
+implementation to add.
+
 ## Verification commands
 
 Use `/workspace/.backtube-environment/env.sh` for local JDK/SDK configuration.
