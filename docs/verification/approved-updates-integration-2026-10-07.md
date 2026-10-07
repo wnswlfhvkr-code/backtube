@@ -202,3 +202,41 @@ certificate, package and version against b855aa544 before delivery; do not assum
 that separate ephemeral CI runs reuse the same certificate. No signing key is
 copied and no installed app data is deleted. Exact follow-up CI/APK evidence is
 recorded in PR5 after verification.
+
+## Synced verified checkpoint: b5b6e3111
+
+Source `b5b6e311182e7011d833f6be0aba26f9ed19960f` passed
+[CI 37646975276](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37646975276):
+JVM/build and both API23/API35 jobs succeeded. Local JVM verification reported
+237 tests with zero failures/errors/skips; app/test builds and Checkstyle passed.
+Each connected Android suite reported 108 cases, zero failures/errors and three
+existing opt-in skips. The three real preference-initialization cases and seven
+cross-UID focus cases ran successfully. Dedicated timer (1), offline (1+1+3) and
+current-track UI (4) phases passed on both APIs. Live SubscriptionManagerTest
+remained excluded; offline restart was exercised separately by seed/restore.
+
+The unchanged CI APK is available in
+[artifact 11495011105](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37646975276/artifacts/11495011105).
+It contains `app-continuous.apk`, 11,594,175 bytes, package
+`org.schabi.newpipe.continuous.integrationapprovedupdates`, version `0.29.1` /
+code `1015`, min23 / target35. Its SHA-256 is
+`d963a0861ac83bf9445bb21128bc4b88611b4e9b6f36f62cbf80e250e1b7fee5`.
+APK v1/v2 signatures and zipalign verified successfully; certificate SHA-256 is
+`ae89a250cd498b77fc5012126dacd533b1c24fd8e2f1945ba50cf331f741ecad`.
+Embedded build revision `6a014e7d124cdf6c57b95d36683fe78ee02ea8b2` is GitHub's
+synthetic PR merge; its tree `c7e4b3a6a22dc12995bdb7f7a48944961376bde9` exactly
+matches the source checkpoint. This was not an actual main merge.
+
+The earlier b855aa544 APK has the same package/version but certificate SHA-256
+`91e0c1e4fd4f3ae16b9f0ce23398797a2ab3cb78fdc9bbc6b079bfb4e3923a34`.
+Because the certificates differ, the new APK cannot update that installed test
+app in place. Fresh installation is possible where that package is absent.
+No key copying or installed-data deletion was performed. A separate Library
+copy was saved and its bytes retained the verified APK hash.
+
+This synchronization only records already-completed evidence; no product code
+or APK changed. Runtime checks above belong to b5b6e3111, not a new runtime run
+for this documentation-only checkpoint. Physical-device acoustic behavior and
+API37 runtime remain unverified. Prior external Claude review findings remain in
+`offline-library-2026-10-07.md`; no original Claude patch was available locally
+to archive or attribute as newly executed work.
