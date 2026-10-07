@@ -173,6 +173,12 @@ public class DownloadManagerService extends Service {
             }
 
             @Override
+            public void onCapabilitiesChanged(Network network,
+                    android.net.NetworkCapabilities capabilities) {
+                handleConnectivityState(false);
+            }
+
+            @Override
             public void onLost(Network network) {
                 handleConnectivityState(false);
             }
@@ -249,6 +255,13 @@ public class DownloadManagerService extends Service {
     }
 
     @Override
+    public void onTimeout(int startId, int fgsType) {
+        mManager.pauseAllMissions(true);
+        updateForegroundState(false);
+        stopSelf();
+    }
+
+    @Override
     public IBinder onBind(Intent intent) {
         return mBinder;
     }
@@ -260,6 +273,11 @@ public class DownloadManagerService extends Service {
 
         switch (msg.what) {
             case MESSAGE_FINISHED:
+                if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
+                    mManager.setFinished(mission);
+                    updateForegroundState(mManager.runMissions());
+                    break;
+                }
                 notifyMediaScanner(mission.storage.getUri());
                 notifyFinishedDownload(mission.storage.getName());
                 mManager.setFinished(mission);
@@ -322,6 +340,8 @@ public class DownloadManagerService extends Service {
             mManager.updateMaximumAttempts();
         } else if (getString(R.string.downloads_cross_network).equals(key)) {
             mManager.mPrefMeteredDownloads = prefs.getBoolean(key, false);
+        } else if (org.schabi.newpipe.offline.OfflineDownloads.WIFI_ONLY.equals(key)) {
+            handleConnectivityState(false);
         } else if (getString(R.string.downloads_queue_limit).equals(key)) {
             mManager.mPrefQueueLimit = prefs.getBoolean(key, true);
         } else if (getString(R.string.download_path_video_key).equals(key)) {

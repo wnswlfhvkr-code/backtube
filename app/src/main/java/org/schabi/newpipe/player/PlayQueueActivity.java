@@ -17,12 +17,7 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
 import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.ListView;
-import android.widget.NumberPicker;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
@@ -31,6 +26,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -45,7 +42,9 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.fragments.OnScrollBelowItemsListener;
 import org.schabi.newpipe.local.dialog.PlaylistDialog;
 import org.schabi.newpipe.player.event.PlayerEventListener;
+import org.schabi.newpipe.player.gesture.SwipeUpToOpenListener;
 import org.schabi.newpipe.player.helper.PlaybackParameterDialog;
+import org.schabi.newpipe.player.helper.SleepTimerDialog;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueueAdapter;
@@ -75,6 +74,8 @@ public final class PlayQueueActivity extends AppCompatActivity
     private static final int MENU_ID_AUDIO_TRACK = 71;
 
     private Player player;
+    @Nullable
+    private SleepTimerDialog sleepTimerDialog;
 
     private boolean serviceBound;
     private ServiceConnection serviceConnection;
@@ -84,8 +85,7 @@ public final class PlayQueueActivity extends AppCompatActivity
     private final Handler playbackOptionsHandler = new Handler(Looper.getMainLooper());
     private boolean playbackOptionsUpdatesActive;
     private boolean updatingAutoQueueControl;
-    @Nullable
-    private String recommendationThumbnailUrl;
+    private boolean openingPlaybackScreen;
     private final Runnable playbackOptionsUpdater = new Runnable() {
         @Override
         public void run() {
@@ -214,8 +214,7 @@ public final class PlayQueueActivity extends AppCompatActivity
             startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS));
             return true;
         } else if (itemId == R.id.action_switch_main) {
-            this.player.setRecovery();
-            NavigationHelper.playOnMainPlayer(this, player.getPlayQueue(), true);
+            openPlaybackScreen();
             return true;
         } else if (itemId == R.id.action_switch_popup) {
             if (PermissionHelper.isPopupEnabledElseAsk(this)) {
@@ -239,6 +238,7 @@ public final class PlayQueueActivity extends AppCompatActivity
 
     @Override
     protected void onDestroy() {
+        dismissSleepTimerDialog();
         playbackOptionsHandler.removeCallbacks(playbackOptionsUpdater);
         super.onDestroy();
         unbind();
@@ -247,6 +247,7 @@ public final class PlayQueueActivity extends AppCompatActivity
     @Override
     protected void onResume() {
         super.onResume();
+        openingPlaybackScreen = false;
         playbackOptionsUpdatesActive = true;
         updatePlaybackOptionsUpdates();
     }
@@ -278,6 +279,7 @@ public final class PlayQueueActivity extends AppCompatActivity
     }
 
     private void unbind() {
+        dismissSleepTimerDialog();
         if (serviceBound) {
             unbindService(serviceConnection);
             serviceBound = false;
@@ -300,11 +302,14 @@ public final class PlayQueueActivity extends AppCompatActivity
             @Override
             public void onServiceDisconnected(final ComponentName name) {
                 Log.d(TAG, "Player service is disconnected");
+                playbackOptionsHandler.removeCallbacks(playbackOptionsUpdater);
+                onServiceStopped();
             }
 
             @Override
             public void onServiceConnected(final ComponentName name, final IBinder service) {
                 Log.d(TAG, "Player service is connected");
+                dismissSleepTimerDialog();
 
                 if (service instanceof PlayerService.LocalBinder) {
                     final PlayerService playerService =
@@ -356,8 +361,26 @@ public final class PlayQueueActivity extends AppCompatActivity
 
     private void buildMetadata() {
         queueControlBinding.metadata.setOnClickListener(this);
+        queueControlBinding.metadata.setOnTouchListener(new SwipeUpToOpenListener(
+                queueControlBinding.metadata, this::openPlaybackScreen));
+        ViewCompat.replaceAccessibilityAction(queueControlBinding.metadata,
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_EXPAND,
+                getString(R.string.personal_open_current_player), (view, arguments) -> {
+                    openPlaybackScreen();
+                    return true;
+                });
         queueControlBinding.songName.setSelected(true);
         queueControlBinding.artistName.setSelected(true);
+    }
+
+    private void openPlaybackScreen() {
+        if (player == null || player.getPlayQueue() == null
+                || player.getPlayQueue().getItem() == null || openingPlaybackScreen) {
+            return;
+        }
+        openingPlaybackScreen = true;
+        player.setRecovery();
+        NavigationHelper.playOnMainPlayer(this, player.getPlayQueue(), true);
     }
 
     private void buildSeekBar() {
@@ -619,6 +642,8 @@ public final class PlayQueueActivity extends AppCompatActivity
         if (info != null) {
             queueControlBinding.songName.setText(info.getName());
             queueControlBinding.artistName.setText(info.getUploaderName());
+            CoilHelper.INSTANCE.loadThumbnail(queueControlBinding.currentTrackThumbnail,
+                    info.getThumbnails());
 
             queueControlBinding.endTime.setVisibility(View.GONE);
             queueControlBinding.liveSync.setVisibility(View.GONE);
@@ -748,22 +773,7 @@ public final class PlayQueueActivity extends AppCompatActivity
         queueControlBinding.controlAutoQueue.setChecked(player.isAutoQueueEnabled());
         updatingAutoQueueControl = false;
 
-        if (player.isSleepTimerAtEndOfItem()) {
-            queueControlBinding.controlSleepTimer.setText(
-                    R.string.personal_sleep_timer_end_of_item);
-        } else {
-            final long remainingMillis = player.getSleepTimerRemainingMillis();
-            if (remainingMillis <= 0) {
-                queueControlBinding.controlSleepTimer.setText(R.string.personal_sleep_timer_off);
-            } else {
-                final long remainingMinutes = (remainingMillis + 59999) / 60000;
-                queueControlBinding.controlSleepTimer.setText(getString(
-                        R.string.personal_sleep_timer_remaining, remainingMinutes));
-            }
-        }
-        queueControlBinding.controlSleepTimer.setContentDescription(getString(
-                R.string.personal_sleep_timer_title) + ", "
-                + queueControlBinding.controlSleepTimer.getText());
+        SleepTimerDialog.updateButton(queueControlBinding.controlSleepTimer, player);
 
         updateRecommendationPreview();
     }
@@ -771,7 +781,6 @@ public final class PlayQueueActivity extends AppCompatActivity
     private void updateRecommendationPreview() {
         final Player.RecommendationStatus status = player.getRecommendationStatus();
         final PlayQueueItem nextItem = player.getNextRecommendation();
-        final ImageView thumbnail = queueControlBinding.recommendationThumbnail;
         final String title;
         final int buttonText;
         boolean buttonEnabled = true;
@@ -781,19 +790,10 @@ public final class PlayQueueActivity extends AppCompatActivity
                 title = getString(R.string.personal_recommendation_loading);
                 buttonText = R.string.personal_recommendation_loading;
                 buttonEnabled = false;
-                clearRecommendationThumbnail(thumbnail);
                 break;
             case READY:
                 title = nextItem == null ? getString(R.string.personal_no_recommendation)
                         : getString(R.string.personal_next_item) + ": " + nextItem.getTitle();
-                if (nextItem != null) {
-                    if (!nextItem.getUrl().equals(recommendationThumbnailUrl)) {
-                        CoilHelper.INSTANCE.loadThumbnail(thumbnail, nextItem.getThumbnails());
-                        recommendationThumbnailUrl = nextItem.getUrl();
-                    }
-                } else {
-                    clearRecommendationThumbnail(thumbnail);
-                }
                 if (player.canReplaceNextRecommendation()) {
                     buttonText = R.string.personal_recommendation_replace;
                 } else {
@@ -804,14 +804,12 @@ public final class PlayQueueActivity extends AppCompatActivity
             case ERROR:
                 title = getString(R.string.personal_recommendation_failed);
                 buttonText = R.string.personal_recommendation_retry;
-                clearRecommendationThumbnail(thumbnail);
                 break;
             case EMPTY:
             case IDLE:
             default:
                 title = getString(R.string.personal_no_recommendation);
                 buttonText = R.string.personal_recommendation_load;
-                clearRecommendationThumbnail(thumbnail);
                 break;
         }
 
@@ -824,13 +822,6 @@ public final class PlayQueueActivity extends AppCompatActivity
                         && player.canReplaceNextRecommendation() ? View.VISIBLE : View.GONE);
         queueControlBinding.recommendationPreview.setContentDescription(getString(
                 R.string.personal_recommendation_next) + ": " + title);
-    }
-
-    private void clearRecommendationThumbnail(final ImageView thumbnail) {
-        if (recommendationThumbnailUrl != null || thumbnail.getDrawable() == null) {
-            thumbnail.setImageResource(R.drawable.placeholder_thumbnail_video);
-            recommendationThumbnailUrl = null;
-        }
     }
 
     private void onRecommendationClick() {
@@ -887,111 +878,21 @@ public final class PlayQueueActivity extends AppCompatActivity
     }
 
     private void showSleepTimerDialog() {
-        if (player == null) {
-            return;
+        dismissSleepTimerDialog();
+        if (player != null) {
+            sleepTimerDialog = new SleepTimerDialog(this, player, () -> {
+                updatePlaybackOptions();
+                updatePlaybackOptionsUpdates();
+            });
+            sleepTimerDialog.show();
         }
-
-        final int[] minutes = {15, 30, 60, 90, 120};
-        final CharSequence[] options = new CharSequence[minutes.length + 4];
-        for (int index = 0; index < minutes.length; index++) {
-            options[index] = getString(R.string.personal_sleep_timer_minutes, minutes[index]);
-        }
-        final int customIndex = minutes.length;
-        final int endOfItemIndex = customIndex + 1;
-        final int extendIndex = endOfItemIndex + 1;
-        final int cancelIndex = extendIndex + 1;
-        options[customIndex] = getString(R.string.personal_sleep_timer_custom);
-        options[endOfItemIndex] = getString(R.string.personal_sleep_timer_end_current_item);
-        options[extendIndex] = getString(R.string.personal_sleep_timer_extend);
-        options[cancelIndex] = getString(R.string.personal_sleep_timer_cancel_timer);
-
-        final CheckBox fadeToggle = new CheckBox(this);
-        fadeToggle.setText(R.string.personal_sleep_timer_fade);
-        fadeToggle.setContentDescription(getString(R.string.personal_sleep_timer_fade));
-        fadeToggle.setChecked(player.isSleepTimerFadeEnabled());
-        fadeToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (player != null) {
-                player.setSleepTimerFadeEnabled(isChecked);
-            }
-        });
-
-        final ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this,
-                android.R.layout.select_dialog_item, options) {
-            @Override
-            public boolean isEnabled(final int position) {
-                return position != endOfItemIndex || player == null
-                        || player.canSetSleepTimerAtEndOfItem();
-            }
-        };
-        final AlertDialog sleepTimerDialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.personal_sleep_timer_title)
-                .setView(fadeToggle)
-                .setAdapter(adapter, (dialog, which) -> {
-                    if (player == null) {
-                        dialog.dismiss();
-                        return;
-                    } else if (which < minutes.length) {
-                        player.setSleepTimer(minutes[which] * 60_000L);
-                    } else if (which == customIndex) {
-                        showCustomSleepTimerDialog();
-                    } else if (which == endOfItemIndex) {
-                        if (!player.canSetSleepTimerAtEndOfItem()) {
-                            return;
-                        }
-                        player.setSleepTimerAtEndOfItem();
-                    } else if (which == extendIndex) {
-                        player.extendSleepTimer();
-                    } else {
-                        player.cancelSleepTimer();
-                    }
-                    updatePlaybackOptions();
-                    updatePlaybackOptionsUpdates();
-                    dialog.dismiss();
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .create();
-        sleepTimerDialog.setOnShowListener(ignored -> limitSleepTimerListHeight(sleepTimerDialog));
-        sleepTimerDialog.show();
     }
 
-    private void limitSleepTimerListHeight(final AlertDialog dialog) {
-        final ListView list = dialog.getListView();
-        if (list == null) {
-            return;
+    private void dismissSleepTimerDialog() {
+        if (sleepTimerDialog != null) {
+            sleepTimerDialog.dismiss();
+            sleepTimerDialog = null;
         }
-
-        final ViewGroup.LayoutParams parameters = list.getLayoutParams();
-        final var metrics = getResources().getDisplayMetrics();
-        // Leave room for the title, fade checkbox, buttons and system bars on short screens.
-        final int maximumHeight = Math.max((int) (64 * metrics.density), Math.min(
-                (int) (metrics.heightPixels * 0.45f),
-                metrics.heightPixels - (int) (272 * metrics.density)));
-        final int currentHeight = list.getHeight() > 0 ? list.getHeight() : maximumHeight;
-        parameters.height = Math.min(currentHeight, maximumHeight);
-        list.setLayoutParams(parameters);
-        list.requestLayout();
-    }
-
-    private void showCustomSleepTimerDialog() {
-        final NumberPicker minutesPicker = new NumberPicker(this);
-        minutesPicker.setMinValue(1);
-        minutesPicker.setMaxValue(1440);
-        minutesPicker.setValue(30);
-        minutesPicker.setWrapSelectorWheel(false);
-
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.personal_sleep_timer_custom)
-                .setView(minutesPicker)
-                .setPositiveButton(R.string.ok, (dialog, which) -> {
-                    if (player != null) {
-                        minutesPicker.clearFocus();
-                        player.setSleepTimer(minutesPicker.getValue() * 60_000L);
-                        updatePlaybackOptions();
-                        updatePlaybackOptionsUpdates();
-                    }
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .show();
     }
 
     @Override

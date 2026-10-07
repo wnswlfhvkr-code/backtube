@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="personal_open_current_player">Open current track player</string>
     <string name="personal_no_recommendation">No new recommended videos available.</string>
     <string name="personal_recommendation_failed">Could not load recommendations.</string>
     <string name="personal_recommendation_next">Up next</string>

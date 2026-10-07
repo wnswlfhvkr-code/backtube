@@ -11,6 +11,8 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
+import org.schabi.newpipe.offline.OfflineFirst;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource;
 import org.schabi.newpipe.player.mediasource.LoadedMediaSource;
 import org.schabi.newpipe.player.mediasource.ManagedMediaSource;
@@ -119,6 +121,7 @@ public class MediaSourceManager {
 
     @NonNull
     private final AtomicBoolean isBlocked;
+    private volatile boolean disposed;
 
     @NonNull
     private ManagedMediaSourcePlaylist playlist;
@@ -179,6 +182,8 @@ public class MediaSourceManager {
      * Dispose the manager and releases all message buses and loaders.
      */
     public void dispose() {
+        disposed = true;
+        removeMediaSourceHandler.removeCallbacksAndMessages(null);
         if (DEBUG) {
             Log.d(TAG, "close() called.");
         }
@@ -219,6 +224,9 @@ public class MediaSourceManager {
     }
 
     private void onPlayQueueChanged(final PlayQueueEvent event) {
+        if (disposed) {
+            return;
+        }
         if (playQueue.isEmpty() && playQueue.isComplete()) {
             playbackListener.onPlaybackShutdown();
             return;
@@ -349,6 +357,9 @@ public class MediaSourceManager {
     }
 
     private synchronized void maybeSynchronizePlayer() {
+        if (disposed) {
+            return;
+        }
         if (isPlayQueueReady() && isPlaybackReady()) {
             final boolean isBlockReleased = maybeUnblock();
             maybeSync(isBlockReleased);
@@ -379,6 +390,9 @@ public class MediaSourceManager {
     }
 
     private void loadImmediate() {
+        if (disposed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "MediaSource - loadImmediate() called");
         }
@@ -420,7 +434,17 @@ public class MediaSourceManager {
     }
 
     private Single<ManagedMediaSource> getLoadedMediaSource(@NonNull final PlayQueueItem stream) {
-        return stream.getStream()
+        return Single.defer(() -> OfflineFirst.select(() -> {
+            final com.google.android.exoplayer2.source.MediaSource local =
+                    playbackListener.localSourceOf(stream);
+            if (local == null) {
+                return null;
+            }
+            final MediaItemTag tag = MediaItemTag.from(local.getMediaItem())
+                    .orElseThrow(() -> new IllegalStateException("Missing local metadata"));
+            return Single.<ManagedMediaSource>just(
+                    new LoadedMediaSource(local, tag, stream, Long.MAX_VALUE));
+        }, () -> stream.getStream()
                 .map(streamInfo -> Optional
                         .ofNullable(playbackListener.sourceOf(stream, streamInfo))
                         .<ManagedMediaSource>flatMap(source ->
@@ -442,7 +466,8 @@ public class MediaSourceManager {
                             return FailedMediaSource.of(stream,
                                     new MediaSourceResolutionException(message));
                         })
-                )
+                ), stream.getUrl().startsWith(OfflineStore.LOCAL_PREFIX)))
+                .subscribeOn(Schedulers.io())
                 .onErrorReturn(throwable -> {
                     if (throwable instanceof ExtractionException) {
                         return FailedMediaSource.of(stream, new StreamInfoLoadException(throwable));
@@ -457,6 +482,9 @@ public class MediaSourceManager {
 
     private void onMediaSourceReceived(@NonNull final PlayQueueItem item,
                                        @NonNull final ManagedMediaSource mediaSource) {
+        if (disposed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "MediaSource - Loaded=[" + item.getTitle()
                     + "] with url=[" + item.getUrl() + "]");
