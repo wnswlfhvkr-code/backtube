@@ -8,6 +8,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import android.app.Activity;
+import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -19,6 +20,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.IBinder;
@@ -37,6 +39,8 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
 import androidx.test.runner.lifecycle.Stage;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+
+import coil3.transition.CrossfadeDrawable;
 
 import org.junit.After;
 import org.junit.Before;
@@ -214,13 +218,15 @@ public class MiniPlayerUiTest {
                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_PORTRAIT && artworkColor() == Color.RED);
+                == Configuration.ORIENTATION_PORTRAIT
+                && Integer.valueOf(Color.RED).equals(artworkColor()));
         captureScreen("backtube-current-track-generated.png");
         onMain(() -> active(PlayQueueActivity.class).setRequestedOrientation(
                 ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
         await(() -> active(PlayQueueActivity.class) != null
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE && artworkColor() == Color.RED);
+                == Configuration.ORIENTATION_LANDSCAPE
+                && Integer.valueOf(Color.RED).equals(artworkColor()));
         captureScreen("backtube-current-track-generated-landscape.png");
         onMain(() -> {
             final View preview = active(PlayQueueActivity.class)
@@ -228,11 +234,14 @@ public class MiniPlayerUiTest {
             assertFalse("next-track preview still contains an image", containsImage(preview));
             player.playNext();
         });
-        await(() -> artworkColor() == Color.BLUE);
+        await(() -> Integer.valueOf(Color.BLUE).equals(artworkColor()));
         onMain(player::playNext);
-        await(() -> tracks.get(2).getName().contentEquals(((TextView) active(
-                PlayQueueActivity.class).findViewById(R.id.song_name)).getText())
-                && artworkColor() != Color.BLUE && artworkColor() != Color.RED);
+        await(() -> {
+            final Integer color = artworkColor();
+            return tracks.get(2).getName().contentEquals(((TextView) active(
+                    PlayQueueActivity.class).findViewById(R.id.song_name)).getText())
+                    && color != null && color != Color.BLUE && color != Color.RED;
+        });
     }
 
     @Test
@@ -240,12 +249,25 @@ public class MiniPlayerUiTest {
         final PlayQueue[] original = new PlayQueue[1];
         onMain(() -> original[0] = player.getPlayQueue());
         for (int repeat = 0; repeat < 3; repeat++) {
-            onMain(() -> swipe(active(PlayQueueActivity.class).findViewById(R.id.metadata),
-                    0, -160, false));
-            await(() -> active(MainActivity.class) != null
-                    && BottomSheetBehavior.from(active(MainActivity.class)
-                    .findViewById(R.id.fragment_player_holder)).getState()
-                    == BottomSheetBehavior.STATE_EXPANDED);
+            final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+            final Instrumentation.ActivityMonitor launches = instrumentation.addMonitor(
+                    MainActivity.class.getName(), null, false);
+            try {
+                onMain(() -> {
+                    final View row = active(PlayQueueActivity.class).findViewById(R.id.metadata);
+                    // Both complete before the activity can pause: only one launch is allowed.
+                    swipe(row, 0, -160, false);
+                    swipe(row, 0, -160, false);
+                });
+                await(() -> active(MainActivity.class) != null
+                        && BottomSheetBehavior.from(active(MainActivity.class)
+                        .findViewById(R.id.fragment_player_holder)).getState()
+                        == BottomSheetBehavior.STATE_EXPANDED);
+                assertEquals("rapid repeated swipes launched the player twice", 1,
+                        launches.getHits());
+            } finally {
+                instrumentation.removeMonitor(launches);
+            }
             onMain(() -> {
                 assertSame(original[0], player.getPlayQueue());
                 active(MainActivity.class).onBackPressed();
@@ -279,7 +301,7 @@ public class MiniPlayerUiTest {
     }
 
     @Test
-    public void gesturesRejectWrongDirectionAndCancellationButPreserveTap() {
+    public void gesturesRejectWrongDirectionMultitouchAndCancellationButPreserveTap() {
         onMain(() -> {
             final View row = new View(context);
             row.layout(0, 0, 600, 200);
@@ -291,24 +313,49 @@ public class MiniPlayerUiTest {
             swipe(row, 160, -10, false);
             swipe(row, 0, 160, false);
             swipe(row, 0, -160, true);
+            final long canceledStart = SystemClock.uptimeMillis();
+            dispatchPointers(row, canceledStart, 0, MotionEvent.ACTION_UP, 1, 160);
+            twoFingerSwipe(row, false);
+            twoFingerSwipe(row, true);
             assertEquals(0, opensAndClicks[0]);
             assertEquals(1, opensAndClicks[1]);
             swipe(row, 0, -160, false);
+            final long duplicateStart = SystemClock.uptimeMillis();
+            dispatchPointers(row, duplicateStart, 0, MotionEvent.ACTION_UP, 1, 160);
+            assertEquals("duplicate UP reopened a completed gesture", 1, opensAndClicks[0]);
             swipe(row, 0, -160, false);
             assertEquals(2, opensAndClicks[0]);
             assertEquals(1, opensAndClicks[1]);
         });
     }
 
-    private int artworkColor() {
+    private Integer artworkColor() {
         final int id = context.getResources().getIdentifier("current_track_thumbnail", "id",
                 context.getPackageName());
         assertTrue("current track artwork is missing", id != 0);
         final ImageView image = active(PlayQueueActivity.class).findViewById(id);
         assertNotNull(image);
-        final Drawable drawable = image.getDrawable();
+        Drawable drawable = image.getDrawable();
+        while (drawable instanceof CrossfadeDrawable) {
+            final CrossfadeDrawable transition = (CrossfadeDrawable) drawable;
+            if (transition.isRunning()) {
+                return null;
+            }
+            drawable = transition.getEnd();
+        }
         if (drawable == null) {
-            return Color.TRANSPARENT;
+            return null;
+        }
+        if (drawable instanceof BitmapDrawable) {
+            // Coil may decode hardware bitmaps, which cannot be drawn on a software Canvas.
+            final Bitmap pixels = ((BitmapDrawable) drawable).getBitmap()
+                    .copy(Bitmap.Config.ARGB_8888, false);
+            assertNotNull(pixels);
+            try {
+                return pixels.getPixel(pixels.getWidth() / 2, pixels.getHeight() / 2);
+            } finally {
+                pixels.recycle();
+            }
         }
         final Bitmap sample = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888);
         final Rect previousBounds = new Rect(drawable.getBounds());
@@ -348,6 +395,44 @@ public class MiniPlayerUiTest {
             final MotionEvent event = MotionEvent.obtain(start, start + i * 30L, action,
                     x + dx * density * i / 8f, y + dy * density * i / 8f, 0);
             view.dispatchTouchEvent(event);
+            event.recycle();
+        }
+    }
+
+    private static void twoFingerSwipe(final View view, final boolean cancel) {
+        final long start = SystemClock.uptimeMillis();
+        final int secondPointer = 1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT;
+        dispatchPointers(view, start, 0, MotionEvent.ACTION_DOWN, 1, 0);
+        dispatchPointers(view, start, 20,
+                MotionEvent.ACTION_POINTER_DOWN | secondPointer, 2, 0);
+        dispatchPointers(view, start, 40, MotionEvent.ACTION_MOVE, 2, 160);
+        dispatchPointers(view, start, 60, cancel ? MotionEvent.ACTION_CANCEL
+                : MotionEvent.ACTION_POINTER_UP | secondPointer, 2, 160);
+        // Releasing the remaining finger must not reactivate the canceled gesture.
+        dispatchPointers(view, start, 80, MotionEvent.ACTION_UP, 1, 160);
+    }
+
+    private static void dispatchPointers(final View view, final long start, final long elapsed,
+                                         final int action, final int count, final float upward) {
+        final float density = view.getResources().getDisplayMetrics().density;
+        final MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[count];
+        final MotionEvent.PointerCoords[] coordinates = new MotionEvent.PointerCoords[count];
+        for (int i = 0; i < count; i++) {
+            properties[i] = new MotionEvent.PointerProperties();
+            properties[i].id = i;
+            properties[i].toolType = MotionEvent.TOOL_TYPE_FINGER;
+            coordinates[i] = new MotionEvent.PointerCoords();
+            coordinates[i].x = view.getWidth() / 2f + i * 24 * density;
+            coordinates[i].y = view.getHeight() / 2f - upward * density;
+            coordinates[i].pressure = 1;
+            coordinates[i].size = 1;
+        }
+        final MotionEvent event = MotionEvent.obtain(start, start + elapsed, action, count,
+                properties, coordinates, 0, 0, 1, 1, 0, 0,
+                android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+        try {
+            view.dispatchTouchEvent(event);
+        } finally {
             event.recycle();
         }
     }

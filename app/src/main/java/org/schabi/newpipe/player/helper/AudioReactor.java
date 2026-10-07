@@ -31,6 +31,8 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     private float focusGain = 1.0f;
     private float playbackGain = 1.0f;
     private boolean resumeOnFocusGain;
+    private boolean hasAudioFocus;
+    private boolean focusRequestActive;
 
     public AudioReactor(@NonNull final Context context,
                         @NonNull final ExoPlayer player) {
@@ -56,19 +58,36 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     // Audio Manager
     //////////////////////////////////////////////////////////////////////////*/
 
-    public void requestAudioFocus() {
-        if (AudioManagerCompat.requestAudioFocus(audioManager, request)
-                == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+    public boolean requestAudioFocus() {
+        if (requestAudioFocusFromSystem() == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             // A synchronous grant need not dispatch AUDIOFOCUS_GAIN. This is also the
             // notification/media-button resume path after an interruption.
             resumeOnFocusGain = false;
+            hasAudioFocus = true;
+            focusRequestActive = true;
             restoreFocusGain();
+            return true;
         }
+        // A denied request is not permission to play quietly. Keep any earlier transient
+        // interruption's resume intent: its existing listener may still receive a valid GAIN.
+        hasAudioFocus = false;
+        player.pause();
+        return false;
+    }
+
+    protected int requestAudioFocusFromSystem() {
+        return AudioManagerCompat.requestAudioFocus(audioManager, request);
+    }
+
+    public boolean hasAudioFocus() {
+        return hasAudioFocus;
     }
 
     public void abandonAudioFocus() {
         // Explicit pause (including the sleep timer) must win over a late focus callback.
         resumeOnFocusGain = false;
+        hasAudioFocus = false;
+        focusRequestActive = false;
         AudioManagerCompat.abandonAudioFocusRequest(audioManager, request);
     }
 
@@ -105,6 +124,7 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
                 break;
             case AudioManager.AUDIOFOCUS_LOSS:
                 resumeOnFocusGain = false;
+                focusRequestActive = false;
                 onAudioFocusLoss();
                 break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
@@ -117,6 +137,8 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private void onAudioFocusGain() {
         Log.d(TAG, "onAudioFocusGain() called");
+        // A callback queued before an explicit abandon cannot grant cached ownership.
+        hasAudioFocus = focusRequestActive;
         restoreFocusGain();
 
         final boolean shouldResume = resumeOnFocusGain;
@@ -128,11 +150,13 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private void onAudioFocusLoss() {
         Log.d(TAG, "onAudioFocusLoss() called");
+        hasAudioFocus = false;
         player.pause();
     }
 
     private void onAudioFocusLossCanDuck() {
         Log.d(TAG, "onAudioFocusLossCanDuck() called");
+        hasAudioFocus = false;
         focusGain = DUCK_AUDIO_TO;
         applyVolume();
     }

@@ -14,9 +14,4 @@ if grep -Eq 'IndexOutOfBoundsException|NullPointerException|not attached to a co
     echo '::error::Android runtime emitted a bounds, null, detached-context or closed-database error'
     result=1
 fi
-app_id=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/debug/output-metadata.json"))["applicationId"])')
-adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/backtube-current-track-generated.png" \
-    "$output_dir/backtube-current-track-generated.png" || true
-adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/backtube-current-track-generated-landscape.png" \
-    "$output_dir/backtube-current-track-generated-landscape.png" || true
 exit "$result"

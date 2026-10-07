@@ -248,6 +248,159 @@ public class AudioReactorPlaybackTest {
         assertVolume(0.0f);
     }
 
+    @Test
+    public void deniedNotificationResumeStaysPausedOnAppReturnUntilGrantedRetry() throws Exception {
+        final ControlledAudioReactor controlled = installControlledReactor();
+        interruptPlayback();
+        runOnMain(() -> controlled.denyRequest = true);
+        context.sendBroadcast(new Intent(NotificationConstants.ACTION_PLAY_PAUSE)
+                .setPackage(context.getPackageName()));
+        await("notification never requested focus", () -> controlled.requestCount > 0);
+        runOnMain(() -> {
+            assertFalse(player.getPlayWhenReady());
+            assertEquals(Player.STATE_PAUSED, player.getCurrentState());
+        });
+        assertVolume(.2f);
+        final Activity activity = InstrumentationRegistry.getInstrumentation().startActivitySync(
+                new Intent(context, PlayQueueActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            runOnMain(() -> assertFalse("app return retried denied playback",
+                    player.getPlayWhenReady()));
+            assertVolume(.2f);
+            runOnMain(() -> controlled.denyRequest = false);
+            controller.getTransportControls().play();
+            await("explicit granted retry did not play", player::isPlaying);
+            assertVolume(1.0f);
+            focus(AudioManager.AUDIOFOCUS_GAIN);
+            assertVolume(1.0f);
+        } finally {
+            runOnMain(activity::finish);
+        }
+    }
+
+    @Test
+    public void deniedInternalPlayIntentReportsPaused() {
+        final ControlledAudioReactor controlled = installControlledReactor();
+        runOnMain(() -> {
+            player.pause();
+            controlled.denyRequest = true;
+            // Same low-level entry used by existing-queue and timestamp paths.
+            player.getExoPlayer().setPlayWhenReady(true);
+            assertFalse(player.getPlayWhenReady());
+            assertEquals(Player.STATE_PAUSED, player.getCurrentState());
+            assertEquals(1, controlled.requestCount);
+        });
+    }
+
+    @Test
+    public void deniedRequestStillAcceptsValidLateGainForTransientResume() throws Exception {
+        final ControlledAudioReactor controlled = installControlledReactor();
+        interruptPlayback();
+        runOnMain(() -> {
+            controlled.denyRequest = true;
+            player.play();
+            assertFalse(player.getPlayWhenReady());
+            assertEquals(1, controlled.requestCount);
+        });
+        focus(AudioManager.AUDIOFOCUS_GAIN);
+        await("existing interrupted playback did not resume on valid gain", player::isPlaying);
+        runOnMain(() -> assertEquals("gain must not redundantly request focus",
+                1, controlled.requestCount));
+        assertVolume(1.0f);
+    }
+
+    @Test
+    public void userPauseAfterDeniedRequestWinsOverLateGain() {
+        final ControlledAudioReactor controlled = installControlledReactor();
+        interruptPlayback();
+        runOnMain(() -> {
+            controlled.denyRequest = true;
+            player.play();
+            player.pause();
+        });
+        focus(AudioManager.AUDIOFOCUS_GAIN);
+        runOnMain(() -> assertFalse(player.getPlayWhenReady()));
+    }
+
+    @Test
+    public void sleepTimerExpiryDuringInterruptionWinsOverLateGain() throws Exception {
+        interruptPlayback();
+        runOnMain(() -> player.setSleepTimer(300));
+        await("sleep timer did not expire", () -> player.getSleepTimerRemainingMillis() == 0);
+        focus(AudioManager.AUDIOFOCUS_GAIN);
+        runOnMain(() -> assertFalse(player.getPlayWhenReady()));
+    }
+
+    @Test
+    public void duckingComposesWithChangingFadeAndRestoresOnlyFocusGain() {
+        focus(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK);
+        runOnMain(() -> reactor.setPlaybackGain(.6f));
+        assertVolume(.12f);
+        runOnMain(() -> reactor.setPlaybackGain(.3f));
+        assertVolume(.06f);
+        focus(AudioManager.AUDIOFOCUS_GAIN);
+        assertVolume(.3f);
+    }
+
+    @Test
+    public void mutedNotificationResumeStaysSilentAndDeniedUnmutePauses() throws Exception {
+        final ControlledAudioReactor controlled = installControlledReactor();
+        runOnMain(() -> {
+            player.toggleMute();
+            player.pause();
+            controlled.denyRequest = true;
+        });
+        context.sendBroadcast(new Intent(NotificationConstants.ACTION_PLAY_PAUSE)
+                .setPackage(context.getPackageName()));
+        await("muted notification resume did not play", player::isPlaying);
+        assertVolume(0.0f);
+        runOnMain(() -> {
+            assertEquals("muted playback should not acquire focus", 0, controlled.requestCount);
+            player.toggleMute();
+            assertFalse("denied unmute must pause", player.getPlayWhenReady());
+            assertFalse(player.isMuted());
+            assertEquals(1, controlled.requestCount);
+            controlled.denyRequest = false;
+        });
+        controller.getTransportControls().play();
+        await("granted unmuted retry did not play", player::isPlaying);
+        assertVolume(1.0f);
+    }
+
+    private ControlledAudioReactor installControlledReactor() {
+        final ControlledAudioReactor[] result = new ControlledAudioReactor[1];
+        runOnMain(() -> {
+            reactor.dispose();
+            result[0] = new ControlledAudioReactor();
+            reactor = result[0];
+            final Field field = Player.class.getDeclaredField("audioReactor");
+            field.setAccessible(true);
+            field.set(player, reactor);
+            assertTrue("replacement reactor did not acquire initial focus",
+                    reactor.requestAudioFocus());
+            result[0].requestCount = 0;
+        });
+        return result[0];
+    }
+
+    /** Simulates the platform result; granted retries still use the actual Android request. */
+    private final class ControlledAudioReactor extends AudioReactor {
+        private boolean denyRequest;
+        private int requestCount;
+
+        private ControlledAudioReactor() {
+            super(context, player.getExoPlayer());
+        }
+
+        @Override
+        protected int requestAudioFocusFromSystem() {
+            requestCount++;
+            return denyRequest ? AudioManager.AUDIOFOCUS_REQUEST_FAILED
+                    : super.requestAudioFocusFromSystem();
+        }
+    }
+
     private void interruptPlayback() {
         focus(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK);
         focus(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT);

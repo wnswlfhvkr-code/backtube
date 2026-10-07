@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uses generated WAV only. The caller builds/starts exactly one emulator.
+# Uses generated local WAV and PNG fixtures only. The caller builds/starts exactly one emulator.
 set -euo pipefail
 output_dir=app/build/reports/offline-runtime
 mkdir -p "$output_dir"
@@ -44,4 +44,10 @@ run_phase restore -e session_restart_phase restore \
 run_phase playback -e class "$class_name#savedOfflineCopyPlaysWithoutInfoCacheAndKeepsSleepTimerOnNetworkReturn,$class_name#savedOfflineQueueRestoresWithoutRemoteMetadata,$class_name#savedOfflineShelfImportsGeneratedFile"
 adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/offline-shelf-generated.png" \
     "$output_dir/offline-shelf-generated.png"
+# Capture generated UI evidence before connectedCheck uninstalls the test app/data.
+run_phase current-ui -e class org.schabi.newpipe.player.MiniPlayerUiTest
+for orientation in "" "-landscape"; do
+    adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/backtube-current-track-generated${orientation}.png" \
+        "$output_dir/backtube-current-track-generated${orientation}.png"
+done
 # Leave networking disabled for the subsequent local connected suite.

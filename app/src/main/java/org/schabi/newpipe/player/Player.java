@@ -1263,6 +1263,11 @@ public final class Player implements PlaybackListener, Listener {
             simpleExoPlayer.pause();
             return;
         }
+        // Existing-queue and timestamp actions can set ExoPlayer's play intent directly.
+        if (playWhenReady && audioReactor != null && !isMuted() && !audioReactor.hasAudioFocus()
+                && !audioReactor.requestAudioFocus()) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "ExoPlayer - onPlayWhenReadyChanged() called with: "
                     + "playWhenReady = [" + playWhenReady + "], "
@@ -1311,7 +1316,8 @@ public final class Player implements PlaybackListener, Listener {
                     isPrepared = true;
                     onPrepared(playWhenReady);
                 }
-                changeState(playWhenReady ? STATE_PLAYING : STATE_PAUSED);
+                // onPrepared may have paused playback after a denied focus request.
+                changeState(getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED);
                 break;
             case com.google.android.exoplayer2.Player.STATE_ENDED: // 4
                 sleepTimer.onItemEnded();
@@ -1401,7 +1407,7 @@ public final class Player implements PlaybackListener, Listener {
         // A restored paused player stops its progress loop as soon as it is ready.
         triggerProgressUpdate();
 
-        if (playWhenReady && !isMuted()) {
+        if (playWhenReady && !isMuted() && !audioReactor.hasAudioFocus()) {
             audioReactor.requestAudioFocus();
         }
     }
@@ -1991,8 +1997,8 @@ public final class Player implements PlaybackListener, Listener {
         sleepTimer.expireIfDue();
         sleepTimerExpired = false;
 
-        if (!isMuted()) {
-            audioReactor.requestAudioFocus();
+        if (!isMuted() && !audioReactor.requestAudioFocus()) {
+            return;
         }
 
         if (currentState == STATE_COMPLETED) {
