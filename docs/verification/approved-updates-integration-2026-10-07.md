@@ -110,3 +110,51 @@ Timer layout contract first failed both cases against the unintegrated resources
 (missing timer and missing horizontal scroll container). After integration,
 full JVM tests, debug app/test APK builds and Checkstyle passed locally. Exact
 integrated Android results will be recorded against the committed head.
+
+## First integrated runtime and fixture repairs: e9a32efcf
+
+[Run 37604483522](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37604483522)
+passed JVM/build and API23. API35 failed in the setup of
+`PlaybackRecoveryTest.metadataRefreshTimeoutIsTerminal`, before its test body:
+the generated player reached READY at 42000 ms, then an actual System UI
+MediaSession STOP reset it to IDLE/0. Logcat identifies
+`com.android.systemui` and `MediaSessionRecord:stop`; the old service/session had
+already been destroyed and a new session created. A delayed notification cleanup
+using the same notification key is the inferred trigger, consistent with
+[Android15 LegacyMediaDataManagerImpl.dismissMediaData](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/packages/SystemUI/src/com/android/systemui/media/controls/domain/pipeline/LegacyMediaDataManagerImpl.kt).
+This is not evidence that the metadata-timeout behavior failed.
+
+Isolate the direct Player recovery fixture from System UI transport commands by
+destroying its MediaSessionPlayerUi before player initialization. Keep its actual
+foreground notification and audio focus. Do not ignore production STOP, extend
+the timeout or remove recovery assertions. Separate AudioReactorPlaybackTest and
+RealAudioFocusHandoffTest retain real session/focus coverage; this isolated
+recovery fixture itself does not establish System UI transport integration.
+
+Visual inspection also rejected the initially passing timer screenshot evidence:
+portrait showed an extraction error and landscape placed the timer below the
+viewport. The synthetic item's comments request cleared InfoCache while detail
+metadata was loading. Disable comments only in this fixture, refresh generated
+metadata after MainActivity launch, and restore the prior preference after the
+activities finish. Require visible, successful expanded detail content, scroll
+the timer fully into the viewport, use screen-coordinate taps, and recheck
+visibility after rotation and around screenshots. Hidden `performClick()` calls
+are no longer accepted as timer UI evidence. These repairs change tests only.
+
+After these fixture repairs, local `testDebugUnitTest`, `assembleDebug`,
+`assembleDebugAndroidTest` and `runCheckstyle` completed successfully. The JVM
+reports contain 235 cases with zero failures/errors/skips. Shell syntax and
+`git diff --check` also passed. The subsequent committed head still needs its
+own Android runtime result; no passing screenshot claim is made from this build.
+
+The duplicate manual run 37604511644 was intentionally cancelled after the PR run
+appeared. It is not an additional regression result.
+
+## Automatic resume setting
+
+`PlayerHelper.isResumeAfterAudioFocusGain` and `video_audio_settings.xml` default
+`resume_on_audio_focus_gain` to false. The Korean setting is “이어서 재생” under
+video/audio settings. Tests explicitly cover enabled and disabled states. The
+user's installed-device setting is unknown, and it was not changed. This can
+explain an absent transient auto-resume when disabled, but does not establish the
+cause of the user's reported quiet audio or behavior on their physical device.

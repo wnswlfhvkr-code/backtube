@@ -28,6 +28,7 @@ import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
 
@@ -105,6 +106,11 @@ public class PlaybackRecoveryTest {
         await(() -> service != null && service.getPlayer() != null);
         onMain(() -> {
             player = service.getPlayer();
+            // Exercise Player recovery directly: a delayed System UI notification dismissal
+            // from the preceding fixture must not send transport commands into this player.
+            // Keep the foreground notification and audio focus; real media-session behavior
+            // is covered by AudioReactorPlaybackTest and RealAudioFocusHandoffTest.
+            player.UIs().destroyAll(MediaSessionPlayerUi.class);
             player.setAutoQueueEnabled(false);
             final Method init = Player.class.getDeclaredMethod("initPlayer", boolean.class);
             init.setAccessible(true);

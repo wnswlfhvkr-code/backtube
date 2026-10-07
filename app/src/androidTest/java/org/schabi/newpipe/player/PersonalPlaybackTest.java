@@ -15,6 +15,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -1661,97 +1662,46 @@ public class PersonalPlaybackTest {
 
     @Test
     public void detailTimerSharesStateAndDialogCancellationPreservesPlayback() throws Exception {
-        final boolean expectDenied = "true".equals(InstrumentationRegistry.getArguments()
-                .getString("expect_notification_denied", "false"));
-        if (expectDenied) {
-            assertTrue(Build.VERSION.SDK_INT >= 33);
-            assertFalse("fixture must start in a fresh application process",
-                    App.getInstance().getNotificationsRequested());
-            assertEquals(PackageManager.PERMISSION_DENIED,
-                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
-        }
-        startOfflineRecommendationChain(false);
-        runOnMain(() -> {
-            player.pause();
-            player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
-        });
-        final MainActivity launched = launchMainActivity();
-        if (expectDenied) {
-            assertTrue(App.getInstance().getNotificationsRequested());
-            assertEquals(PackageManager.PERMISSION_DENIED,
-                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
-        }
-        runOnMain(() -> NavigationHelper.openVideoDetailFragment(launched,
-                launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
-                player.getPlayQueue(), false));
-        assertTrue("detail timer did not connect", waitFor(() -> callOnMain(() ->
-                activeMainActivity() != null
-                        && activeMainActivity().getSupportFragmentManager()
-                        .findFragmentById(R.id.fragment_player_holder) != null
-                        && activeMainActivity().getSupportFragmentManager()
-                        .findFragmentById(R.id.fragment_player_holder).isResumed()
-                        && activeMainActivity().findViewById(
-                                R.id.detail_controls_sleep_timer) != null
-                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                        .isEnabled()), 5));
-        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                .performClick());
-        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_minutes, 15));
-        assertTrue("15 minute selection did not set the timer", waitFor(() -> callOnMain(
-                () -> player.getSleepTimerRemainingMillis() > 14 * 60_000L), 5));
-        assertEquals(context.getString(R.string.personal_sleep_timer_remaining, 15),
-                callOnMain(() -> ((android.widget.TextView) activeMainActivity().findViewById(
-                        R.id.detail_controls_sleep_timer)).getText().toString()));
-        assertFalse("setting a timer resumed paused playback", callOnMain(player::isPlaying));
-
-        captureScreen(context, "backtube-detail-timer-generated.png");
-        for (final boolean playing : new boolean[]{false, true}) {
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        final String commentsKey = context.getString(R.string.show_comments_key);
+        final Boolean previousComments = prefs.contains(commentsKey)
+                ? prefs.getBoolean(commentsKey, true) : null;
+        prefs.edit().putBoolean(commentsKey, false).commit();
+        try {
+            final boolean expectDenied = "true".equals(InstrumentationRegistry.getArguments()
+                    .getString("expect_notification_denied", "false"));
+            if (expectDenied) {
+                assertTrue(Build.VERSION.SDK_INT >= 33);
+                assertFalse("fixture must start in a fresh application process",
+                        App.getInstance().getNotificationsRequested());
+                assertEquals(PackageManager.PERMISSION_DENIED,
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+            }
+            startOfflineRecommendationChain(false);
             runOnMain(() -> {
-                if (playing) {
-                    player.play();
-                } else {
-                    player.pause();
-                }
+                player.pause();
+                player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
             });
-            assertTrue(waitFor(() -> callOnMain(() -> player.isPlaying() == playing), 5));
-            runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                    .performClick());
-            clickAccessibilityText(context.getString(R.string.personal_sleep_timer_custom));
-            clickAccessibilityText(context.getString(R.string.cancel));
-            assertEquals("dialog cancellation changed playback", playing,
-                    (boolean) callOnMain(player::isPlaying));
-            assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 14 * 60_000L));
-        }
-
-        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                .performClick());
-        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_extend));
-        assertTrue("extend selection did not add 15 minutes", waitFor(() -> callOnMain(
-                () -> player.getSleepTimerRemainingMillis() > 29 * 60_000L), 5));
-        runOnMain(() -> {
-            player.pause();
-            activeMainActivity().findViewById(R.id.detail_controls_sleep_timer).performClick();
-            activeMainActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-        });
-        assertTrue("rotated detail screen did not reconnect", waitFor(() -> callOnMain(() ->
-                activeMainActivity() != null && activeMainActivity().getResources()
-                        .getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
-                        && activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                        .isEnabled()), 5));
-        assertNull("old timer dialog survived rotation", findNodeByText(
-                context.getString(R.string.personal_sleep_timer_minutes, 15)));
-        assertTrue(callOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
-        captureScreen(context, "backtube-detail-timer-generated-landscape.png");
-        runOnMain(() -> activeMainActivity().findViewById(R.id.detail_controls_sleep_timer)
-                .performClick());
-        clickAccessibilityText(context.getString(R.string.personal_sleep_timer_cancel_timer));
-        assertTrue("cancel selection did not stop the timer", waitFor(() -> callOnMain(
-                () -> player.getSleepTimerRemainingMillis() == 0), 5));
-        assertEquals(0, (long) callOnMain(player::getSleepTimerRemainingMillis));
-        assertFalse("cancelling timer resumed playback", callOnMain(player::isPlaying));
-        if (expectDenied) {
-            assertEquals(PackageManager.PERMISSION_DENIED,
-                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+            final MainActivity launched = launchMainActivity();
+            runOnMain(() -> {
+                cacheOfflineRecommendationChain();
+                NavigationHelper.openVideoDetailFragment(launched,
+                        launched.getSupportFragmentManager(), 1, "offline-A", "offline-A",
+                        player.getPlayQueue(), false);
+            });
+            PlaybackTestUi.exerciseVisibleDetailTimer(context, player, this::activeMainActivity);
+            if (expectDenied) {
+                assertTrue(App.getInstance().getNotificationsRequested());
+                assertEquals(PackageManager.PERMISSION_DENIED,
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS));
+            }
+        } finally {
+            finishQueueActivity();
+            if (previousComments == null) {
+                prefs.edit().remove(commentsKey).commit();
+            } else {
+                prefs.edit().putBoolean(commentsKey, previousComments).commit();
+            }
         }
     }
 
