@@ -25,6 +25,9 @@ import java.util.List;
  */
 public abstract class PlayerUi {
 
+    public void onListeningModeChanged() {
+    }
+
     @NonNull protected final Context context;
     @NonNull protected final Player player;
 

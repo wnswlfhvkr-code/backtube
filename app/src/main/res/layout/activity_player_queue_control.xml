@@ -64,35 +64,52 @@
         android:background="?attr/selectableItemBackground"
         android:clickable="true"
         android:focusable="true"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:padding="8dp"
         tools:ignore="RtlHardcoded,RtlSymmetry">
 
-        <org.schabi.newpipe.views.NewPipeTextView
-            android:id="@+id/song_name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="marquee"
-            android:fadingEdge="horizontal"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:scrollHorizontally="true"
-            android:singleLine="true"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="14sp"
-            tools:text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis nec aliquam augue, eget cursus est. Ut id tristique enim, ut scelerisque tellus. Sed ultricies ipsum non mauris ultricies, commodo malesuada velit porta." />
+        <ImageView
+            android:id="@+id/current_track_thumbnail"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="8dp"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:src="@drawable/placeholder_thumbnail_video" />
 
-        <org.schabi.newpipe.views.NewPipeTextView
-            android:id="@+id/artist_name"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:ellipsize="marquee"
-            android:fadingEdge="horizontal"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:scrollHorizontally="true"
-            android:singleLine="true"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:textSize="12sp"
-            tools:text="Duis posuere arcu condimentum lobortis mattis." />
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/song_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:fadingEdge="horizontal"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="14sp"
+                tools:text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis nec aliquam augue, eget cursus est. Ut id tristique enim, ut scelerisque tellus. Sed ultricies ipsum non mauris ultricies, commodo malesuada velit porta." />
+
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/artist_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:fadingEdge="horizontal"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:textSize="12sp"
+                tools:text="Duis posuere arcu condimentum lobortis mattis." />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -306,19 +323,11 @@
         android:paddingStart="8dp"
         android:paddingEnd="8dp">
 
-        <ImageView
-            android:id="@+id/recommendation_thumbnail"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:contentDescription="@string/personal_recommendation_next"
-            android:scaleType="centerCrop"
-            tools:src="@drawable/placeholder_thumbnail_video" />
-
         <org.schabi.newpipe.views.NewPipeTextView
             android:id="@+id/recommendation_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="2"

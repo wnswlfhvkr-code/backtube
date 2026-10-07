@@ -69,6 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         include:
           - api-level: 23
@@ -103,7 +104,38 @@ jobs:
           api-level: ${{ matrix.api-level }}
           target: ${{ matrix.target }}
           arch: ${{ matrix.arch }}
-          script: ./gradlew connectedCheck --stacktrace
+          script: bash scripts/run-android-verification.sh
+
+      - name: Report offline runtime result
+        if: always()
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import re
+          for report in sorted(Path("app/build/reports/offline-runtime").glob("*.txt")):
+              text = report.read_text()
+              if re.search(r"OK \([0-9]+ tests?\)", text):
+                  print(f"::notice title=Runtime {report.stem}::Passed on API ${{ matrix.api-level }}")
+              else:
+                  detail = text[-6000:].replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
+                  print(f"::error title=Runtime {report.stem}::{detail}")
+          import xml.etree.ElementTree as ET
+          for report in Path("app/build/outputs/androidTest-results").rglob("TEST-*.xml"):
+              root = ET.parse(report).getroot()
+              print(f"::notice title=Android suite::{root.get('name')} tests={root.get('tests')} failures={root.get('failures')} errors={root.get('errors')}")
+              for case in root.iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      detail = (failure.get("message") or failure.text or "failed")[:1500]
+                      detail = detail.replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
+                      print(f"::error title={case.get('classname')}.{case.get('name')}::{detail}")
+          PYTHON
+
+      - name: Upload offline runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-runtime-api${{ matrix.api-level }}
+          path: app/build/reports/offline-runtime/**
 
       - name: Upload test report when tests fail # because the printed out stacktrace (console) is too short, see also #7553
         uses: actions/upload-artifact@v7

@@ -66,26 +66,22 @@ public final class FlingBehavior extends AppBarLayout.Behavior {
     public boolean onInterceptTouchEvent(@NonNull final CoordinatorLayout parent,
                                          @NonNull final AppBarLayout child,
                                          @NonNull final MotionEvent ev) {
-        for (final int element : skipInterceptionOfElements) {
-            final View view = child.findViewById(element);
-            if (view != null) {
-                final boolean visible = view.getGlobalVisibleRect(globalRect);
-                if (visible && globalRect.contains((int) ev.getRawX(), (int) ev.getRawY())) {
+        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            allowScroll = true;
+            resetNestedScrollingChild();
+            stopAppBarLayoutFling();
+            // Decide once per gesture. Moving off a seek bar/button must not steal its drag.
+            for (final int element : skipInterceptionOfElements) {
+                final View view = child.findViewById(element);
+                if (view != null && view.getGlobalVisibleRect(globalRect)
+                        && globalRect.contains((int) ev.getRawX(), (int) ev.getRawY())) {
                     allowScroll = false;
-                    return false;
+                    break;
                 }
             }
         }
-        allowScroll = true;
-        switch (ev.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                // remove reference to old nested scrolling child
-                resetNestedScrollingChild();
-                // Stop fling when your finger touches the screen
-                stopAppBarLayoutFling();
-                break;
-            default:
-                break;
+        if (!allowScroll) {
+            return false;
         }
         return super.onInterceptTouchEvent(parent, child, ev);
     }

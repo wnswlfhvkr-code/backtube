@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offline_library">Offline saves</string>
+    <string name="offline_saved_copy">Saved copy</string>
+    <string name="offline_save">Save offline</string>
+    <string name="offline_import">Import media file</string>
+    <string name="offline_delete_all">Delete all</string>
+    <string name="offline_summary">%1$.1f / 500 MB · Kept until you delete them</string>
+    <string name="offline_empty">Use Save offline on a track, add a completed download, or import a media file.</string>
+    <string name="offline_ready">Available offline</string>
+    <string name="offline_copying">Saving local copy…</string>
+    <string name="offline_interrupted">Interrupted · Retry copies again from the source</string>
+    <string name="offline_failed">Save failed · Check the source and storage. Delete unwanted saved items if full.</string>
+    <string name="offline_play">Play saved copy</string>
+    <string name="offline_size">%1$.1f MB</string>
+    <string name="offline_storage_error">Could not save or read this file. Check free space and access to the source media.</string>
+    <string name="offline_delete_title">Delete saved copy?</string>
+    <string name="offline_delete_message">Only offline copies are removed. Original downloads are kept. An already open copy is removed when playback releases it.</string>
+    <string name="offline_media_only">Choose audio or video for offline playback.</string>
+    <string name="offline_wifi_only">Save over unmetered Wi-Fi only</string>
+    <string name="offline_downloading">Downloading / processing…</string>
+    <string name="offline_network_wait">Waiting for allowed network / download queue</string>
+    <string name="offline_recovery_wait">Reconnecting download · Reopen the content if recovery is unavailable</string>
+    <string name="offline_storage_full">Offline storage is full (500 MB limit), or the device has no free space. Delete unwanted saved items, then retry. Existing saves are kept.</string>
+    <string name="offline_saved_complete">Saved offline</string>
+    <string name="offline_open_list">Open saved list</string>
+</resources>

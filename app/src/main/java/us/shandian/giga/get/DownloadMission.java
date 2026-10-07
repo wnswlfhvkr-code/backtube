@@ -391,6 +391,15 @@ public class DownloadMission extends Mission {
         enqueued = false;
         running = false;
 
+        try {
+            storage.commitOfflineDownload();
+        } catch (IOException error) {
+            errCode = ERROR_FILE_CREATION;
+            errObject = error;
+            writeThisToFile();
+            notify(DownloadManagerService.MESSAGE_ERROR);
+            return;
+        }
         deleteThisFromFile();
         notify(DownloadManagerService.MESSAGE_FINISHED);
     }
@@ -427,7 +436,8 @@ public class DownloadMission extends Mission {
      * Start downloading with multiple threads.
      */
     public void start() {
-        if (running || isFinished() || urls.length < 1) return;
+        if (running || (isFinished() && errCode != ERROR_FILE_CREATION)
+                || urls.length < 1) return;
 
         // ensure that the previous state is completely paused.
         joinForThreads(10000);

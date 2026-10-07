@@ -135,6 +135,10 @@
             android:label="@string/app_name"
             android:launchMode="singleTask" />
 
+        <activity android:name=".offline.OfflineLibraryActivity"
+            android:exported="false"
+            android:label="@string/offline_library" />
+
         <service android:name="us.shandian.giga.service.DownloadManagerService"
             android:foregroundServiceType="dataSync" />
 

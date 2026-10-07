@@ -42,7 +42,6 @@ import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
-import android.widget.Toast;
 
 import androidx.annotation.AttrRes;
 import androidx.annotation.NonNull;
@@ -78,7 +77,6 @@ import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.comments.CommentsInfoItem;
 import org.schabi.newpipe.extractor.exceptions.ContentNotSupportedException;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
-import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
@@ -101,6 +99,7 @@ import org.schabi.newpipe.player.event.OnKeyDownListener;
 import org.schabi.newpipe.player.event.PlayerServiceExtendedEventListener;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.helper.PlayerHolder;
+import org.schabi.newpipe.player.helper.SleepTimerDialog;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
@@ -125,7 +124,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -179,6 +177,10 @@ public final class VideoDetailFragment
 
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceChangeListener =
             (sharedPreferences, key) -> {
+                // A notification queued before unregistering can arrive after detachment.
+                if (getContext() == null) {
+                    return;
+                }
                 if (getString(R.string.show_comments_key).equals(key)) {
                     showComments = sharedPreferences.getBoolean(key, true);
                     tabSettingsChanged = true;
@@ -236,6 +238,18 @@ public final class VideoDetailFragment
     private PlayerService playerService;
     private Player player;
     private final PlayerHolder playerHolder = PlayerHolder.getInstance();
+    @Nullable
+    private SleepTimerDialog sleepTimerDialog;
+    private final Handler sleepTimerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable sleepTimerUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updateSleepTimerButton();
+            if (isResumed() && binding != null && player != null) {
+                sleepTimerHandler.postDelayed(this, 1000);
+            }
+        }
+    };
 
     /*//////////////////////////////////////////////////////////////////////////
     // Service management
@@ -248,7 +262,9 @@ public final class VideoDetailFragment
     @Override
     public void onPlayerConnected(@NonNull final Player connectedPlayer,
                                   final boolean playAfterConnect) {
+        dismissSleepTimerDialog();
         player = connectedPlayer;
+        updateSleepTimerUpdates();
 
         // It will do nothing if the player is not in fullscreen mode
         hideSystemUiIfNeeded();
@@ -282,7 +298,9 @@ public final class VideoDetailFragment
 
     @Override
     public void onPlayerDisconnected() {
+        dismissSleepTimerDialog();
         player = null;
+        updateSleepTimerUpdates();
         // the binding could be null at this point, if the app is finishing
         if (binding != null) {
             restoreDefaultBrightness();
@@ -353,6 +371,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onPause() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
         super.onPause();
         if (currentWorker != null) {
             currentWorker.dispose();
@@ -368,6 +387,7 @@ public final class VideoDetailFragment
     @Override
     public void onResume() {
         super.onResume();
+        updateSleepTimerUpdates();
         if (DEBUG) {
             Log.d(TAG, "onResume() called");
         }
@@ -437,6 +457,8 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
+        dismissSleepTimerDialog();
         super.onDestroyView();
         binding = null;
     }
@@ -463,6 +485,27 @@ public final class VideoDetailFragment
     // OnClick
     //////////////////////////////////////////////////////////////////////////*/
 
+    private void updateSleepTimerButton() {
+        if (binding != null) {
+            SleepTimerDialog.updateButton(binding.detailControlsSleepTimer, player);
+        }
+    }
+
+    private void updateSleepTimerUpdates() {
+        sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
+        updateSleepTimerButton();
+        if (isResumed() && binding != null && player != null) {
+            sleepTimerHandler.postDelayed(sleepTimerUpdater, 1000);
+        }
+    }
+
+    private void dismissSleepTimerDialog() {
+        if (sleepTimerDialog != null) {
+            sleepTimerDialog.dismiss();
+            sleepTimerDialog = null;
+        }
+    }
+
     private void setOnClickListeners() {
         binding.detailTitleRootLayout.setOnClickListener(v -> toggleTitleAndSecondaryControls());
         binding.detailUploaderRootLayout.setOnClickListener(makeOnClickListener(info -> {
@@ -487,7 +530,14 @@ public final class VideoDetailFragment
             openVideoPlayerAutoFullscreen();
         });
 
-        binding.detailControlsBackground.setOnClickListener(v -> openBackgroundPlayer(false));
+        binding.detailControlsSleepTimer.setOnClickListener(v -> {
+            dismissSleepTimerDialog();
+            if (player != null) {
+                sleepTimerDialog = new SleepTimerDialog(requireContext(), player,
+                        this::updateSleepTimerButton);
+                sleepTimerDialog.show();
+            }
+        });
         binding.detailControlsPopup.setOnClickListener(v -> openPopupPlayer(false));
         binding.detailControlsPlaylistAppend.setOnClickListener(makeOnClickListener(info -> {
             if (getFM() != null && currentInfo != null) {
@@ -506,6 +556,7 @@ public final class VideoDetailFragment
                         dialog -> dialog.show(getParentFragmentManager(), TAG)));
             }
         }));
+        binding.detailControlsOfflineSave.setOnClickListener(v -> openOfflineSaveDialog());
         binding.detailControlsDownload.setOnClickListener(v -> {
             if (PermissionHelper.checkStoragePermissions(activity,
                     PermissionHelper.DOWNLOAD_DIALOG_REQUEST_CODE)) {
@@ -566,9 +617,6 @@ public final class VideoDetailFragment
             }
         }));
 
-        binding.detailControlsBackground.setOnLongClickListener(makeOnLongClickListener(info ->
-            openBackgroundPlayer(true)
-        ));
         binding.detailControlsPopup.setOnLongClickListener(makeOnLongClickListener(info ->
             openPopupPlayer(true)
         ));
@@ -667,7 +715,6 @@ public final class VideoDetailFragment
             }
             return false;
         };
-        binding.detailControlsBackground.setOnTouchListener(controlsTouchListener);
         binding.detailControlsPopup.setOnTouchListener(controlsTouchListener);
 
         binding.appBarLayout.addOnOffsetChangedListener((layout, verticalOffset) -> {
@@ -710,57 +757,15 @@ public final class VideoDetailFragment
             Log.d(TAG, "onBackPressed() called");
         }
 
-        // If we are in fullscreen mode just exit from it via first back press
-        if (isFullscreen()) {
-            if (!DeviceUtils.isTablet(activity)) {
-                player.pause();
-            }
-            restoreDefaultOrientation();
-            setAutoPlay(false);
-            return true;
-        }
-
-        // If we have something in history of played items we replay it here
-        if (isPlayerAvailable()
-                && player.getPlayQueue() != null
-                && player.videoPlayerSelected()
-                && player.getPlayQueue().previous()) {
-            return true; // no code here, as previous() was used in the if
-        }
-
-        // That means that we are on the start of the stack,
-        if (stack.size() <= 1) {
-            restoreDefaultOrientation();
-            return false; // let MainActivity handle the onBack (e.g. to minimize the mini player)
-        }
-
-        // Remove top
-        stack.pop();
-        // Get stack item from the new top
-        setupFromHistoryItem(Objects.requireNonNull(stack.peek()));
-
-        return true;
+        // Back is UI navigation; queue/history navigation belongs to playback controls.
+        restoreDefaultOrientation();
+        return false;
     }
 
-    private void setupFromHistoryItem(final StackItem item) {
-        setAutoPlay(false);
-        hideMainPlayerOnLoadingNewStream();
-
-        setInitialData(item.getServiceId(), item.getUrl(),
-                item.getTitle() == null ? "" : item.getTitle(), item.getPlayQueue());
-        startLoading(false);
-
-        // Maybe an item was deleted in background activity
-        if (item.getPlayQueue().getItem() == null) {
-            return;
-        }
-
-        final PlayQueueItem playQueueItem = item.getPlayQueue().getItem();
-        // Update title, url, uploader from the last item in the stack (it's current now)
-        final boolean isPlayerStopped = !isPlayerAvailable() || player.isStopped();
-        if (playQueueItem != null && isPlayerStopped) {
-            updateOverlayData(playQueueItem.getTitle(),
-                    playQueueItem.getUploader(), playQueueItem.getThumbnails());
+    /** Detach the video UI before task removal without stopping playback or its timer. */
+    public void prepareForUiExit() {
+        if (isPlayerAvailable()) {
+            player.continueInBackgroundOnUiExit();
         }
     }
 
@@ -1069,25 +1074,6 @@ public final class VideoDetailFragment
         }
     }
 
-    private void openBackgroundPlayer(final boolean append) {
-        final boolean useExternalAudioPlayer = PreferenceManager
-                .getDefaultSharedPreferences(activity)
-                .getBoolean(activity.getString(R.string.use_external_audio_player_key), false);
-
-        toggleFullscreenIfInFullscreenMode();
-
-        if (isPlayerAvailable()) {
-            // FIXME Workaround #7427
-            player.setRecovery();
-        }
-
-        if (useExternalAudioPlayer) {
-            showExternalAudioPlaybackDialog();
-        } else {
-            openNormalBackgroundPlayer(append);
-        }
-    }
-
     private void openPopupPlayer(final boolean append) {
         if (!PermissionHelper.isPopupEnabledElseAsk(activity)) {
             return;
@@ -1167,21 +1153,6 @@ public final class VideoDetailFragment
     @Nullable
     public String getUrl() {
         return url;
-    }
-
-    private void openNormalBackgroundPlayer(final boolean append) {
-        // See UI changes while remote playQueue changes
-        if (!isPlayerAvailable()) {
-            playerHolder.startService(false, this);
-        }
-
-        final PlayQueue queue = setupPlayQueueForIntent(append);
-        if (append) {
-            NavigationHelper.enqueueOnPlayer(activity, queue, PlayerType.AUDIO);
-        } else {
-            replaceQueueIfUserConfirms(() -> NavigationHelper
-                    .playOnBackgroundPlayer(activity, queue, true));
-        }
     }
 
     private void openMainPlayer() {
@@ -1478,8 +1449,7 @@ public final class VideoDetailFragment
             toggleFullscreenIfInFullscreenMode();
         }
 
-        // This will show systemUI and pause the player.
-        // User can tap on Play button and video will be in fullscreen mode again
+        // Restore the device orientation policy when returning to the main screen.
         // Note for tablet: trying to avoid orientation changes since it's not easy
         // to physically rotate the tablet every time
         if (activity != null && !DeviceUtils.isTablet(activity)) {
@@ -1644,9 +1614,8 @@ public final class VideoDetailFragment
 
         binding.detailControlsDownload.setVisibility(
                 StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
-        binding.detailControlsBackground.setVisibility(
-                info.getAudioStreams().isEmpty() && info.getVideoStreams().isEmpty()
-                        ? View.GONE : View.VISIBLE);
+        binding.detailControlsOfflineSave.setVisibility(
+                StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
 
         final boolean noVideoStreams =
                 info.getVideoStreams().isEmpty() && info.getVideoOnlyStreams().isEmpty();
@@ -1706,6 +1675,19 @@ public final class VideoDetailFragment
         CoilHelper.INSTANCE.loadAvatar(binding.detailUploaderThumbnailView,
                 info.getUploaderAvatars());
         binding.detailUploaderThumbnailView.setVisibility(View.VISIBLE);
+    }
+
+    private void openOfflineSaveDialog() {
+        if (currentInfo == null) {
+            return;
+        }
+        try {
+            DownloadDialog.forOffline(activity, currentInfo)
+                    .show(getParentFragmentManager(), "offline_save");
+        } catch (final Exception e) {
+            ErrorUtil.showSnackbar(activity, new ErrorInfo(e, UserAction.DOWNLOAD_OPEN_DIALOG,
+                    "Showing offline save dialog", currentInfo));
+        }
     }
 
     public void openDownloadDialog() {
@@ -2127,7 +2109,6 @@ public final class VideoDetailFragment
             final int transparent = ContextCompat.getColor(requireContext(),
                     R.color.transparent_background_color);
             binding.detailControlsPlaylistAppend.setBackgroundColor(transparent);
-            binding.detailControlsBackground.setBackgroundColor(transparent);
             binding.detailControlsPopup.setBackgroundColor(transparent);
             binding.detailControlsDownload.setBackgroundColor(transparent);
             binding.detailControlsShare.setBackgroundColor(transparent);
@@ -2246,43 +2227,6 @@ public final class VideoDetailFragment
             });
         }
         builder.show();
-    }
-
-    private void showExternalAudioPlaybackDialog() {
-        if (currentInfo == null) {
-            return;
-        }
-
-        final List<AudioStream> audioStreams = getUrlAndNonTorrentStreams(
-                currentInfo.getAudioStreams());
-        final List<AudioStream> audioTracks =
-                ListHelper.getFilteredAudioStreams(activity, audioStreams);
-
-        if (audioTracks.isEmpty()) {
-            Toast.makeText(activity, R.string.no_audio_streams_available_for_external_players,
-                    Toast.LENGTH_SHORT).show();
-        } else if (audioTracks.size() == 1) {
-            startOnExternalPlayer(activity, currentInfo, audioTracks.get(0));
-        } else {
-            final int selectedAudioStream =
-                    ListHelper.getDefaultAudioFormat(activity, audioTracks);
-            final CharSequence[] trackNames = audioTracks.stream()
-                    .map(audioStream -> Localization.audioTrackName(activity, audioStream))
-                    .toArray(CharSequence[]::new);
-
-            new AlertDialog.Builder(activity)
-                    .setTitle(R.string.select_audio_track_external_players)
-                    .setNeutralButton(R.string.open_in_browser, (dialog, i) ->
-                            ShareUtils.openUrlInBrowser(requireActivity(), url))
-                    .setSingleChoiceItems(trackNames, selectedAudioStream, null)
-                    .setNegativeButton(R.string.cancel, null)
-                    .setPositiveButton(R.string.ok, (dialog, i) -> {
-                        final int index = ((AlertDialog) dialog).getListView()
-                                .getCheckedItemPosition();
-                        startOnExternalPlayer(activity, currentInfo, audioTracks.get(index));
-                    })
-                    .show();
-        }
     }
 
     /*
