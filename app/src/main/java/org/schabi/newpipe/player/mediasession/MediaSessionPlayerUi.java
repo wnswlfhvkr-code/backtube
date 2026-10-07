@@ -145,6 +145,14 @@ public class MediaSessionPlayerUi extends PlayerUi
             public void pause() {
                 player.pause();
             }
+
+            @Override
+            public void stop() {
+                if (DEBUG) {
+                    Log.d(TAG, "Media session stop requested", new Throwable("Stop caller"));
+                }
+                player.stop();
+            }
         };
     }
 

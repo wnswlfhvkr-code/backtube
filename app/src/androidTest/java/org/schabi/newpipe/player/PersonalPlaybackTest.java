@@ -169,6 +169,221 @@ public class PersonalPlaybackTest {
     }
 
     @Test
+    public void savedOfflineCopyPlaysWithoutInfoCacheAndKeepsSleepTimerOnNetworkReturn()
+            throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final org.schabi.newpipe.offline.OfflineStore.Entry entry = library.store().create(
+                "Generated offline WAV", "https://example.invalid/owned-recording", 0,
+                Uri.fromFile(localAudio).toString(), "audio/wav");
+        try {
+            library.store().copy(entry.id, new FileInputStream(localAudio));
+            InfoCache.getInstance().clearCache();
+            runOnMain(() -> {
+                final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                        "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                        boolean.class);
+                init.setAccessible(true);
+                init.invoke(player, library.queue(entry), true);
+            });
+            assertTrue("saved local source did not play", waitFor(() -> callOnMain(() ->
+                    player.isPlaying() && player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+            runOnMain(() -> {
+                PreferenceManager.getDefaultSharedPreferences(context).edit()
+                        .putBoolean(context.getString(R.string.data_saver_key), true).commit();
+                final java.lang.reflect.Field quality = org.schabi.newpipe.player.Player.class
+                        .getDeclaredField("observedAudioQuality");
+                quality.setAccessible(true);
+                quality.set(player, "offline-network-change-test");
+                player.setSleepTimer(1200);
+                final Method refresh = org.schabi.newpipe.player.Player.class
+                        .getDeclaredMethod("refreshNetworkAudioQuality");
+                refresh.setAccessible(true);
+                refresh.invoke(player);
+                assertEquals("offline-network-change-test", quality.get(player));
+                assertTrue(player.getSleepTimerRemainingMillis() > 0);
+            });
+            assertTrue("offline sleep timer did not pause", waitFor(() -> callOnMain(() ->
+                    !player.getPlayWhenReady() && player.getSleepTimerRemainingMillis() == 0), 5));
+            assertEquals(entry.localUrl(), callOnMain(player::getVideoUrl));
+        } finally {
+            library.store().delete(entry.id);
+        }
+    }
+
+    @Test
+    public void savedOfflineShelfImportsGeneratedFile() throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final String origin = "https://example.invalid/generated-shelf-test";
+        final android.app.Activity shelf = InstrumentationRegistry.getInstrumentation()
+                .startActivitySync(new Intent(context,
+                        org.schabi.newpipe.offline.OfflineLibraryActivity.class)
+                        .setData(Uri.fromFile(localAudio)).putExtra("title", "Generated shelf WAV")
+                        .putExtra("origin", origin).putExtra("service", 0)
+                        .putExtra("mime", "audio/wav").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            assertTrue("shelf import did not complete", waitFor(() -> callOnMain(() ->
+                    library.store().find(0, origin) != null), 15));
+            assertTrue("shelf did not render saved playback action", waitFor(() -> callOnMain(() ->
+                    offlinePlayButton(shelf) != null), 10));
+            runOnMain(() -> {
+                final android.widget.Button play = offlinePlayButton(shelf);
+                play.requestRectangleOnScreen(new Rect(0, 0, play.getWidth(), play.getHeight()),
+                        true);
+            });
+            captureScreen("offline-shelf-generated.png");
+            runOnMain(() -> {
+                final android.widget.Button play = offlinePlayButton(shelf);
+                assertTrue("saved playback action not visible", play.getGlobalVisibleRect(
+                        new Rect()));
+                assertTrue("saved playback action not clickable", play.performClick());
+            });
+            final boolean started = waitFor(() -> callOnMain(() ->
+                    player.isPlaying() && player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10);
+            assertTrue("shelf action did not start local playback: " + playbackDiagnostics(),
+                    started);
+            assertTrue("import changed original file", localAudio.isFile());
+        } finally {
+            final org.schabi.newpipe.offline.OfflineStore.Entry saved =
+                    library.store().find(0, origin);
+            if (saved != null) {
+                library.store().delete(saved.id);
+            }
+            runOnMain(shelf::finish);
+        }
+    }
+
+    private android.widget.Button offlinePlayButton(final android.app.Activity shelf) {
+        final java.util.ArrayList<android.view.View> matches = new java.util.ArrayList<>();
+        shelf.findViewById(android.R.id.content).findViewsWithText(matches,
+                context.getString(R.string.offline_play), android.view.View.FIND_VIEWS_WITH_TEXT);
+        for (final android.view.View match : matches) {
+            if (match instanceof android.widget.Button && match.isShown()) {
+                return (android.widget.Button) match;
+            }
+        }
+        return null;
+    }
+
+    @Test
+    public void savedOfflineLifecycleAcrossProcessRestart() throws Exception {
+        org.junit.Assume.assumeTrue(!restartPhase.isEmpty());
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final android.content.SharedPreferences fixture = context.getSharedPreferences(
+                "offline-lifecycle-test", Context.MODE_PRIVATE);
+        if ("seed".equals(restartPhase)) {
+            final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.importUri(
+                    Uri.fromFile(localAudio), "Generated saved WAV", "", 0, "audio/wav");
+            final org.schabi.newpipe.offline.OfflineStore.Entry expired = library.importUri(
+                    Uri.fromFile(localAudio), "Generated expired WAV", "", 0, "audio/wav");
+            assertTrue("asynchronous save did not finish", waitFor(() -> callOnMain(() ->
+                    library.store().get(saved.id).state
+                            == org.schabi.newpipe.offline.OfflineStore.State.READY
+                    && library.store().get(expired.id).state
+                            == org.schabi.newpipe.offline.OfflineStore.State.READY), 15));
+            assertTrue("saving removed original file", localAudio.isFile());
+            new LastPlaybackSessionStore(PreferenceManager.getDefaultSharedPreferences(context))
+                    .save(library.queue(saved), 1000, Player.REPEAT_MODE_ONE);
+            fixture.edit().putString("saved", saved.id).putString("expired", expired.id)
+                    .putInt("seedPid", android.os.Process.myPid()).commit();
+            // Deterministic elapsed-retention fixture, re-read only in the next process.
+            final File metadata = new File(context.getFilesDir(),
+                    "offline/" + expired.id + ".properties");
+            final java.util.Properties properties = new java.util.Properties();
+            try (FileInputStream input = new FileInputStream(metadata)) {
+                properties.load(input);
+            }
+            properties.setProperty("expires", "1");
+            try (FileOutputStream output = new FileOutputStream(metadata)) {
+                properties.store(output, "generated expiry fixture");
+                output.getFD().sync();
+            }
+            return;
+        }
+        assertTrue("test requires a different app process",
+                fixture.getInt("seedPid", -1) != android.os.Process.myPid());
+        assertEquals("airplane mode must be enabled before restore", "1", shellCommand(
+                "settings get global airplane_mode_on").trim());
+        final String savedId = fixture.getString("saved", "");
+        final String expiredId = fixture.getString("expired", "");
+        final org.schabi.newpipe.offline.OfflineStore.Entry saved = library.store().get(savedId);
+        final org.schabi.newpipe.offline.OfflineStore.Entry expired =
+                library.store().get(expiredId);
+        assertTrue("completed save missing after restart", saved != null);
+        assertEquals(org.schabi.newpipe.offline.OfflineStore.State.EXPIRED, expired.state);
+        assertFalse("expired media bytes retained", library.store().file(expired).exists());
+        assertNull("expired item still playable", library.source(library.queue(expired).getItem()));
+        final LastPlaybackSessionStore.Snapshot snapshot = new LastPlaybackSessionStore(
+                PreferenceManager.getDefaultSharedPreferences(context)).load();
+        assertTrue("saved queue lost across restart", snapshot != null);
+        InfoCache.getInstance().clearCache();
+        runOnMain(() -> {
+            final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                    "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                    boolean.class);
+            init.setAccessible(true);
+            init.invoke(player, snapshot.getQueue(), true);
+            player.getExoPlayer().setRepeatMode(Player.REPEAT_MODE_ONE);
+        });
+        assertTrue("restarted offline playback did not advance", waitFor(() -> callOnMain(() ->
+                player.isPlaying() && player.getCurrentMetadata()
+                        instanceof org.schabi.newpipe.offline.OfflineMediaTag
+                        && player.getExoPlayer().getCurrentPosition() > 1000), 15));
+        runOnMain(() -> player.setSleepTimer(1500));
+        assertTrue("offline timer did not pause playback", waitFor(() -> callOnMain(() ->
+                !player.getPlayWhenReady() && player.getSleepTimerRemainingMillis() == 0), 8));
+        assertEquals(saved.localUrl(), callOnMain(player::getVideoUrl));
+        runOnMain(player::play);
+        assertTrue(waitFor(() -> callOnMain(player::isPlaying), 5));
+        final File savedFile = library.store().file(saved);
+        library.store().delete(saved.id);
+        assertNull(library.store().get(saved.id));
+        runOnMain(service::destroyPlayerAndStopService);
+        assertTrue("deleted bytes not removed after reader release", waitFor(
+                () -> !savedFile.exists(), 10));
+        library.store().delete(expired.id);
+        fixture.edit().clear().commit();
+    }
+
+    @Test
+    public void savedOfflineQueueRestoresWithoutRemoteMetadata() throws Exception {
+        final org.schabi.newpipe.offline.OfflineLibrary library =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context);
+        final org.schabi.newpipe.offline.OfflineStore.Entry entry = library.store().create(
+                "Generated restore WAV", "", 0, Uri.fromFile(localAudio).toString(), "audio/wav");
+        final android.content.SharedPreferences preferences = context.getSharedPreferences(
+                "offline-restore-test", Context.MODE_PRIVATE);
+        try {
+            library.store().copy(entry.id, new FileInputStream(localAudio));
+            new LastPlaybackSessionStore(preferences).save(library.queue(entry), 1500,
+                    com.google.android.exoplayer2.Player.REPEAT_MODE_OFF);
+            final LastPlaybackSessionStore.Snapshot snapshot =
+                    new LastPlaybackSessionStore(preferences).load();
+            assertTrue(snapshot != null);
+            InfoCache.getInstance().clearCache();
+            runOnMain(() -> {
+                final Method init = org.schabi.newpipe.player.Player.class.getDeclaredMethod(
+                        "initPlayback", org.schabi.newpipe.player.playqueue.PlayQueue.class,
+                        boolean.class);
+                init.setAccessible(true);
+                init.invoke(player, snapshot.getQueue(), false);
+            });
+            assertTrue("restored saved source never prepared", waitFor(() -> callOnMain(() ->
+                    player.getCurrentMetadata()
+                            instanceof org.schabi.newpipe.offline.OfflineMediaTag), 10));
+            assertFalse(callOnMain(player::getPlayWhenReady));
+            assertEquals(entry.localUrl(), callOnMain(player::getVideoUrl));
+        } finally {
+            preferences.edit().clear().commit();
+            library.store().delete(entry.id);
+        }
+    }
+
+    @Test
     public void songSelectionPlaysImmediatelyAndPlayerSwitchKeepsPause() throws Exception {
         final String autoplayKey = context.getString(R.string.autoplay_key);
         final String original = player.getPrefs().getString(autoplayKey,
@@ -189,11 +404,19 @@ public class PersonalPlaybackTest {
             runOnMain(() -> NavigationHelper.openVideoDetailFragment(activity,
                     activity.getSupportFragmentManager(), 1, "offline-C", "offline-C",
                     null, false));
-            assertTrue("passive details did not load", waitFor(() -> callOnMain(() -> {
+            final boolean passiveDetailsLoaded = waitFor(() -> callOnMain(() -> {
                 final android.widget.TextView title = activity.findViewById(
                         R.id.detail_video_title_view);
                 return title != null && "offline-C".contentEquals(title.getText());
-            }), 5));
+            }), 5);
+            assertTrue("passive details did not load: " + playbackDiagnostics()
+                    + callOnMain(() -> {
+                        final android.widget.TextView title = activity.findViewById(
+                                R.id.detail_video_title_view);
+                        return ", detailTitle=" + (title == null ? "missing" : title.getText())
+                                + ", activity=" + ActivityLifecycleMonitorRegistry.getInstance()
+                                        .getLifecycleStageOf(activity);
+                    }), passiveDetailsLoaded);
             assertTrue("opening details changed the paused queue", callOnMain(
                     () -> !player.getPlayWhenReady()
                             && "offline-A".equals(player.getVideoUrl())));
@@ -521,7 +744,13 @@ public class PersonalPlaybackTest {
         try (android.os.ParcelFileDescriptor descriptor = InstrumentationRegistry
                 .getInstrumentation().getUiAutomation().executeShellCommand(command);
              FileInputStream input = new FileInputStream(descriptor.getFileDescriptor())) {
-            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            final java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            final byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+            }
+            return output.toString(java.nio.charset.StandardCharsets.UTF_8.name());
         }
     }
 
@@ -539,9 +768,11 @@ public class PersonalPlaybackTest {
             setField("currentMetadata", StreamInfoTag.of(recommendationInfo("A", "B")));
             player.getExoPlayer().seekTo(3800);
         });
-        assertTrue("natural end did not request a recommendation", waitFor(
+        final boolean advanced = waitFor(
                 () -> callOnMain(() -> player.getPlayQueue().getIndex() == 1),
-                PLAYBACK_TIMEOUT_SECONDS));
+                PLAYBACK_TIMEOUT_SECONDS);
+        assertTrue("natural end did not request a recommendation: " + playbackDiagnostics(),
+                advanced);
         assertEquals("B", callOnMain(() -> player.getPlayQueue().getItem().getUrl()));
     }
 
@@ -941,9 +1172,25 @@ public class PersonalPlaybackTest {
             init.setAccessible(true);
             init.invoke(player, new SinglePlayQueue(first), true);
         });
-        assertTrue("offline chain A did not start", waitFor(
-                () -> callOnMain(() -> player.isPlaying()
-                        && "offline-A".equals(player.getVideoUrl())), 10));
+        final boolean started = waitFor(() -> callOnMain(() -> player.isPlaying()
+                && "offline-A".equals(player.getVideoUrl())), 10);
+        assertTrue("offline chain A did not start: " + playbackDiagnostics(), started);
+    }
+
+    private String playbackDiagnostics() {
+        return callOnMain(() -> {
+            final com.google.android.exoplayer2.Player exo = player.getExoPlayer();
+            return "url=" + player.getVideoUrl() + ", playing=" + player.isPlaying()
+                    + ", ready=" + exo.getPlayWhenReady() + ", state=" + exo.getPlaybackState()
+                    + ", position=" + exo.getCurrentPosition() + ", duration=" + exo.getDuration()
+                    + ", repeat=" + exo.getRepeatMode() + ", error=" + exo.getPlayerError()
+                    + ", autoQueue=" + player.isAutoQueueEnabled()
+                    + ", recommendation=" + player.getRecommendationStatus()
+                    + ", queueIndex=" + (player.getPlayQueue() == null
+                            ? -1 : player.getPlayQueue().getIndex())
+                    + ", queueSize=" + (player.getPlayQueue() == null
+                            ? 0 : player.getPlayQueue().size());
+        });
     }
 
     private void cacheOfflineRecommendationChain() {
@@ -1014,6 +1261,9 @@ public class PersonalPlaybackTest {
 
     @Test
     public void recommendationMenuSupportsExcludeUndoAndClear() throws Exception {
+        // A paused real source avoids leaving the fixture in its loading animation.
+        prepareAndPlayLocalAudio();
+        runOnMain(player::pause);
         final StreamInfo info = recommendationInfo("A", "B");
         info.setRelatedItems(List.of(recommendationItem("B", "channel-b"),
                 recommendationItem("C", "channel-c")));
@@ -1533,7 +1783,7 @@ public class PersonalPlaybackTest {
         AccessibilityNodeInfo match = null;
         for (final AccessibilityNodeInfo node : nodes) {
             if (match == null && node.isVisibleToUser() && fullyVisibleInList(node)
-                    && text.equals(String.valueOf(node.getText()))) {
+                    && text.equalsIgnoreCase(String.valueOf(node.getText()))) {
                 match = node;
             } else {
                 node.recycle();
@@ -1602,15 +1852,23 @@ public class PersonalPlaybackTest {
 
     private void finishQueueActivity() {
         runOnMain(() -> {
-            for (final android.app.Activity activity : List.copyOf(
-                    ActivityLifecycleMonitorRegistry.getInstance()
-                            .getActivitiesInStage(Stage.RESUMED))) {
-                if (activity instanceof PlayQueueActivity || activity instanceof MainActivity) {
+            final java.util.Set<android.app.Activity> activities = new java.util.HashSet<>();
+            for (final Stage stage : Stage.values()) {
+                if (stage != Stage.PRE_ON_CREATE && stage != Stage.DESTROYED) {
+                    activities.addAll(ActivityLifecycleMonitorRegistry.getInstance()
+                            .getActivitiesInStage(stage));
+                }
+            }
+            for (final android.app.Activity activity : activities) {
+                if (!activity.isFinishing() && (activity instanceof PlayQueueActivity
+                        || activity instanceof MainActivity
+                        || activity instanceof org.schabi.newpipe.offline.OfflineLibraryActivity)) {
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                     activity.finish();
                 }
             }
         });
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
     }
 
     private void initPlayerForLocalAudio() throws Exception {
