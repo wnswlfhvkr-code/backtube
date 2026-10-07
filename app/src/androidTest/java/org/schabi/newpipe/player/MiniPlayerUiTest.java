@@ -220,6 +220,7 @@ public class MiniPlayerUiTest {
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_PORTRAIT
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
+        onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated.png");
         onMain(() -> active(PlayQueueActivity.class).setRequestedOrientation(
                 ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
@@ -227,6 +228,7 @@ public class MiniPlayerUiTest {
                 && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE
                 && Integer.valueOf(Color.RED).equals(artworkColor()));
+        onMain(this::assertCurrentRowVisible);
         captureScreen("backtube-current-track-generated-landscape.png");
         onMain(() -> {
             final View preview = active(PlayQueueActivity.class)
@@ -298,6 +300,74 @@ public class MiniPlayerUiTest {
             swipe(list, 0, -160, false);
             assertTrue("list swipe was intercepted", list.computeVerticalScrollOffset() > before);
         });
+    }
+
+    @Test
+    public void landscapeVisibleMetadataAcceptsScreenCoordinateSwipe() throws Exception {
+        onMain(() -> active(PlayQueueActivity.class).setRequestedOrientation(
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+        await(() -> active(PlayQueueActivity.class) != null
+                && active(PlayQueueActivity.class).getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE
+                && Integer.valueOf(Color.RED).equals(artworkColor()));
+        final Rect row = new Rect();
+        final PlayQueue[] original = new PlayQueue[1];
+        onMain(() -> {
+            assertCurrentRowVisible();
+            original[0] = player.getPlayQueue();
+            final View metadata = active(PlayQueueActivity.class).findViewById(R.id.metadata);
+            final int[] location = new int[2];
+            metadata.getLocationOnScreen(location);
+            row.set(location[0], location[1], location[0] + metadata.getWidth(),
+                    location[1] + metadata.getHeight());
+        });
+        final float density = context.getResources().getDisplayMetrics().density;
+        final float startY = row.bottom - 8 * density;
+        final long start = SystemClock.uptimeMillis();
+        for (int i = 0; i <= 8; i++) {
+            final MotionEvent event = MotionEvent.obtain(start, SystemClock.uptimeMillis(),
+                    i == 0 ? MotionEvent.ACTION_DOWN : i == 8 ? MotionEvent.ACTION_UP
+                            : MotionEvent.ACTION_MOVE,
+                    row.centerX(), startY - 120 * density * i / 8f, 0);
+            event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+            try {
+                assertTrue("screen-coordinate gesture could not be injected",
+                        InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                                .injectInputEvent(event, true));
+            } finally {
+                event.recycle();
+            }
+            SystemClock.sleep(20);
+        }
+        await(() -> active(MainActivity.class) != null
+                && BottomSheetBehavior.from(active(MainActivity.class)
+                .findViewById(R.id.fragment_player_holder)).getState()
+                == BottomSheetBehavior.STATE_EXPANDED);
+        onMain(() -> assertSame(original[0], player.getPlayQueue()));
+    }
+
+    private void assertCurrentRowVisible() {
+        final PlayQueueActivity activity = active(PlayQueueActivity.class);
+        final Rect row = fullyVisibleBounds(activity.findViewById(R.id.metadata), "current row");
+        final Rect artwork = fullyVisibleBounds(activity.findViewById(
+                R.id.current_track_thumbnail), "current artwork");
+        assertTrue("artwork lies outside its current row", row.contains(artwork));
+        assertTrue("title lies outside its current row", row.contains(fullyVisibleBounds(
+                activity.findViewById(R.id.song_name), "current title")));
+        assertTrue("artist lies outside its current row", row.contains(fullyVisibleBounds(
+                activity.findViewById(R.id.artist_name), "current artist")));
+        fullyVisibleBounds(activity.findViewById(R.id.control_play_pause), "play/pause");
+        final Rect queue = fullyVisibleBounds(activity.findViewById(R.id.play_queue), "queue");
+        assertTrue("current row overlaps the queue", !Rect.intersects(row, queue));
+    }
+
+    private static Rect fullyVisibleBounds(final View view, final String name) {
+        final Rect bounds = new Rect();
+        assertTrue(name + " is hidden or empty", view.isShown() && view.getWidth() > 0
+                && view.getHeight() > 0 && view.getGlobalVisibleRect(bounds));
+        assertEquals(name + " is clipped horizontally", view.getWidth(), bounds.width());
+        assertEquals(name + " is clipped vertically", view.getHeight(), bounds.height());
+        return bounds;
     }
 
     @Test
