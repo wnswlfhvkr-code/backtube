@@ -213,7 +213,8 @@ public class RealAudioFocusHandoffTest {
         expectFocus(AudioManager.AUDIOFOCUS_LOSS);
         await("permanent focus owner did not pause Backtube", () -> !player.getPlayWhenReady());
         releaseOwner();
-        assertRemainsPaused(true);
+        // API23 may still dispatch GAIN after permanent loss; it must not restore resume intent.
+        assertRemainsPaused(false);
         assertNoNewRequest();
         controller.getTransportControls().play();
         await("explicit play did not reacquire real focus", () ->
@@ -288,7 +289,10 @@ public class RealAudioFocusHandoffTest {
                 .putExtra(AudioFocusOwnerActivity.GAIN_TYPE, gainType));
         final Intent status = expectOwner(AudioFocusOwnerActivity.REQUESTED);
         final int ownerUid = status.getIntExtra(AudioFocusOwnerActivity.OWNER_UID, -1);
-        assertEquals(testContext.getApplicationInfo().uid, ownerUid);
+        // API23's instrumentation context can expose an unpopulated ApplicationInfo (uid=0).
+        // Resolve the installed package record, then still require a genuinely separate UID.
+        assertEquals(context.getPackageManager()
+                .getApplicationInfo(testContext.getPackageName(), 0).uid, ownerUid);
         assertNotEquals("focus owner must have a distinct APK UID", Process.myUid(), ownerUid);
         assertEquals("real competing focus request was rejected",
                 AudioManager.AUDIOFOCUS_REQUEST_GRANTED,

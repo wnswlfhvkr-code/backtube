@@ -57,3 +57,22 @@ case was added, `assembleDebugAndroidTest runCheckstyle` passed again.
 `testDebugUnitTest`: 233 tests, zero failures/errors/skips (37 XML reports).
 Diff whitespace and shell syntax checks passed. These are local compilation and
 JVM results; the seven new tests still require actual Android execution.
+
+## First real-focus CI: a1bccbfb1
+
+[Run 37601044631](https://github.com/wnswlfhvkr-code/backtube/actions/runs/37601044631):
+API35 passed all seven real-handoff tests and the 104-case connected suite
+(zero failures/errors; three pre-existing opt-in skips), plus dedicated local
+lifecycle/UI phases. API23 failed all seven new cases at the same fixture UID
+assertion: `testContext.getApplicationInfo().uid` was 0 while the real test owner
+reported UID10056. The target process was UID10055. This is a fixture lookup
+failure, not evidence that all seven playback behaviors failed.
+
+Resolve the installed test package's ApplicationInfo through PackageManager,
+retaining both the exact owner-UID check and the distinct-target-UID assertion.
+The API23 trace also observed GAIN after a permanent LOSS when the owner left;
+API35 did not. The permanent-loss test must accept either callback sequence and
+require that playback remains paused without a new request until explicit Play.
+It must not turn the documentation's usual callback sequence into a universal
+platform assertion. The explicit-abandon test still verifies the no-GAIN path.
+Both changes affect tests only. Revalidation is required before integration.
