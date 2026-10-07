@@ -101,7 +101,9 @@ public class RealAudioFocusHandoffTest {
 
     @Before
     public void setUp() throws Exception {
-        setPreference(R.string.resume_on_audio_focus_gain_key, true);
+        setPreference(R.string.resume_on_audio_focus_gain_key, null);
+        assertTrue("an absent preference must enable automatic resume",
+                PlayerHelper.isResumeAfterAudioFocusGain(context));
         setPreference(R.string.auto_queue_key, false);
         ContextCompat.registerReceiver(context, statusReceiver,
                 new IntentFilter(AudioFocusOwnerActivity.STATUS), ContextCompat.RECEIVER_EXPORTED);
@@ -375,13 +377,19 @@ public class RealAudioFocusHandoffTest {
         return PreferenceManager.getDefaultSharedPreferences(context);
     }
 
-    private void setPreference(final int resource, final boolean value) {
+    private void setPreference(final int resource, final Boolean value) {
         final String key = context.getString(resource);
         if (!originalPreferences.containsKey(key)) {
             originalPreferences.put(key, preferences().contains(key)
                     ? preferences().getBoolean(key, false) : null);
         }
-        preferences().edit().putBoolean(key, value).commit();
+        final SharedPreferences.Editor editor = preferences().edit();
+        if (value == null) {
+            editor.remove(key);
+        } else {
+            editor.putBoolean(key, value);
+        }
+        editor.commit();
     }
 
     private void setField(final String name, final Object value) throws Exception {

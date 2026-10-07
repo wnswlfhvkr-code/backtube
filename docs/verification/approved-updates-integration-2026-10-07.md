@@ -150,7 +150,7 @@ own Android runtime result; no passing screenshot claim is made from this build.
 The duplicate manual run 37604511644 was intentionally cancelled after the PR run
 appeared. It is not an additional regression result.
 
-## Automatic resume setting
+## Automatic resume setting at checkpoint b855aa544
 
 `PlayerHelper.isResumeAfterAudioFocusGain` and `video_audio_settings.xml` default
 `resume_on_audio_focus_gain` to false. The Korean setting is “이어서 재생” under
@@ -178,3 +178,27 @@ wait before strict geometry assertions. Preserve clipping/overlap and actual
 screen-coordinate swipe checks; do not retry the test or change production UI.
 Add measured dimensions to a remaining geometry failure for diagnosis. The APK
 from this run was inspected but not delivered as the final verified build.
+
+## Requested follow-up: enable automatic resume by default
+
+After verified integration b855aa544, the user requested an ON default and a new
+test APK. Change only the UI preference default and PlayerHelper's absent-key
+fallback to true. Do not migrate or overwrite a stored false value. Older
+automatically stored false values cannot be distinguished from a deliberate
+opt-out, so both remain false. Fresh installs and absent-key settings use true.
+The ordinary switch remains at queue overflow → Settings → “비디오 및 오디오” →
+“동작” → “이어서 재생”. No player/focus/timer behavior is otherwise changed.
+
+A focused JVM regression first failed against the old fallback (one expected
+failure: missingPreferenceEnablesAutomaticResume); the explicit opt-out case
+passed. Android coverage exercises real preference-resource initialization,
+absent-key fallback and preserving saved OFF during reinitialization. The seven
+real cross-UID focus cases now begin with an absent resume key instead of forcing
+ON; the opt-out case explicitly stores OFF. Existing pause, timer, permanent-loss
+and manual-gain assertions remain, and fixtures restore original preferences.
+
+Use the existing CI continuous/debug signing route. Compare the produced APK's
+certificate, package and version against b855aa544 before delivery; do not assume
+that separate ephemeral CI runs reuse the same certificate. No signing key is
+copied and no installed app data is deleted. Exact follow-up CI/APK evidence is
+recorded in PR5 after verification.
