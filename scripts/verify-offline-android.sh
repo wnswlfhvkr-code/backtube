@@ -44,10 +44,4 @@ run_phase restore -e session_restart_phase restore \
 run_phase playback -e class "$class_name#savedOfflineCopyPlaysWithoutInfoCacheAndKeepsSleepTimerOnNetworkReturn,$class_name#savedOfflineQueueRestoresWithoutRemoteMetadata,$class_name#savedOfflineShelfImportsGeneratedFile"
 adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/offline-shelf-generated.png" \
     "$output_dir/offline-shelf-generated.png"
-adb shell settings put global airplane_mode_on 0
-if (( api_level >= 30 )); then
-    adb shell cmd connectivity airplane-mode disable
-else
-    adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false
-fi
-adb shell svc wifi enable
+# Leave networking disabled for the subsequent local connected suite.
