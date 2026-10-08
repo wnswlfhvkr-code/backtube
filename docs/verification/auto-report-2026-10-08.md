@@ -88,8 +88,11 @@ coverage included in the counts above (no tests beyond those counts are claimed)
 
 ## Known limits
 
-- Android API 23/35: no emulator, system image or device execution was available, so no
-  instrumentation tests were run on a device.
+- Android API 23/35: a device run was attempted on 2026-10-08 and was BLOCKED by
+  infrastructure. There was no KVM acceleration, and the ADB bridge could not start.
+  0 tests were executed on either API level (0 passed, 0 failed). This is not an
+  application test failure. Mobile WorkManager delivery coverage and playback/offline
+  regression coverage remain pending. See `auto-report-2026-10-08-mobile.md`.
 - No real GitHub App, installation, private key, Cloudflare account, endpoint, runtime
   provisioning or public issue call was made.
 - The public endpoint is unauthenticated by design. Anyone can fabricate allowlisted
@@ -111,6 +114,12 @@ See `relay/README.md` ("Future setup").
 
 ## Pull request
 
-This work is prepared for a draft PR stacked on base `feat/playback-feedback`,
-preserving existing PR6. No merge to main and no deployment is authorized. This
-document does not assign a new PR number or URL.
+- PR7: https://github.com/wnswlfhvkr-code/backtube/pull/7. It is an OPEN draft with base
+  `feat/playback-feedback` and branch `feat/claude-auto-report`.
+- Preserved commits:
+  - main `84b4e0e85f02f29a8523486345db5fc5df9e395d`;
+  - PR6 `be4b30a4850a70e13a0493a399318091205b5e65`;
+  - PR7 checkpoint `71e1be62c0d46051f1b20957e0611582b9951fb8`.
+- Identifiers of subsequent documentation-only commits are recorded in Git history and in PR7.
+  The listed `71e1be62` commit is a preserved checkpoint, not necessarily the branch head.
+- No merge to main and no deployment is authorized.

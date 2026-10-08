@@ -105,6 +105,54 @@ Each of the following steps needs explicit **user** approval *before* it is perf
 - Verify free-plan availability and limits before any deployment.
 - Never enable a paid plan or overage from this project.
 
+### 운영자 실행 체크리스트 (향후, 사용자 전용)
+
+> 준비용 문서입니다. 아래 항목은 **하나도 실행되지 않았습니다**. 계정, App, 키, 자격 증명, 인증,
+> 배포, 유료 플랜, 공개 이슈는 만들어지지 않았습니다. 이후 설정과 롤아웃을 사용자가 명시적으로
+> 승인한 경우에만 **사용자가 직접** 수행합니다.
+
+1. **GitHub App 등록과 설치 (사용자):**
+   - 본인 계정 전용(private) App으로 등록합니다.
+   - Repository 권한은 Issues **Read and write** 하나만 선택합니다. Metadata read는 자동으로
+     포함됩니다.
+   - 다른 repository/account 권한, OAuth 사용자 인증, Device Flow, webhook은 사용하지 않습니다.
+   - 설치할 때 "Only select repositories"로 정확히 `wnswlfhvkr-code/backtube` 하나만 고릅니다.
+   - 참고: https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app ,
+     https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app
+2. **개인 키 (사용자, 비공개):**
+   - 키 발급과 PKCS#8 PEM 변환은 사용자가 비공개로 직접 처리합니다.
+   - 유일한 서버 런타임 시크릿 `GH_APP_PRIVATE_KEY`는 Cloudflare 시크릿 UI에 직접 입력합니다.
+   - 키를 채팅, 어시스턴트, APK, 저장소, 로그, 명령줄 인자에 넣지 마십시오.
+3. **Cloudflare Free 연결 (사용자):**
+   - 사용자가 직접 Wrangler 계정 OAuth 로그인을 합니다. 참고:
+     https://developers.cloudflare.com/workers/wrangler/commands/#login
+   - 이 최소 수동 경로에는 별도의 `CLOUDFLARE_API_TOKEN`이 필요 없으며, 지금 발급하지 않습니다.
+   - Workers Free의 SQLite 기반 Durable Objects 가용성과 한도를 확인합니다. 참고:
+     https://developers.cloudflare.com/durable-objects/platform/pricing/
+   - `wrangler.jsonc`에 있는 현재 바인딩과 마이그레이션만 사용합니다. 유료 플랜이나 초과 과금은
+     쓰지 않습니다.
+4. **비활성 배포 (승인 후):**
+   - `REPORTING_ENABLED`를 `"false"`로 유지한 채 배포합니다.
+   - 아래 표의 비밀이 아닌 식별자를 설정합니다.
+5. **활성화와 엔드포인트 APK (별도 명시 승인):**
+   - `REPORTING_ENABLED`를 `"true"`로 바꿉니다.
+   - 공개 HTTPS `/v1/fault` 엔드포인트를 넣은 APK를 배포합니다.
+   - 이때부터 공개 이슈가 생성될 수 있습니다.
+6. **중지:**
+   - `REPORTING_ENABLED`를 `"false"`로 되돌리거나, 엔드포인트가 비어 있는 APK를 배포합니다.
+
+| 바인딩 | 종류 | 용도 |
+|---|---|---|
+| `REPORTING_ENABLED` | Worker var | 전체 스위치. 기본값 `"false"` |
+| `GH_APP_ID` | Worker var (비밀 아님) | App 식별자. JWT 발급자 |
+| `GH_INSTALLATION_ID` | Worker var (비밀 아님) | 설치 토큰을 발급받을 설치 |
+| `GH_BOT_LOGIN` | Worker var (비밀 아님) | App 봇 로그인. `<app-slug>[bot]`과 정확히 일치 |
+| `GH_APP_PRIVATE_KEY` | 유일한 시크릿 | 메모리 내에서 RS256 App JWT 서명에만 사용. 이 JWT로 단기 설치 액세스 토큰을 발급받으며, 개인 키가 설치 액세스 토큰을 직접 서명하지는 않음 |
+| `APP_FAULT_ENDPOINT` | APK 빌드 값 (비밀 아님) | 공개 HTTPS `/v1/fault`. 현재 비어 있음 |
+
+PAT, webhook secret, Claude OAuth 토큰, 제공자 API 키는 relay와 APK 어디에도 필요하지 않으며
+추가하지 않습니다.
+
 ## Development
 
 Requires Node.js 24.
@@ -127,7 +175,13 @@ Do **not** run a real deploy from this repository.
 
 ## Verification status
 
-- Android runtime behavior on API 23 and 35 has **not** been executed (no emulator).
-- Unit tests and APK builds are separate evidence.
+- Android runtime behavior on API 23 and 35 remains **unverified**.
+  - A device run was attempted on 2026-10-08 and was BLOCKED by infrastructure: there was no
+    KVM, and the ADB bridge could not start.
+  - Each API level had 0 executed, 0 passed and 0 failed. This is not an application test
+    failure.
+  - Details and pending coverage: `docs/verification/auto-report-2026-10-08-mobile.md`.
+- Unit tests, APK builds and relay tests (47/47) are separate evidence. They are not mobile
+  results.
 - No battery measurements have been made, and none are claimed.
-- Do not treat the work as fully tested until a verification document records the results.
+- Do not treat the work as fully tested until a verification document records device results.

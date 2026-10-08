@@ -451,5 +451,45 @@
       "relay/README.md": "89df70892e312b9f26f926ffc86ebe871286c18c47dadabdc770cb0bae1a1db2",
       "docs/verification/auto-report-2026-10-08.md": "1d8eed0fd850cf1833b6432736faeba397f69100191ba7c6d4bc1566f3398430"
     }
+  },
+  {
+    "phase": "mobile-operator-checklist",
+    "started_utc": "2026-10-08T15:02:41.365383+00:00",
+    "finished_utc": "2026-10-08T15:03:12.970778+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/README.md": "7f6dfa32251d4477467e29f67837526276c4b1303dad02657025c4c9f7064c4d"
+    }
+  },
+  {
+    "phase": "mobile-runtime-evidence",
+    "started_utc": "2026-10-08T15:09:41.003476+00:00",
+    "finished_utc": "2026-10-08T15:11:15.832185+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "docs/verification/auto-report-2026-10-08.md": "a2fd5eb58412615995c5b2026c2e5e666d7d42347412c8ccc3e587beadc0fc61",
+      "docs/verification/auto-report-2026-10-08-mobile.md": "b77611cb1bf64b229b5d9a6ae944c0809cc11377687f9a7ad0d819d852144bf8",
+      "relay/README.md": "67bbb37169fad8123a8b4927a1cf05096231b7d831c7676ca314282cebccafe3"
+    }
+  },
+  {
+    "phase": "mobile-doc-final-polish",
+    "started_utc": "2026-10-08T15:12:23.226522+00:00",
+    "finished_utc": "2026-10-08T15:12:31.005825+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "docs/verification/auto-report-2026-10-08-mobile.md": "771722d6170542e8394b532064b66a22793514bf34afd918f76e1af5fa5a3bb8",
+      "docs/verification/auto-report-2026-10-08.md": "76464835e11b9f0f4c33c28f879a03152de7d2862737a002624b0b0760b951a4",
+      "relay/README.md": "983c77a40092cb1b6eff7bcd9eb7febc1961957fd0968dbbc0d81358179eb3f1"
+    }
   }
 ]
