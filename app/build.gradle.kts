@@ -4,6 +4,8 @@
  */
 
 import com.android.build.api.dsl.ApplicationExtension
+import java.net.URI
+import java.net.URISyntaxException
 import java.util.regex.Pattern
 
 plugins {
@@ -25,6 +27,43 @@ val workingBranch = gitWorkingBranch.getOrElse("")
 val normalizedWorkingBranch = workingBranch
     .replaceFirst("^[^A-Za-z]+".toRegex(), "")
     .replace("[^0-9A-Za-z]+".toRegex(), "")
+
+// Optional sanitized fault relay endpoint; empty means delivery is off.
+// Only https://host[:port]/v1/fault is accepted. The value is never echoed on failure.
+fun validatedAppFaultEndpoint(raw: String?): String {
+    if (raw.isNullOrEmpty()) {
+        return ""
+    }
+    val failure = "Invalid appFaultEndpoint property: expected https://host[:port]/v1/fault"
+    if (!Regex("https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/v1/fault").matches(raw)) {
+        throw GradleException(failure)
+    }
+    val uri = try {
+        URI(raw)
+    } catch (e: URISyntaxException) {
+        throw GradleException(failure)
+    }
+    val port = uri.port
+    if (!uri.isAbsolute ||
+        uri.scheme != "https" ||
+        uri.host.isNullOrEmpty() ||
+        uri.rawUserInfo != null ||
+        uri.rawQuery != null ||
+        uri.rawFragment != null ||
+        uri.rawPath != "/v1/fault" ||
+        (port != -1 && port !in 1..65535)
+    ) {
+        throw GradleException(failure)
+    }
+    return raw
+}
+
+fun javaStringLiteral(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val appFaultEndpoint = validatedAppFaultEndpoint(
+    providers.gradleProperty("appFaultEndpoint").orNull
+)
 
 kotlin {
     jvmToolchain(21)
@@ -54,6 +93,8 @@ configure<ApplicationExtension> {
         System.getProperty("versionNameSuffix")?.let { versionNameSuffix = it }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "APP_FAULT_ENDPOINT", javaStringLiteral(appFaultEndpoint))
     }
 
     buildTypes {
@@ -324,6 +365,7 @@ dependencies {
     androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.assertj.core)
+    androidTestImplementation("androidx.work:work-testing:2.11.2")
 }
 
 aboutLibraries {

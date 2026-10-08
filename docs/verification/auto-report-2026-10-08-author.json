@@ -1,0 +1,455 @@
+[
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/AppFaultDeliveryStateTest.java": "413029a74f06ea7d3a8c960a0183fd7cf9e95953b88bd76c5691c7c3b70c1e64"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultOutbox.java": "cfbf0fd370e6eb5d58ea175cd48fdbdb61016ca3fe77528470e26cdb197ee376"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/ledger.test.mjs": "873bcb2bf7c92a8a59982e2bbe9d0720c2b95d40269470e2dcfb6ac1d231716e",
+      "relay/test/privacy.test.mjs": "324653f437be78324946e9d1a56ae4611f7d161e7924f83018c86da0f1d278ff"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/ledger.test.mjs": "10b238c06be1e5dc91535837fe4f82310252084fa33617aee5360b8d4fe7ee2f",
+      "relay/test/privacy.test.mjs": "0f39b409d1a11a9e7404a194164f803240f93a28b5992daf90b5f0d06b1345c9"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/AppFaultDeliveryTest.java": "1414f5ca4fa26bcec933262e70053dabb85703af04c89a3f2a235aca74b3e606"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultDelivery.java": "913486a8078939067fa12c495f158a899724b000bd2df2a5b70067822797be31",
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultOutbox.java": "a25553d1d5e9ebf10a5a4b21ebe4504f0c64ab8197679569a3f937a032278aa6"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/github.test.mjs": "4f3b9890490bd4b51f718355e86c3bba862922883eeac0b14bf7e40f6c354fd0"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/protocol.mjs": "88ed5d5effa6ef72dbef4168875dff3679c9268853317bfbdce86bfc29c9abda",
+      "relay/src/ledger.mjs": "7f505df0d1b0c6330fd5e8d82bc9678d75f21d7885ae18f1e27e8d6d1bbd2022"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/AppFaultHttpProtocolTest.java": "2209be4d20dcd64d6deb7d50bb831074ba1a2b0169bb95d50341f931d4b9b8ac"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/github.test.mjs": "a4b46d14e2e914d714b23672e26d4c3be1c0033acec689958d940b697b8937d4"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultHttpProtocol.java": "b4169be4273576a97eafa97baa341f545671a9bff53f685733cd2b71019475f4"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/ledger.test.mjs": "02a4070fd9164884a48d95fd5b37c8bc7d8b6da09b68a2ed4761b0f2114271c8"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/github.mjs": "af94f6e1cb113ffac164c93a8e8e239a947fe30e104fa2f91093fa315420d1ea"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/ledger.mjs": "ffcb0f74525f75528c37dbf5e92783f2b83b35bbbf4cea54a296d190db89f3dd"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/handler.test.mjs": "137033d18d828a5d6d58e9982ad5f4263d3e4aae372ea260f49b578d70d22764"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/AppFaultSchedulingTest.java": "274aa7e0b024a9af1d900fef41e4761371c9b145cd6eb2b17e18df16123f3481"
+    }
+  },
+  {
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/handler.mjs": "1381beea2d4359e37c4f84954155bffe12756732825254d7108836c26c007a8b",
+      "relay/src/worker.mjs": "6daf697e2b0a66d43e58e6e7030f7b623e24933167fe4f0727781b99fee57474",
+      "relay/package.json": "d7407baa9af3200e6fe35782a72b58f2d761008c518d665b1a9b2db6c09d34f8",
+      "relay/wrangler.jsonc": "f9b112e5c8ce2d62a83cddfb1768d4264769a7cf924e49657e661adf4f6ce787",
+      "relay/.gitignore": "bfab68330c9e84f1c8166bd72f36e365277181f578e2e166d6a01e2b819a6cde"
+    }
+  },
+  {
+    "phase": "resume-fixture-tests",
+    "started_utc": "2026-10-08T14:20:02.050791+00:00",
+    "finished_utc": "2026-10-08T14:20:08.735817+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/ledger.test.mjs": "9ea28404ea09d3ff0194cd6952400e8dd20bda76ae6f6a544aa8053be7914eab"
+    }
+  },
+  {
+    "phase": "resume-policy-implementation",
+    "started_utc": "2026-10-08T14:20:02.062844+00:00",
+    "finished_utc": "2026-10-08T14:20:10.151046+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultScheduling.java": "72f3fc4d988501fc20380b1cea25f5e1fbb9b4b80d4bfcf48f67d5da214491b1"
+    }
+  },
+  {
+    "phase": "android-integration-test-setup",
+    "started_utc": "2026-10-08T14:23:01.434821+00:00",
+    "finished_utc": "2026-10-08T14:23:31.351627+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/build.gradle.kts": "22cc55a610427866ecef75d99384074dc4e73ec7beb691ff0a184e2f9cad396a",
+      "app/src/androidTest/java/org/schabi/newpipe/error/autoreport/AppFaultAndroidSchedulingTest.java": "a448306dc869549ee5177740707d0d26d5fc4c4d3bef147143183a514d42cc4c"
+    }
+  },
+  {
+    "phase": "github-stop-regression-tests",
+    "started_utc": "2026-10-08T14:23:24.637926+00:00",
+    "finished_utc": "2026-10-08T14:23:34.999169+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/github.test.mjs": "ac5d966ee82cfc95e68ec9912c95b38ddab099f0f1558b9f40bc0ac0eb7e10fd"
+    }
+  },
+  {
+    "phase": "worker-adapter-regression-tests",
+    "started_utc": "2026-10-08T14:23:01.451790+00:00",
+    "finished_utc": "2026-10-08T14:23:48.142920+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/worker.test.mjs": "9f030614f5830b93f19452e65e6c3ef7acbf632d143b753270d30ead4f054cdf"
+    }
+  },
+  {
+    "phase": "http-transport-tests",
+    "started_utc": "2026-10-08T14:25:11.649278+00:00",
+    "finished_utc": "2026-10-08T14:25:27.682069+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/HttpFaultTransportTest.java": "e7068373028abd0eadd524406491ad40f7ad6c446497c0e1819969162e5947ba"
+    }
+  },
+  {
+    "phase": "github-stop-implementation",
+    "started_utc": "2026-10-08T14:25:11.636516+00:00",
+    "finished_utc": "2026-10-08T14:25:29.006806+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/github.mjs": "1d22e44699763a5efc0dfd5ecf04e207a936bdc1781432d8d4cf830a83c32630",
+      "relay/src/worker.mjs": "038006e79c43cd1d88ed01b065915db64e8a3352ad26bd7f8ca111c6dd484609"
+    }
+  },
+  {
+    "phase": "android-fixture-tests",
+    "started_utc": "2026-10-08T14:26:08.282230+00:00",
+    "finished_utc": "2026-10-08T14:26:13.138375+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/androidTest/java/org/schabi/newpipe/error/autoreport/AppFaultAndroidSchedulingTest.java": "d090ee7995863d19a38bc9bf3b5487c4937f80aa808b7795662415710d9f437d"
+    }
+  },
+  {
+    "phase": "worker-sentinel-implementation",
+    "started_utc": "2026-10-08T14:26:08.281556+00:00",
+    "finished_utc": "2026-10-08T14:26:17.389968+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/src/worker.mjs": "5aa160c1f91b6f93ce100d74a258f9020383c28ef17a811f3c44fb938edc6fd3",
+      "relay/src/ledger.mjs": "2af5c9984cd818cf21ca038a67cceca7241c6423c5e72708e1c21b82072e565c"
+    }
+  },
+  {
+    "phase": "app-workmanager-implementation",
+    "started_utc": "2026-10-08T14:27:31.130619+00:00",
+    "finished_utc": "2026-10-08T14:28:25.477180+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultScheduler.java": "5d6036d4bcf51ea461a619fbf7c657a2d30ebcb5dd1cde0566586f45aec22b32",
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultUploadWorker.java": "d729507513b221867a2eae707445cca908520974c7003aa120d58bef5b38086a"
+    }
+  },
+  {
+    "phase": "http-transport-implementation",
+    "started_utc": "2026-10-08T14:28:20.585742+00:00",
+    "finished_utc": "2026-10-08T14:28:50.654805+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/HttpFaultTransport.java": "01bb5d4d224f8de18b4f34fc869e4f05d24cbe8f0e7c9591552ead2a62982f60"
+    }
+  },
+  {
+    "phase": "runtime-test-setup",
+    "started_utc": "2026-10-08T14:29:06.040367+00:00",
+    "finished_utc": "2026-10-08T14:29:42.699997+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/package.json": "0984478281bd0eaf7eff7da50186fe7db5823efea0b5cbfd07f554af3a953bfd",
+      "relay/test/runtime.test.mjs": "c5819238cbcdf093b080bfd707a43bdc92cc91e82a1d63e33e49ba3c2544ca66"
+    }
+  },
+  {
+    "phase": "app-entry-integration",
+    "started_utc": "2026-10-08T14:29:55.048490+00:00",
+    "finished_utc": "2026-10-08T14:30:34.777840+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultEventReceiver.java": "d8c6cf170e1967c3a7bce8f4f00158f862534dc6585eafdd750ef194b0d206d1",
+      "app/src/main/java/org/schabi/newpipe/error/AcraReportSender.java": "6fb1f4bddeacddb38374cee59a0a82fef630d01fe5be0e0626cd9d44b7b19cf8",
+      "app/src/main/java/org/schabi/newpipe/App.kt": "904a2334135aaabcf12833cfcc109620d73487667de2434d7f911520a2aa4cbf",
+      "app/build.gradle.kts": "94f6f8adb4a19b21c738d2421d853b3eb365a1fb5245ae457af555039790da85",
+      "app/src/main/AndroidManifest.xml": "b8655d1d394075ad077fc90fcdf0375845c4892bf6cb2c49ee52fbdf47b6fbd6"
+    }
+  },
+  {
+    "phase": "build-uri-compile-fix",
+    "started_utc": "2026-10-08T14:31:51.960376+00:00",
+    "finished_utc": "2026-10-08T14:31:57.164472+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/build.gradle.kts": "8332eaf625122cdd640ac00fb6db43e1b92e57a5bf2655d0f0174579075508bc"
+    }
+  },
+  {
+    "phase": "runtime-fixture-test-fix",
+    "started_utc": "2026-10-08T14:31:51.957286+00:00",
+    "finished_utc": "2026-10-08T14:31:59.681910+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/runtime.test.mjs": "91edcc39ca34d1a2323b0f4097d985f5a612d7d4814462e9846fc532b3da0bc2",
+      "relay/package.json": "0f50021a1f841bb0aa70f870138e5224ca9dbb1815a5f1f4aca4a1be7dec1af4"
+    }
+  },
+  {
+    "phase": "app-startup-off-tests",
+    "started_utc": "2026-10-08T14:32:55.593348+00:00",
+    "finished_utc": "2026-10-08T14:33:07.663839+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/androidTest/java/org/schabi/newpipe/error/autoreport/AppFaultAndroidSchedulingTest.java": "852a2b8e3b825305a43985c3d105e3a3b35dac48724ca15bff01561d0ce34186"
+    }
+  },
+  {
+    "phase": "app-completion-clock-tests",
+    "started_utc": "2026-10-08T14:32:55.598149+00:00",
+    "finished_utc": "2026-10-08T14:33:13.808550+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/test/java/org/schabi/newpipe/error/autoreport/AppFaultDeliveryTest.java": "68262865d450b0f51d45085bc2d558c3e124cbe8c1a255ee01170314359a240d"
+    }
+  },
+  {
+    "phase": "scheduler-race-regression",
+    "started_utc": "2026-10-08T14:34:08.133677+00:00",
+    "finished_utc": "2026-10-08T14:34:58.438672+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "docs/verification/auto-report-2026-10-08-scheduler-check.py": "515ea0c70c198bdf95639337ac8a0ff57881663c0e9af701c0723c6b9748b51e"
+    }
+  },
+  {
+    "phase": "runtime-api-compatibility",
+    "started_utc": "2026-10-08T14:35:15.404003+00:00",
+    "finished_utc": "2026-10-08T14:35:20.809944+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/runtime.test.mjs": "7b424b797cae1f7a57d5df3ca9671e552578abe49e6f8385c63b0beb2a60b6c9"
+    }
+  },
+  {
+    "phase": "app-completion-clock-implementation",
+    "started_utc": "2026-10-08T14:36:02.455721+00:00",
+    "finished_utc": "2026-10-08T14:36:20.151613+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultDelivery.java": "66bee07114f68a867aff7cc155d9bd75e8fbb94bfa7a76583c449244436bea7f",
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultUploadWorker.java": "141c18069160f4c634a7c7fd2b24610df7ef4449b81a7374ff1fee1d26fd577c"
+    }
+  },
+  {
+    "phase": "scheduler-review-implementation",
+    "started_utc": "2026-10-08T14:36:02.455764+00:00",
+    "finished_utc": "2026-10-08T14:36:21.742187+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "app/src/main/java/org/schabi/newpipe/error/autoreport/AppFaultScheduler.java": "47206bfa5f4b3d4f442c585fd96044b106019ca48d9d5df61f875e07dc140e63"
+    }
+  },
+  {
+    "phase": "relay-operator-documentation",
+    "started_utc": "2026-10-08T14:38:35.518558+00:00",
+    "finished_utc": "2026-10-08T14:38:58.653857+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/README.md": "8abc6654dade3f1415ffad74ec0af99a125b2ba3c660741589fcad462f99b7e7"
+    }
+  },
+  {
+    "phase": "runtime-persistence-test-fix",
+    "started_utc": "2026-10-08T14:39:36.136792+00:00",
+    "finished_utc": "2026-10-08T14:39:39.264359+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/test/runtime.test.mjs": "ebe0e8fd2af535de0c9fb8884343315e64255eeb78368fd6bea854e68135aa6e"
+    }
+  },
+  {
+    "phase": "final-verification-documentation",
+    "started_utc": "2026-10-08T14:42:32.737065+00:00",
+    "finished_utc": "2026-10-08T14:42:57.792356+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "docs/verification/auto-report-2026-10-08.md": "2944eeefa8ee55db48246e7b67c0d71dd3915d60fd384f1dfbd67abec10703ea",
+      "relay/README.md": "0a32dd45da1bd7de7a7498c0d0e51acd38364eab5fdc1a01371fd11547040ec4"
+    }
+  },
+  {
+    "phase": "final-proof-and-spec-update",
+    "started_utc": "2026-10-08T14:44:07.327665+00:00",
+    "finished_utc": "2026-10-08T14:44:21.488569+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "docs/verification/auto-report-2026-10-08.md": "2ea5dcb41a95a77b4a443df60a925d7f3ac3d81259534b041555e31c1c98800f",
+      "docs/superpowers/specs/2026-10-08-auto-report-design.md": "5d39566f426c4ecd18abb5e4c6bc6fe88979b89729e51bea3138f577e4b2daf1"
+    }
+  },
+  {
+    "phase": "retention-documentation-clarification",
+    "started_utc": "2026-10-08T14:46:25.103073+00:00",
+    "finished_utc": "2026-10-08T14:46:28.790827+00:00",
+    "cli_exit_code": 0,
+    "timeout_seconds": 480,
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.294",
+    "files_sha256": {
+      "relay/README.md": "89df70892e312b9f26f926ffc86ebe871286c18c47dadabdc770cb0bae1a1db2",
+      "docs/verification/auto-report-2026-10-08.md": "1d8eed0fd850cf1833b6432736faeba397f69100191ba7c6d4bc1566f3398430"
+    }
+  }
+]

@@ -59,6 +59,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".error.autoreport.AppFaultEventReceiver"
+            android:exported="false" />
+
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"

@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+build-dry-run/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.pem
