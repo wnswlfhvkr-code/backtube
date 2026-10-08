@@ -27,6 +27,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Prepare Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+          log-accepted-android-sdk-licenses: false
+
       - name: Install the required Android build packages
         run: sdkmanager --install 'platforms;android-37.0' 'build-tools;37.0.0'
 
