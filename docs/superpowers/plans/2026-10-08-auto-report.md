@@ -87,5 +87,5 @@ build endpoint string is empty unless explicitly configured for a later rollout.
 - [x] Record actual commands/counts/blockers; preserve only model/version/file
   hashes as authorship evidence, no private reasoning or raw model transcripts.
 - [x] Document exact later GitHub/Cloudflare permissions and default disabled state.
-- [ ] Verify diff/base preservation, commit/push isolated branch and preserve a
+- [x] Verify diff/base preservation, commit/push isolated branch and preserve a
   draft PR. Do not merge or deploy.
