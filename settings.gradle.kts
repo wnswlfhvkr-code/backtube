@@ -24,6 +24,7 @@ dependencyResolutionManagement {
 include(":app") // androidApp
 include(":desktopApp")
 include("shared")
+include(":faultProbe") // debug-only local synthetic fault diagnostic
 
 // Use a local copy of NewPipe Extractor by uncommenting the lines below.
 // We assume, that NewPipe and NewPipe Extractor have the same parent directory.
