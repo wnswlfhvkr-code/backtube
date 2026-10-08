@@ -1,0 +1,153 @@
+name: PR7 phone diagnostic APK artifact
+
+'on':
+  push:
+    branches: [chore/pr7-phone-artifact-20261008]
+    paths: [.github/workflows/pr7-phone-artifact.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr7-phone-diagnostic-artifact
+  cancel-in-progress: false
+
+jobs:
+  diagnostic-apk:
+    if: github.repository == 'wnswlfhvkr-code/backtube'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install the required Android build packages
+        run: sdkmanager --install 'platforms;android-37.0' 'build-tools;37.0.0'
+
+      - name: Test and build only the local diagnostic
+        run: >-
+          ./gradlew :faultProbe:testDebugUnitTest :faultProbe:lintDebug
+          :faultProbe:assembleDebug --no-daemon --no-configuration-cache
+          --console=plain -DskipFormatKtlint
+
+      - name: Verify and stage the three delivery files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          import xml.etree.ElementTree as ET
+          import zipfile
+
+          product_source_commit = '4def95e8ec9507827c6ceb7b2356486277f322ad'
+          delivery = Path('phone-artifact')
+          delivery.mkdir()
+          apk = delivery / 'backtube-pr7-local-test-ci.apk'
+          shutil.copyfile('faultProbe/build/outputs/apk/debug/faultProbe-debug.apk', apk)
+          tools = Path(os.environ['ANDROID_HOME']) / 'build-tools/37.0.0'
+          signature = subprocess.run(
+              [str(tools / 'apksigner'), 'verify', '--print-certs', str(apk)],
+              check=True, capture_output=True, text=True)
+          certificate = re.search(r'certificate SHA-256 digest: ([0-9a-fA-F]{64})',
+                                  signature.stdout)
+          assert certificate, 'Verified signer certificate digest is required'
+          badging = subprocess.run(
+              [str(tools / 'aapt2'), 'dump', 'badging', str(apk)],
+              check=True, capture_output=True, text=True).stdout
+          assert "name='org.schabi.newpipe.pr7faulttest20261008'" in badging
+          assert "versionCode='1'" in badging and "versionName='1.0-pr7-local'" in badging
+          assert not any(s.startswith('uses-permission') for s in badging.splitlines())
+          manifest = subprocess.run(
+              [str(tools / 'aapt2'), 'dump', 'xmltree', str(apk),
+               '--file', 'AndroidManifest.xml'],
+              check=True, capture_output=True, text=True).stdout
+          assert 'minSdkVersion(0x0101020c)=23' in manifest
+          assert 'targetSdkVersion(0x01010270)=35' in manifest
+          assert 'allowBackup(0x01010280)=false' in manifest
+          assert manifest.count('E: activity ') == 1
+          assert not re.search(r'E: (service|provider|receiver|uses-permission)\b', manifest)
+
+          patterns = [rb'sk-ant-(?:oat[0-9]+|api[0-9]+)-[A-Za-z0-9_-]{20,}',
+                      rb'github_pat_[A-Za-z0-9_]{20,}', rb'gh[pousr]_[A-Za-z0-9]{20,}',
+                      rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----']
+          with zipfile.ZipFile(apk) as archive:
+              assert not any(re.search(pattern, archive.read(name))
+                             for name in archive.namelist() for pattern in patterns)
+              dex = b''.join(archive.read(name) for name in archive.namelist()
+                             if re.fullmatch(r'classes\d*\.dex', name))
+          for forbidden in (b'Lorg/schabi/newpipe/App;', b'Lorg/acra/', b'Landroidx/work/'):
+              assert forbidden not in dex
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          for report in Path('faultProbe/build/test-results/testDebugUnitTest').glob('TEST-*.xml'):
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.get(key, 0))
+          assert totals == dict(tests=7, failures=0, errors=0, skipped=0)
+          lint = ET.parse('faultProbe/build/reports/lint-results-debug.xml').getroot()
+          assert not any(issue.get('severity') in ('Error', 'Fatal')
+                         for issue in lint.findall('issue'))
+
+          metadata = dict(
+              apk_name=apk.name, apk_bytes=apk.stat().st_size,
+              apk_sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),
+              signer_certificate_sha256=certificate.group(1).lower(),
+              signature_verified=True, source_commit=os.environ['GITHUB_SHA'],
+              product_source_commit=product_source_commit,
+              run_id=os.environ['GITHUB_RUN_ID'],
+              package='org.schabi.newpipe.pr7faulttest20261008',
+              version_name='1.0-pr7-local', version_code=1,
+              min_api=23, target_api=35, requested_permissions=0,
+              diagnostic_jvm=totals, actual_phone_runs=0, service_enabled=False,
+              signing_note='Fresh ephemeral GitHub runner debug signature; differs from local APK')
+          (delivery / 'artifact-metadata.json').write_text(
+              json.dumps(metadata, ensure_ascii=False, indent=2) + '\n')
+          guide = Path('docs/verification/auto-report-2026-10-08-phone-guide-ko.md').read_text()
+          guide = guide.replace(
+              '디버그 서명은 기존 개발용 키스토어를 사용합니다.',
+              '이 CI APK는 일회성 GitHub runner의 표준 디버그 서명으로 만들어졌습니다.')
+          guide = guide.replace(
+              'APK 파일의 해시, 크기, 최종 커밋 정보는 빌드 후 조정자가 별도의 파일 목록으로 덧붙입니다.',
+              'APK 파일의 해시, 크기, 최종 커밋 정보는 같은 ZIP의 artifact-metadata.json에 있습니다.')
+          guide = guide.replace('공유해도 되는 것:\n-', '공유해도 되는 것:\n\n-')
+          guide = guide.replace('공유하지 말아야 할 것:\n-', '공유하지 말아야 할 것:\n\n-')
+          preface = ('# CI APK 설치 전 확인\n\n'
+                     'ZIP을 풀고 backtube-pr7-local-test-ci.apk를 설치하세요. '
+                     '전체 재생 앱이 아닌 별도 로컬 진단 앱입니다. '
+                     '이 새 빌드는 로컬 APK와 해시·서명이 다릅니다. '
+                     '이미 같은 진단 패키지가 설치돼 있으면 덮어쓰지 말고 멈추세요.\n\n'
+                     '`민감 표식 없음`은 정해진 가짜 표식의 미잔존 검사이며 '
+                     '모든 개인정보 안전성을 입증하는 검사는 아닙니다. '
+                     '실제 휴대폰 실행은 아직 0회입니다.\n\n')
+          (delivery / 'backtube-pr7-phone-guide-ko.md').write_text(preface + guide)
+          print(json.dumps(metadata, ensure_ascii=False))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Diagnostic APK: `' + apk.name + '`\n\n')
+              summary.write('APK SHA-256: `' + metadata['apk_sha256'] + '`\n\n')
+              summary.write('JVM 7/7; signature valid; permissions 0; phone runs 0.\n')
+          PY
+
+      - name: Upload the APK, Korean guide and verification metadata
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: backtube-pr7-phone-diagnostic-${{ github.run_id }}
+          path: phone-artifact/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Record the official artifact link
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: echo "APK ZIP artifact (GitHub login required) — $ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
