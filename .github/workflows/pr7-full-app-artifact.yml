@@ -1,0 +1,187 @@
+name: PR7 existing full app APK artifact
+
+'on':
+  push:
+    branches: [chore/pr7-full-app-artifact-20261010]
+    paths: [.github/workflows/pr7-full-app-artifact.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr7-existing-full-app-artifact
+  cancel-in-progress: false
+
+jobs:
+  full-app-apk:
+    if: github.repository == 'wnswlfhvkr-code/backtube' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 4def95e8ec9507827c6ceb7b2356486277f322ad
+          persist-credentials: false
+
+      - name: Pin the verified source and preserve the verified debug package
+        run: |
+          test "$(git rev-parse HEAD)" = 4def95e8ec9507827c6ceb7b2356486277f322ad
+          git switch -c feat/claude-auto-report
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Prepare Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install the required Android build packages
+        run: sdkmanager --install 'platforms;android-37.0' 'build-tools;37.0.0'
+
+      - name: Test and build the unchanged full app with reporting OFF
+        run: >-
+          ./gradlew :app:testDebugUnitTest :app:runCheckstyle :app:assembleDebug
+          --no-daemon --no-configuration-cache --max-workers=2 --console=plain
+          -DskipFormatKtlint -PappFaultEndpoint=
+
+      - name: Verify and stage the APK, Korean guide and metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          import xml.etree.ElementTree as ET
+          import zipfile
+
+          product_commit = '4def95e8ec9507827c6ceb7b2356486277f322ad'
+          package = 'org.schabi.newpipe.debug.featclaudeautoreport'
+          local_signer = '4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc'
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == product_commit
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()
+          generated = list(Path('app/build').rglob('BuildConfig.java'))
+          assert any(re.search(r'APP_FAULT_ENDPOINT\s*=\s*""\s*;', p.read_text()) for p in generated)
+          assert re.search(r'"REPORTING_ENABLED"\s*:\s*"false"', Path('relay/wrangler.jsonc').read_text())
+
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          reports = list(Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          assert len(reports) == 48
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.get(key, 0))
+          assert totals == dict(tests=311, failures=0, errors=0, skipped=0)
+          checkstyle = list(Path('app/build/reports/checkstyle').glob('*.xml'))
+          assert checkstyle and not any(ET.parse(p).getroot().findall('.//error') for p in checkstyle)
+
+          delivery = Path('full-app-artifact')
+          delivery.mkdir()
+          apk = delivery / 'backtube-pr7-full-app-4def95e8e-20261010-ci.apk'
+          shutil.copyfile('app/build/outputs/apk/debug/app-debug.apk', apk)
+          tools = Path(os.environ['ANDROID_HOME']) / 'build-tools/37.0.0'
+          signature = subprocess.run(
+              [str(tools / 'apksigner'), 'verify', '--print-certs', str(apk)],
+              check=True, capture_output=True, text=True)
+          certificate = re.search(r'certificate SHA-256 digest:\s*([0-9a-fA-F]{64})',
+                                  signature.stdout + signature.stderr, re.I)
+          assert certificate, 'Verified public signer certificate digest is required'
+          badging = subprocess.run([str(tools / 'aapt2'), 'dump', 'badging', str(apk)],
+                                   check=True, capture_output=True, text=True).stdout
+          assert "name='" + package + "'" in badging
+          assert "versionCode='1015'" in badging and "versionName='0.29.1'" in badging
+          permissions = sorted(set(re.findall(r"uses-permission[^\n]*name='([A-Za-z0-9_.]+)'", badging)))
+          expected_permissions = sorted([
+              'android.permission.ACCESS_NETWORK_STATE', 'android.permission.FOREGROUND_SERVICE',
+              'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+              'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'android.permission.INTERNET',
+              'android.permission.POST_NOTIFICATIONS', 'android.permission.READ_EXTERNAL_STORAGE',
+              'android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.SYSTEM_ALERT_WINDOW',
+              'android.permission.WAKE_LOCK', 'android.permission.WRITE_EXTERNAL_STORAGE',
+              package + '.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'])
+          assert permissions == expected_permissions
+          manifest = subprocess.run([str(tools / 'aapt2'), 'dump', 'xmltree', str(apk),
+                                     '--file', 'AndroidManifest.xml'],
+                                    check=True, capture_output=True, text=True).stdout
+          assert 'minSdkVersion(0x0101020c)=23' in manifest
+          assert 'targetSdkVersion(0x01010270)=35' in manifest
+          patterns = [rb'sk-ant-(?:oat[0-9]+|api[0-9]+)-[A-Za-z0-9_-]{20,}',
+                      rb'github_pat_[A-Za-z0-9_]{20,}', rb'gh[pousr]_[A-Za-z0-9]{20,}',
+                      rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----']
+          with zipfile.ZipFile(apk) as archive:
+              for name in archive.namelist():
+                  content = archive.read(name)
+                  assert not any(re.search(pattern, content) for pattern in patterns)
+          signer = certificate.group(1).lower()
+          metadata = dict(
+              apk_name=apk.name, apk_bytes=apk.stat().st_size,
+              apk_sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),
+              signer_certificate_sha256=signer, signature_verified=True,
+              signer_matches_local_reference=signer == local_signer,
+              local_reference_signer_certificate_sha256=local_signer,
+              product_source_commit=product_commit,
+              delivery_workflow_commit=os.environ['GITHUB_SHA'], run_id=os.environ['GITHUB_RUN_ID'],
+              package=package, version_name='0.29.1', version_code=1015,
+              min_api=23, target_api=35, permissions=permissions, permissions_match_verified_local_apk=True,
+              app_jvm=totals, unit_suites=len(reports), checkstyle_errors=0,
+              automatic_external_reporting_enabled=False, new_product_features=False,
+              full_app_phone_runs=0,
+              same_package_installed_policy='STOP; do not overwrite, uninstall or clear data',
+              signing_note='CI standard debug signing; verify artifact identity; no existing-package update is approved')
+          (delivery / 'artifact-metadata.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + '\n')
+          guide = '''# 기존 PR7 전체 앱 실기기 확인
+
+          이 APK는 검증된 기존 PR7 커밋 4def95e8의 재현 빌드입니다. 새 Claude 기능 버전이 아닙니다.
+          별도 로컬 진단 앱과 달리 실제 플레이어 전체 앱이며, 자동 외부 오류 보고는 OFF입니다.
+
+          ## 설치 전 확인
+
+          GitHub에 로그인해 ZIP을 받고 압축을 푸세요. APK 이름과 실제 SHA-256·서명 인증서 지문은 같은 ZIP의 artifact-metadata.json에 있습니다.
+          버전은 0.29.1 / 코드 1015, 패키지는 org.schabi.newpipe.debug.featclaudeautoreport입니다.
+          일반 backtube 및 진단 앱 패키지와 분리되어 있습니다. 같은 전체 앱 패키지가 이미 설치돼 있으면 설치를 멈추세요.
+          이 CI 빌드는 로컬 APK와 해시·디버그 서명이 다를 수 있습니다. 기존 설치의 서명 일치를 확인하지 않은 업데이트는 권하지 않습니다.
+          기존 앱을 삭제하거나 데이터를 지우거나 보안 정책을 끄지 마세요. 이미 허용한 설치 경로를 사용하고 차단되면 멈추세요.
+          기존 사용자 데이터 자동 이전은 하지 않습니다. 제품 소스와 권한 선언은 검증된 로컬 APK와 같습니다.
+
+          ## 최소 확인 절차
+
+          1. 기존 같은 패키지가 없을 때만 APK를 새로 설치하고 설치 화면에서 바로 열어 테스트 앱을 구분하세요.
+          2. 앱 정보에서 버전 0.29.1을 확인하세요. 로그인·결제·추가 권한 변경 없이 공개 영상을 30초 정도 재생하세요.
+          3. 일시정지/재개와 한 번의 탐색을 확인하고, 홈 화면에 잠깐 갔다가 돌아와 재생 상태를 확인하세요.
+          4. Android 앱 정보에서 이 테스트 앱만 강제 종료한 뒤 다시 열어 정상 시작·재생을 확인하세요. 데이터 삭제는 하지 마세요.
+          5. 기존 설정만으로 가능한 경우 짧은 오프라인 저장/재생을 확인하세요. 새 권한이나 저장 위치 변경이 필요하면 해당 항목은 미실시로 남기세요.
+
+          성공/실패/미실시 여부와 버전만 알려 주세요. 영상 제목·URL·계정·원문 오류·로그·개인 화면은 보내지 않아도 됩니다.
+          일부러 충돌을 유발하거나 서버 전송을 켜지 마세요. 전체 앱의 ACRA 기록 연결 자체는 이 재생 확인만으로 인수 통과가 되지 않습니다.
+          앞서 통과한 중복 방지·강제 종료 후 기록 유지는 별도 진단 앱의 결과입니다.
+          '''
+          import textwrap
+          (delivery / 'backtube-pr7-full-app-phone-guide-ko.md').write_text(textwrap.dedent(guide))
+          print(json.dumps(metadata, ensure_ascii=False))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Existing PR7 full app APK; source `' + product_commit + '`; no new features.\n\n')
+              summary.write('APK SHA-256: `' + metadata['apk_sha256'] + '`\n\n')
+              summary.write('JVM 311/311; Checkstyle 0; signature valid; reporting OFF; full-app phone runs 0.\n')
+          PY
+
+      - name: Upload the full APK, Korean guide and verification metadata
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: backtube-pr7-existing-full-app-${{ github.run_id }}
+          path: full-app-artifact/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Record the official artifact link
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: echo "Full APK ZIP artifact (GitHub login required) — $ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
