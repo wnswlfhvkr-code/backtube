@@ -260,6 +260,11 @@ public class OfflineLibraryAccessTest {
             final View row = shelf.findViewById(R.id.offline_saved_rows)
                     .findViewWithTag(saved.id);
             assertTrue(row.findViewById(R.id.itemRoot).hasOnClickListeners());
+            final AccessibilityNodeInfo node = row.findViewById(R.id.itemRoot)
+                    .createAccessibilityNodeInfo();
+            assertTrue(node.getActionList().stream().anyMatch(action -> action.getId()
+                    == AccessibilityNodeInfo.ACTION_CLICK && action.getLabel() != null
+                    && context.getString(R.string.offline_play).contentEquals(action.getLabel())));
             assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());

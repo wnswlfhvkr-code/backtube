@@ -32,6 +32,7 @@ import us.shandian.giga.service.DownloadManager;
 import us.shandian.giga.service.DownloadManagerService;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.core.view.MenuItemCompat;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.annotation.NonNull;
@@ -472,7 +473,9 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                     && !"giga".equals(entry.source) && !library.isCopying(entry.id)) {
                 menu.getMenu().add(Menu.NONE, R.id.offline_retry, 2, R.string.retry);
             }
-            menu.getMenu().add(Menu.NONE, R.id.offline_delete, 3, R.string.delete);
+            MenuItemCompat.setContentDescription(menu.getMenu()
+                    .add(Menu.NONE, R.id.offline_delete, 3, R.string.delete),
+                    getString(R.string.offline_delete_description, entry.title));
         }
         menu.setOnMenuItemClickListener(item -> {
             if (moving || dragging) {

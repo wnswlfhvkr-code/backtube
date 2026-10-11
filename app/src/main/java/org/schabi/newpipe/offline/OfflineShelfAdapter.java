@@ -13,10 +13,12 @@ import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.DiffUtil;
 
 import org.schabi.newpipe.R;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 
 /** Reuses play-queue rows without its online image loader or mutable player queue. */
@@ -33,14 +35,16 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     }
 
     void setEntries(final List<OfflineStore.Entry> entries) {
+        final List<OfflineStore.Entry> previous = new ArrayList<>(order.items());
         if (order.replace(entries)) {
-            notifyDataSetChanged();
+            calculateUpdates(previous, order.items()).dispatchUpdatesTo(this);
         }
     }
 
     void completeMove(final List<OfflineStore.Entry> entries) {
+        final List<OfflineStore.Entry> previous = new ArrayList<>(order.items());
         order.completeMove(entries);
-        notifyDataSetChanged();
+        calculateUpdates(previous, order.items()).dispatchUpdatesTo(this);
     }
 
     void setCurrentUrl(@Nullable final String url) {
@@ -90,9 +94,33 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     }
 
     void cancelDrag() {
+        final List<OfflineStore.Entry> previous = new ArrayList<>(order.items());
         draggedId = null;
         order.cancelDrag();
-        notifyDataSetChanged();
+        calculateUpdates(previous, order.items()).dispatchUpdatesTo(this);
+    }
+
+    static DiffUtil.DiffResult calculateUpdates(final List<OfflineStore.Entry> previous,
+                                                final List<OfflineStore.Entry> next) {
+        return DiffUtil.calculateDiff(new DiffUtil.Callback() {
+            @Override public int getOldListSize() {
+                return previous.size();
+            }
+
+            @Override public int getNewListSize() {
+                return next.size();
+            }
+
+            @Override public boolean areItemsTheSame(final int oldPosition, final int newPosition) {
+                return previous.get(oldPosition).id.equals(next.get(newPosition).id);
+            }
+
+            @Override public boolean areContentsTheSame(final int oldPosition,
+                                                         final int newPosition) {
+                // Progress lives outside Entry; positional move actions also need rebinding.
+                return false;
+            }
+        });
     }
 
     OfflineShelfOrder.Move moveBy(final String id, final int offset) {
@@ -102,8 +130,10 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     @NonNull
     @Override
     public Holder onCreateViewHolder(@NonNull final ViewGroup parent, final int viewType) {
-        return new Holder(LayoutInflater.from(parent.getContext())
+        final Holder holder = new Holder(LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.offline_shelf_item, parent, false));
+        installHandleTouch(holder);
+        return holder;
     }
 
     @Override
@@ -148,18 +178,45 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
                 listener.play(selected);
             }
         });
+        ViewCompat.replaceAccessibilityAction(holder.root, AccessibilityActionCompat.ACTION_CLICK,
+                holder.root.getContext().getString(R.string.offline_play), null);
         holder.root.setOnLongClickListener(view -> showMenu(holder, holder.menu, false));
         holder.menu.setOnClickListener(view -> showMenu(holder, view, false));
         holder.handle.setOnClickListener(view -> showMenu(holder, view, true));
-        holder.handle.setOnTouchListener((view, event) -> {
-            if (interactionEnabled && draggedId == null
-                    && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                listener.startDrag(holder);
-            }
-            // The child consumes its own click; dragging cancels that click through RecyclerView.
-            return false;
-        });
         addMoveActions(holder, position);
+    }
+
+    private void installHandleTouch(final Holder holder) {
+        // Installed once: rebinding a row must not forget an already accepted touch gesture.
+        holder.handle.setOnTouchListener(new View.OnTouchListener() {
+            private boolean touching;
+            private boolean startedDrag;
+
+            @Override public boolean onTouch(final View view, final MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        touching = true;
+                        startedDrag = false;
+                        if (interactionEnabled && draggedId == null) {
+                            listener.startDrag(holder);
+                            startedDrag = draggedId != null;
+                        }
+                        break;
+                    case MotionEvent.ACTION_UP:
+                        if (touching && !startedDrag) {
+                            view.performClick();
+                        }
+                        touching = false;
+                        break;
+                    case MotionEvent.ACTION_CANCEL:
+                        touching = false;
+                        break;
+                    default:
+                        break;
+                }
+                return true;
+            }
+        });
     }
 
     private boolean showMenu(final Holder holder, final View anchor, final boolean movementOnly) {
@@ -178,16 +235,20 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
             return;
         }
         if (position > 0) {
-            addMoveAction(holder, R.id.offline_move_up, R.string.offline_move_up, -1);
+            addMoveAction(holder, position, R.id.offline_move_up,
+                    R.string.offline_move_up_description, -1);
         }
         if (position + 1 < getItemCount()) {
-            addMoveAction(holder, R.id.offline_move_down, R.string.offline_move_down, 1);
+            addMoveAction(holder, position, R.id.offline_move_down,
+                    R.string.offline_move_down_description, 1);
         }
     }
 
-    private void addMoveAction(final Holder holder, final int actionId, final int title,
+    private void addMoveAction(final Holder holder, final int position,
+                               final int actionId, final int title,
                                final int offset) {
-        final String label = holder.root.getContext().getString(title);
+        final String label = holder.root.getContext().getString(title,
+                holder.title.getText(), position + 1, getItemCount());
         ViewCompat.replaceAccessibilityAction(holder.root,
                 new AccessibilityActionCompat(actionId, label), label, (view, arguments) -> {
                     final OfflineStore.Entry entry = boundEntry(holder);

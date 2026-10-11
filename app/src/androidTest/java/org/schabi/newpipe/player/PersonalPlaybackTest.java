@@ -231,18 +231,23 @@ public class PersonalPlaybackTest {
                         .putExtra("origin", origin).putExtra("service", 0)
                         .putExtra("mime", "audio/wav").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         try {
-            assertTrue("shelf import did not complete", waitFor(() -> callOnMain(() ->
-                    library.store().find(0, origin) != null), 15));
+            assertTrue("shelf import did not complete", waitFor(() -> callOnMain(() -> {
+                final var entry = library.store().find(0, origin);
+                return entry != null && entry.state
+                        == org.schabi.newpipe.offline.OfflineStore.State.READY;
+            }), 15));
             assertTrue("shelf did not render saved playback action", waitFor(() -> callOnMain(() ->
-                    offlinePlayButton(shelf) != null), 10));
+                    offlinePlayRow(shelf, library.store().find(0, origin).id) != null), 10));
             runOnMain(() -> {
-                final android.widget.Button play = offlinePlayButton(shelf);
+                final android.view.View play = offlinePlayRow(shelf,
+                        library.store().find(0, origin).id);
                 play.requestRectangleOnScreen(new Rect(0, 0, play.getWidth(), play.getHeight()),
                         true);
             });
             captureScreen(context, "offline-shelf-generated.png");
             runOnMain(() -> {
-                final android.widget.Button play = offlinePlayButton(shelf);
+                final android.view.View play = offlinePlayRow(shelf,
+                        library.store().find(0, origin).id);
                 assertTrue("saved playback action not visible", play.getGlobalVisibleRect(
                         new Rect()));
                 assertTrue("saved playback action not clickable", play.performClick());
@@ -263,16 +268,16 @@ public class PersonalPlaybackTest {
         }
     }
 
-    private android.widget.Button offlinePlayButton(final android.app.Activity shelf) {
-        final java.util.ArrayList<android.view.View> matches = new java.util.ArrayList<>();
-        shelf.findViewById(android.R.id.content).findViewsWithText(matches,
-                context.getString(R.string.offline_play), android.view.View.FIND_VIEWS_WITH_TEXT);
-        for (final android.view.View match : matches) {
-            if (match instanceof android.widget.Button && match.isShown()) {
-                return (android.widget.Button) match;
-            }
+    private android.view.View offlinePlayRow(final android.app.Activity shelf, final String id) {
+        final androidx.recyclerview.widget.RecyclerView rows =
+                shelf.findViewById(R.id.offline_saved_rows);
+        final android.view.View row = rows.findViewWithTag(id);
+        if (row == null || !row.isShown()) {
+            // This fixture is appended to the retained shelf; render its virtualized final row.
+            rows.scrollToPosition(Math.max(0, rows.getAdapter().getItemCount() - 1));
+            return null;
         }
-        return null;
+        return row.findViewById(R.id.itemRoot);
     }
 
     @Test

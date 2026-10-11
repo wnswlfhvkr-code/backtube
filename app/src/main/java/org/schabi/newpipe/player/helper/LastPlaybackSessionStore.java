@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.exoplayer2.Player;
+
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -163,7 +165,8 @@ public final class LastPlaybackSessionStore {
     }
 
     private static boolean isValidRepeatMode(final int repeatMode) {
-        return repeatMode >= 0 && repeatMode <= 2;
+        return repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE
+                || repeatMode == Player.REPEAT_MODE_ALL;
     }
 
     private static boolean isValidQueue(@NonNull final PlayQueue queue,
@@ -188,9 +191,10 @@ public final class LastPlaybackSessionStore {
     public static final class Snapshot {
         @NonNull
         private final PlayQueue queue;
+        @Player.RepeatMode
         private final int repeatMode;
 
-        Snapshot(@NonNull final PlayQueue queue, final int repeatMode) {
+        Snapshot(@NonNull final PlayQueue queue, @Player.RepeatMode final int repeatMode) {
             this.queue = queue;
             this.repeatMode = repeatMode;
         }
@@ -200,6 +204,7 @@ public final class LastPlaybackSessionStore {
             return queue;
         }
 
+        @Player.RepeatMode
         public int getRepeatMode() {
             return repeatMode;
         }

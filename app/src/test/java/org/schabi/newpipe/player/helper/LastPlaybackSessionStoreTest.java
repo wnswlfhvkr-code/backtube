@@ -138,6 +138,26 @@ public class LastPlaybackSessionStoreTest {
         assertNull(savedJson.get());
     }
 
+    @Test
+    public void allRepeatModesRoundTripAndInvalidModesClearTheSession() {
+        final PlayQueue queue = new SinglePlayQueue(item(0, "backtube-offline:one", "One"));
+        for (final int mode : new int[]{0, 1, 2}) {
+            store.save(queue, 123, mode);
+            assertEquals(mode, store.load().getRepeatMode());
+            assertTrue(store.load().getQueue().isOfflineOnly());
+        }
+        for (final int invalid : new int[]{-1, 3, Integer.MAX_VALUE}) {
+            store.save(queue, 123, invalid);
+            assertNull(store.load());
+            assertNull(savedJson.get());
+            store.save(queue, 123, 0);
+            savedJson.set(savedJson.get().replace("\"repeat_mode\":0",
+                    "\"repeat_mode\":" + invalid));
+            assertNull(store.load());
+            assertNull(savedJson.get());
+        }
+    }
+
     private static StreamInfoItem item(final int serviceId, final String url, final String title) {
         final StreamInfoItem item = new StreamInfoItem(serviceId, url, title,
                 StreamType.AUDIO_STREAM);

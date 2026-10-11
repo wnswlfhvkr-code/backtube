@@ -14,13 +14,6 @@ import androidx.core.content.ContextCompat;
  */
 public final class KeyboardUtil {
 
-    /**
-     * Flag for {@link #hideKeyboard(Activity, EditText)} to force the keyboard to hide.
-     * This is required for non-touch devices like Fire TV where the system
-     * flags the focus as an explicit user action.
-     */
-    private static final int CLEAR_SOFT_INPUT_FORCED = 0;
-
     private KeyboardUtil() {
     }
 
@@ -57,7 +50,8 @@ public final class KeyboardUtil {
         final InputMethodManager imm = ContextCompat.getSystemService(activity,
                 InputMethodManager.class);
         if (imm != null) {
-            imm.hideSoftInputFromWindow(editText.getWindowToken(), CLEAR_SOFT_INPUT_FORCED);
+            // No restrictions: also hide explicitly forced keyboards on non-touch devices.
+            imm.hideSoftInputFromWindow(editText.getWindowToken(), 0);
         }
 
         editText.clearFocus();

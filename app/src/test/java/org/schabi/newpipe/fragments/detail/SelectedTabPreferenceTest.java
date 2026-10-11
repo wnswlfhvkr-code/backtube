@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import android.content.SharedPreferences;
 
@@ -36,6 +38,9 @@ public class SelectedTabPreferenceTest {
         final String key = "stream_info_selected_tab";
         when(preferences.getString(eq(key), anyString())).thenAnswer(call ->
                 stored == null ? call.<String>getArgument(1) : stored);
-        return VideoDetailFragment.readSelectedTab(preferences, key);
+        final String selected = VideoDetailFragment.readSelectedTab(preferences, key);
+        verify(preferences).getString(key, "NEXT VIDEO");
+        verifyNoMoreInteractions(preferences);
+        return selected;
     }
 }

@@ -1,9 +1,27 @@
 # Related default tab and compact saved library — resume record
 
-**Latest state (2026-10-11):** Activity integration is complete; fresh app JVM
-352/352, Checkstyle zero violations, instrumentation source compilation and
-unsigned release build passed. Actual Android execution is 0 and compatible
-signing is blocked. See the Active resume and Final delivery sections below.
+**Latest scope (2026-10-11, follow-up):** Starting from clean
+`4f8c53f39be157f28e8e9fffd003ee087be63409`, fix the existing debug 4/release 3
+lint errors and eight compact-shelf warnings with narrow correctness/accessibility
+changes and stronger regressions. No concurrent writer was found (old git/Java
+processes are zombies). Fresh baseline lint reproduced debug 4 errors/373 warnings
+and release 3 errors/374 warnings. Narrow fixes passed 358 JVM tests, Checkstyle,
+instrumentation compilation and an unsigned release build. Final verification of
+the corrected real About host registration and strengthened instrumentation tests
+passed: debug/release lint each has 0 errors and 366 existing warnings, with no
+new issue against the same-environment baseline. Source publication follows on
+the existing branch, with exact remote HEAD/tree reported in the parent handoff.
+The parent reports that the compatible signed version 1017 APK at source `4f8c53f`
+was already built in the original existing signing environment and delivered.
+That delivery remains complete; this follow-up returns source verification and
+does not create keys, transfer keys, inspect credentials or deliver unsigned APKs.
+Actual Android execution in this environment has been 0; check current availability
+without bypassing the previously observed read-only ADB home or missing KVM.
+Claude use/install/CLI/auth checks, resets, uninstall, merge, deployment, new public
+release, paid APIs and PR-body edits remain prohibited. Preserve the approved UI.
+
+The earlier integration/delivery sections below are historical environment-local
+results, including the local signing limitation subsequently resolved by the parent.
 
 The original `c9fe248` incomplete checkpoint is retained below as history. Its
 preservation-turn stop instruction was superseded by the user's explicit request
@@ -263,3 +281,93 @@ the parent and retained in the local delivery record. Source publication and
 Library saving are complete; compatible signing and actual Android execution
 remain the two blockers described above. No pipeline/signing-key generation was
 triggered to work around these limits.
+
+## Narrow lint and regression follow-up — 2026-10-11
+
+Starting source: `4f8c53f39be157f28e8e9fffd003ee087be63409`. The approved compact
+layout, local placeholder, persisted UUID order, drop-time atomic write/rollback,
+active queue snapshot and local-only playback remain the implementation under test.
+No new thumbnail lookup, preference migration or UI design was introduced.
+
+The four existing debug errors (three in release) were corrected at their causes:
+
+- Register the actual `net.newpipe.app.ComposeActivity` used by About navigation,
+  replacing the nonexistent legacy activity and restoring its intended About label.
+  Both final merged manifests contain exactly one actual host, `exported=false`,
+  the About label and the shared manifest's inherited `adjustResize`; neither
+  contains `AboutActivity`.
+- Express the existing unrestricted keyboard-hide flag as the supported literal
+  zero. Forced keyboard hiding on non-touch devices keeps the same flag value.
+- Express the validated saved repeat mode with ExoPlayer's `RepeatMode` contract
+  and named OFF/ONE/ALL constants. Malformed persisted modes remain rejected.
+- Register the token-checked, separately installed audio-focus fixture through
+  `ContextCompat` with EXPORTED explicitly on all supported Android versions.
+  Its existing cross-UID test control is retained; it is instrumentation-only.
+
+The eight compact warnings across variants were resolved without suppression or
+resource/test deletion. Three full adapter invalidations now dispatch synchronous
+DiffUtil changes using saved UUID identity and copied pre-mutation order. Retained
+rows rebind because download progress is external to Entry and positional move
+accessibility actions need current positions. Drag preview still emits its existing
+move events; refused refreshes during a pending write produce no update.
+Four existing strings now label playback, positional movement and deletion
+accessibility actions. The handle consumes touch events and explicitly performs
+click only for a sequence that never started a drag; its accepted-drag latch is
+installed once so rebinding/clearView timing cannot turn a drag into a menu click.
+Keyboard/accessibility activation retains the movement menu.
+
+Regression additions cover duplicate-title identity mapping, cancel restoration,
+empty removal/insertion, live-status rebinding, valid/invalid saved repeat modes and
+local queue scope. The four Related preference tests additionally verify that
+reading any choice writes no preference or other setting. The older Android
+playback test now waits for the generated import to be READY, scrolls its appended
+virtualized row into view, and plays the exact saved UUID instead of searching for
+the removed card button. Android source also checks the labeled playback action.
+
+TDD evidence is bounded: fresh lint reproduced the requested failing baseline
+before source edits, then the final reports cleared those errors/warnings. The
+first attempted JVM adapter-observer test hit the Android mockable Observable
+stub (`mObservers` null); that is an environment/test-harness failure, not a
+reproduced product failure. Its replacement exercises real DiffUtil update events
+without Android Observable and passes. No pre-existing tests were removed, and no
+runtime RED/Android gesture execution is claimed for this follow-up.
+
+Fresh final evidence in `/workspace/scratch/backtube-lint-followup`:
+
+| Check | Result |
+| --- | --- |
+| App JVM | 358 tests / 52 suites; 0 failures, errors or skips |
+| Checkstyle | 0 violations |
+| Kotlin lint | successful/up-to-date; no Kotlin changed |
+| Debug Android test Java/Kotlin/resources | compiled; not executed |
+| Debug lint | 4 errors/373 warnings → 0 errors/366 warnings |
+| Release lint | 3 errors/374 warnings → 0 errors/366 warnings |
+| Lint new-issue comparison | 0 added issues in each variant |
+| Final unsigned release build | successful; final corrected combined run 3m50s |
+| Independent source review | no remaining Critical/Important finding |
+| Actual Android UI/drag/playback runs | **0** |
+
+Debug's old instrumentation reference already counted the playback string as used,
+so seven warning instances disappear there; release removes all eight compact
+warning instances. The same eight-warning scope across variants is resolved.
+The remaining 366 warnings are pre-existing; lint is not globally warning-clean.
+The transient About unused-resource warning from removing its old declaration was
+eliminated by registering the actual host, without fake references or suppression.
+
+The allowed current ADB attempt again failed before enumeration (exit 134):
+`Cannot mkdir '/home/agent/.android': Read-only file system`. The current SDK has no
+emulator executable, and `/dev/kvm` is absent. No home, permission or key workaround
+was attempted. Gesture timing, TalkBack, rendering and ExoPlayer device behavior
+remain unexecuted. The Related ON/OFF and separate-panel conditions were checked
+in source and XML; phone has no separate pane, `layout-large-land` has one.
+Existing installations still need Related visible, select it once on playback
+detail, then background the app to trigger `onPause` persistence. Explicit prior
+Comments and automatically stored old Comments remain indistinguishable, so no
+setting is reset or migrated.
+
+The parent confirms compatible signed APK version 1017 at source `4f8c53f` was
+already delivered from the original existing signing environment. That is complete
+and is not replaced by this follow-up's unsigned build. This task delivers source
+verification; the parent coordinates any later compatible signing/update. No new
+installable APK, new key, credential check, key transfer, Library upload, app
+uninstall/reset, merge, deployment, public release or PR-body edit was performed.
