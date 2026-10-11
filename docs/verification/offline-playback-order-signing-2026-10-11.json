@@ -58,6 +58,22 @@
       "suites": 49,
       "freshly_rerun_for_packaging_only": false
     },
-    "parallel_installation_runtime_verified": false
+    "parallel_installation_runtime_verified": false,
+    "permission_diff": {
+      "reference_ci_application_id": "org.schabi.newpipe.debug.featclaudeautoreport",
+      "normalized_uses_permission_added": [],
+      "normalized_uses_permission_removed": [
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
+      "normalized_declared_permission_added": [],
+      "normalized_declared_permission_removed": [],
+      "raw_uses_permission_added": [
+        "org.schabi.newpipe.continuous.testofflinelibrary20261011.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "raw_uses_permission_removed": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "org.schabi.newpipe.debug.featclaudeautoreport.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ]
+    }
   }
 }

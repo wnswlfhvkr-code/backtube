@@ -62,9 +62,11 @@ needed; branch-derived test identity is the existing build behavior.
 - Version: `0.29.1-offline-test-98511ab`, code 1016.
 - APK SHA-256: `c796c2d3f3212837f160024ed7b34044165c81a0eadaf1e223c91caa865f2d2e`.
 - Signature verified; public certificate matches the existing local signer above.
-- Provider authority uses the distinct application ID; no shared UID. Permission
-  declarations are unchanged after normalizing the application-specific receiver
-  permission. No runtime permission or default-handler change was performed.
+- Provider authority uses the distinct application ID; no shared UID. Compared
+  with the verified CI APK, application-ID-normalized permission additions are
+  zero and `android.permission.READ_EXTERNAL_STORAGE` is removed. The generated
+  receiver permission uses the new application ID. No runtime permission or
+  default-handler change was performed.
 - The saved store uses `context.getFilesDir()/offline`; database/preferences belong
   to the new app's own context. No automatic data transfer or cross-app access was
   added. Existing temporary saves remain only in their original app.
@@ -81,3 +83,8 @@ The candidate is retained locally with public metadata; it is not an original-ap
 update, a CI publication, automatic migration, or deployment. No existing app was
 uninstalled or reset. No access permission was expanded. Main is untouched;
 Claude/authentication/connection retries remain stopped.
+
+The verified candidate was saved successfully to ChatGPT Library for native APK
+attachment. Its local bytes still match the verified size (11,625,138 bytes) and
+SHA-256 after saving. Library identity/version metadata is retained privately in
+the delivery record. No product source or PR body was changed for this delivery.
