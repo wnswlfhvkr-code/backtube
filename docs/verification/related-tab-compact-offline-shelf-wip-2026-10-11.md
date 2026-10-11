@@ -241,3 +241,25 @@ saving and approved-branch push are the remaining steps.
 Source implementation and requested local verification are finished. Remaining
 blockers are existing-signature compatibility and actual Android runtime/device
 verification. The unsigned Library artifact is compilation evidence only.
+
+### Remote publication verified
+
+The approved source/test/resume tree was published to the existing branch at
+product commit `5eb18a59623fcc99e93fed5b5b9de1fa52374b07`. The remote tree SHA
+`ac281af188ce37602c386b294474c3f414b3c25a` exactly matched the verified local
+commit `4fa405bdccd0658830cf42456a84d3588867ba00`; all six blob SHAs matched.
+The local transport commit is retained on `local/ui-source-4fa405bdc`.
+
+Direct shell `git push` had no stored Git credentials and stopped with prompts
+disabled. No authentication check/login/token retrieval was attempted. The
+already connected official GitHub app uploaded the identical six blobs/tree and
+fast-forwarded the existing ref only with expected HEAD `c9fe248...`. A subsequent
+Git fetch confirmed the published HEAD/tree. PR7 remains Draft, its base remains
+`feat/playback-feedback`, and its body is exactly unchanged.
+
+This final documentation update records that publication; it changes no product
+source. The exact final remote HEAD and private Library file ID are returned to
+the parent and retained in the local delivery record. Source publication and
+Library saving are complete; compatible signing and actual Android execution
+remain the two blockers described above. No pipeline/signing-key generation was
+triggered to work around these limits.
