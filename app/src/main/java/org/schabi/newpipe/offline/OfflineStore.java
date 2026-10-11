@@ -434,7 +434,14 @@ public final class OfflineStore {
             ordered.putIfAbsent(entry.id, entry);
         }
         final List<String> order = new ArrayList<>(ordered.keySet());
-        persistOrder(order);
+        if (!"1".equals(saved.getProperty("version"))
+                || !String.join(",", order).equals(saved.getProperty("ids"))) {
+            try {
+                persistOrder(order);
+            } catch (final IOException ignored) {
+                // Order repair is best effort; complete saved files remain readable.
+            }
+        }
         applyOrder(order);
     }
 

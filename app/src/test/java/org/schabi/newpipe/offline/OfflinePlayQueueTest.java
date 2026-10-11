@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertNull;
 
 public class OfflinePlayQueueTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
@@ -164,5 +165,124 @@ public class OfflinePlayQueueTest {
             assertTrue(restored.isOfflineOnly());
             assertEquals(second.localUrl(), restored.getItem().getUrl());
         }
+    }
+
+    @Test public void transitionUsesIdentityAfterDeletingEarlierOpenReader() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry second = saved("second");
+        saved("third");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.retain(first.id);
+        store.delete(first.id);
+        assertEquals(0, queue.reconcileTransition(second.localUrl(), store, true));
+        assertEquals(second.localUrl(), queue.getItem().getUrl());
+        store.release(first.id);
+        // A later timeline removal callback still identifies B despite its old timeline index.
+        assertEquals(0, queue.reconcileTransition(second.localUrl(), store, false));
+        assertEquals(second.localUrl(), queue.getItem().getUrl());
+    }
+
+    @Test public void rejectedTimestampCallbackKeepsSavedSelection() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        saved("second");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        final StreamInfoItem remote = new StreamInfoItem(0, "https://example.test/remote",
+                "remote", StreamType.AUDIO_STREAM);
+        final PlayQueueItem item = new SinglePlayQueue(remote).getItem();
+        assertFalse(queue.enqueueNextAndSelect(item));
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+        assertEquals(2, queue.size());
+    }
+
+    @Test public void multipleEarlierRemovalsPreserveTransitionTarget() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry second = saved("second");
+        final OfflineStore.Entry target = saved("target");
+        saved("last");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(first.id);
+        store.delete(second.id);
+        assertEquals(0, queue.reconcileTransition(target.localUrl(), store, true));
+        assertEquals(target.localUrl(), queue.getItem().getUrl());
+    }
+
+    @Test public void unavailableAutomaticTailStopsWithoutWrapping() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry last = saved("last");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(last.id);
+        assertEquals(-1, queue.reconcileTransition(last.localUrl(), store, true));
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+    }
+
+    @Test public void unavailableAutomaticMiddleSelectsValidSuccessor() throws Exception {
+        saved("first");
+        final OfflineStore.Entry missing = saved("missing");
+        final OfflineStore.Entry next = saved("next");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(missing.id);
+        assertEquals(1, queue.reconcileTransition(missing.localUrl(), store, true));
+        assertEquals(next.localUrl(), queue.getItem().getUrl());
+    }
+
+    @Test public void unavailableAutomaticTailMayWrapOnlyWithRepeatAll() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry last = saved("last");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(last.id);
+        assertEquals(0, queue.reconcileTransition(last.localUrl(), store, true, true));
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+    }
+
+    @Test public void failedTailStopsOffButRepeatAllCanSelectEarlierSave() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        saved("last");
+        final OfflinePlayQueue off = new OfflinePlayQueue(store, "Saved copy");
+        off.setIndex(1);
+        assertFalse(off.discardFailedCurrent(store, false));
+        assertEquals(1, off.size());
+        final OfflinePlayQueue all = new OfflinePlayQueue(store, "Saved copy");
+        all.setIndex(1);
+        assertTrue(all.discardFailedCurrent(store, true));
+        assertEquals(first.localUrl(), all.getItem().getUrl());
+    }
+
+    @Test public void failedMiddleAdvancesAndRepeatedFailuresExhaustSnapshot() throws Exception {
+        saved("first");
+        saved("middle");
+        final OfflineStore.Entry next = saved("next");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        queue.setIndex(1);
+        assertTrue(queue.discardFailedCurrent(store, false));
+        assertEquals(next.localUrl(), queue.getItem().getUrl());
+        assertTrue(queue.discardFailedCurrent(store, true));
+        assertFalse(queue.discardFailedCurrent(store, true));
+        assertTrue(queue.isEmpty());
+    }
+
+    @Test public void deletedLastCompletionStopsUnlessRepeatAll() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry last = saved("last");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        queue.setIndex(1);
+        store.retain(last.id);
+        store.delete(last.id);
+        assertNull(queue.completionSuccessor(store, false));
+        assertEquals(first.localUrl(), queue.completionSuccessor(store, true).getUrl());
+        store.release(last.id);
+    }
+
+    @Test public void completionSkipsUnavailableSuccessorsAndBoundsRepeatSearch() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry missing = saved("missing");
+        final OfflineStore.Entry next = saved("next");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(missing.id);
+        assertEquals(next.localUrl(), queue.completionSuccessor(store, false).getUrl());
+        queue.setIndex(2);
+        assertNull(queue.completionSuccessor(store, false));
+        store.delete(first.id);
+        store.delete(next.id);
+        assertNull(queue.completionSuccessor(store, true));
     }
 }

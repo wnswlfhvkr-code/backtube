@@ -1,6 +1,7 @@
 package org.schabi.newpipe.player.playqueue;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
@@ -73,6 +74,95 @@ public final class OfflinePlayQueue extends PlayQueue {
         if (isLocal(item.getUrl())) {
             super.enqueueNext(item, skipIfSame);
         }
+    }
+
+    @Override public synchronized boolean enqueueNextAndSelect(@NonNull final PlayQueueItem item) {
+        return isLocal(item.getUrl()) && super.enqueueNextAndSelect(item);
+    }
+
+    // Timeline indices can become stale as deleted predecessors are removed.
+    public synchronized int reconcileTransition(final String localUrl, final OfflineStore store,
+                                                 final boolean includeCurrent) throws IOException {
+        return reconcileTransition(localUrl, store, includeCurrent, false);
+    }
+
+    public synchronized int reconcileTransition(final String localUrl, final OfflineStore store,
+                                                 final boolean includeCurrent,
+                                                 final boolean repeatAll) throws IOException {
+        final PlayQueueItem target = includeCurrent
+                ? transitionTarget(localUrl, store, repeatAll) : itemWithUrl(localUrl);
+        if (target != null && indexOf(target) != getIndex()) {
+            setIndex(indexOf(target));
+        }
+        pruneUnavailable(store, includeCurrent);
+        return isEmpty() || (includeCurrent && target == null) ? -1 : getIndex();
+    }
+
+    @Nullable
+    private PlayQueueItem itemWithUrl(final String localUrl) {
+        for (int i = 0; i < size(); i++) {
+            if (getItem(i).getUrl().equals(localUrl)) {
+                return getItem(i);
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    public synchronized PlayQueueItem transitionTarget(final String localUrl,
+                                                        final OfflineStore store,
+                                                        final boolean repeatAll)
+            throws IOException {
+        final PlayQueueItem tagged = itemWithUrl(localUrl);
+        final PlayQueueItem target = tagged == null ? getItem() : tagged;
+        if (target == null) {
+            return null;
+        }
+        if (store.find(target.getServiceId(), target.getUrl()) != null) {
+            return target;
+        }
+        final int index = indexOf(target);
+        return availableAfter(index, repeatAll ? size() - 1 : size() - index - 1, store);
+    }
+
+    @Nullable
+    public synchronized PlayQueueItem completionSuccessor(final OfflineStore store,
+                                                           final boolean repeatAll)
+            throws IOException {
+        final int count = repeatAll ? size() : size() - getIndex() - 1;
+        return availableAfter(getIndex(), count, store);
+    }
+
+    @Nullable
+    public synchronized PlayQueueItem failureSuccessor(final OfflineStore store,
+                                                        final boolean repeatAll)
+            throws IOException {
+        return availableAfter(getIndex(), repeatAll ? size() - 1 : size() - getIndex() - 1,
+                store);
+    }
+
+    public synchronized boolean discardFailedCurrent(final OfflineStore store,
+                                                       final boolean repeatAll) throws IOException {
+        final PlayQueueItem failed = getItem();
+        final PlayQueueItem next = failureSuccessor(store, repeatAll);
+        if (next != null) {
+            setIndex(indexOf(next));
+        }
+        remove(indexOf(failed));
+        pruneUnavailable(store, true);
+        return next != null && indexOf(next) >= 0;
+    }
+
+    @Nullable
+    private PlayQueueItem availableAfter(final int index, final int count,
+                                         final OfflineStore store) throws IOException {
+        for (int offset = 1; offset <= count; offset++) {
+            final PlayQueueItem item = getItem((index + offset) % size());
+            if (store.find(item.getServiceId(), item.getUrl()) != null) {
+                return item;
+            }
+        }
+        return null;
     }
 
     // Current readers may finish; selection/loop boundaries must validate them again.

@@ -574,6 +574,10 @@ public final class Player implements PlaybackListener, Listener {
             case TimestampChange -> {
                 final var data = Objects.requireNonNull(IntentCompat.getParcelableExtra(intent,
                         PLAYER_INTENT_DATA, TimestampChangeData.class));
+                if (playQueue != null && playQueue.isOfflineOnly()) {
+                    // Timestamp intents require remote StreamInfo; saved playback uses local media.
+                    return;
+                }
                 final Single<StreamInfo> single =
                         ExtractorHelper.getStreamInfo(data.getServiceId(), data.getUrl(), false);
                 streamItemDisposable.add(single.subscribeOn(Schedulers.io())
@@ -607,8 +611,9 @@ public final class Player implements PlaybackListener, Listener {
                                 // else we add the timestamped stream behind the current video
                                 // and start playing it.
                                 } else {
-                                    oldPlayQueue.enqueueNext(playQueueItem, true);
-                                    oldPlayQueue.offsetIndex(1);
+                                    if (!oldPlayQueue.enqueueNextAndSelect(playQueueItem)) {
+                                        return;
+                                    }
                                     newPlayQueue = oldPlayQueue;
                                 }
                                 initPlayback(newPlayQueue, playWhenReady);
@@ -1508,7 +1513,24 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        if (pruneSavedQueue(true)) {
+        if (playQueue instanceof OfflinePlayQueue queue) {
+            try {
+                final PlayQueueItem next = queue.completionSuccessor(
+                        OfflineLibrary.get(context).store(), getRepeatMode() == REPEAT_MODE_ALL);
+                if (next == null) {
+                    // Pause before removals: base queue removal can wrap its index to zero.
+                    pause();
+                } else {
+                    queue.setIndex(queue.indexOf(next));
+                }
+                pruneSavedQueue(true);
+            } catch (final java.io.IOException error) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            stopProgressLoop();
             return;
         }
 
@@ -1726,12 +1748,42 @@ public final class Player implements PlaybackListener, Listener {
 
         // Refresh the playback if there is a transition to the next video
         final int newIndex = newPosition.mediaItemIndex;
-        if (playQueue.isOfflineOnly()
-                && discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION) {
-            playQueue.setIndex(newIndex);
-            if (pruneSavedQueue(true)) {
-                return;
+        if (playQueue instanceof OfflinePlayQueue queue) {
+            final String target = MediaItemTag.from(newPosition.mediaItem)
+                    .map(MediaItemTag::getStreamUrl).orElse(null);
+            if (discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION
+                    && getRepeatMode() == REPEAT_MODE_ONE
+                    && queue.getItem() != null && queue.getItem().getUrl().equals(target)) {
+                registerStreamViewed();
+            } else if (discontinuityReason == DISCONTINUITY_REASON_SEEK && isPrepared) {
+                saveStreamProgressState();
+            } else if (queue.getItem() != null && !queue.getItem().getUrl().equals(target)) {
+                saveStreamProgressStateCompleted();
             }
+            try {
+                final var store = OfflineLibrary.get(context).store();
+                final boolean automatic =
+                        discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION;
+                final boolean repeatAll = getRepeatMode() == REPEAT_MODE_ALL;
+                if (automatic && queue.transitionTarget(target, store, repeatAll) == null) {
+                    pause();
+                }
+                final int selected = queue.reconcileTransition(target,
+                        store, automatic, repeatAll);
+                if (selected < 0) {
+                    pause();
+                    if (!exoPlayerIsNull()) {
+                        simpleExoPlayer.stop();
+                    }
+                }
+            } catch (final java.io.IOException error) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            saveLastSession();
+            return;
         }
         switch (discontinuityReason) {
             case DISCONTINUITY_REASON_AUTO_TRANSITION:
@@ -1963,12 +2015,20 @@ public final class Player implements PlaybackListener, Listener {
         if (exoPlayerIsNull()) {
             return;
         }
-        if (playQueue != null && playQueue.isOfflineOnly() && !playQueue.isEmpty()) {
-            playQueue.remove(playQueue.getIndex());
-            if (!playQueue.isEmpty()) {
-                recoveryFailed = false;
-                recoveryCanceled = false;
-                return;
+        if (playQueue instanceof OfflinePlayQueue queue && !queue.isEmpty()) {
+            try {
+                final var store = OfflineLibrary.get(context).store();
+                final boolean repeatAll = getRepeatMode() == REPEAT_MODE_ALL;
+                if (queue.failureSuccessor(store, repeatAll) == null) {
+                    pause();
+                }
+                if (queue.discardFailedCurrent(store, repeatAll)) {
+                    recoveryFailed = false;
+                    recoveryCanceled = false;
+                    return;
+                }
+            } catch (final java.io.IOException error) {
+                // Stop below; an unreadable store cannot select another saved file safely.
             }
         }
         pause();

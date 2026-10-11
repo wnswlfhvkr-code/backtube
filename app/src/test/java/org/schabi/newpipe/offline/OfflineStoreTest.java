@@ -106,6 +106,51 @@ public class OfflineStoreTest {
         assertEquals(20, store.file(entry).length());
     }
 
+    @Test public void validOrderReopensWithoutRequiringAnOrderWrite() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        store.move(second.id, -1);
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        // Hide the write-fault fixture from orphan cleanup, while all actual I/O remains real.
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(first.id).state);
+        assertEquals(20, store.retain(first.id).length());
+        store.release(first.id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+        assertTrue(pending.delete());
+    }
+
+    @Test public void corruptOrderRepairWriteFailureStillAllowsExistingMedia() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        try (FileOutputStream out = new FileOutputStream(new File(root, "shelf-order"))) {
+            out.write("version=broken".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertTrue(pending.delete());
+    }
+
     @Test public void completeCopySurvivesReopenAndPreservesOriginalIdentity() throws Exception {
         final OfflineStore.Entry entry = create();
         store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
