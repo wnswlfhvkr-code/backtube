@@ -61,13 +61,31 @@ certificate differs from the previously delivered CI APK certificate. Installed
 certificate identity is unverified. Do not uninstall, clear data, change package
 identity or create a replacement signing key to make an update proceed.
 
-The existing draft feature branch is the preservation target. The separately
-authorized CI artifact workflow will pin the final product commit, deliver a
-version-code-1016 debug APK with its source suffix, and include exact APK hash,
-public signer certificate digest, signature verification and unit counts in the
-ZIP. CI standard debug signing is not evidence of compatibility with an existing
-installation. CI artifact URL/expiry and final source SHA are reported with the
-delivery result; no main merge or deployment is part of this work.
+## CI artifact delivered
+
+Product source: `98511aba53f82e3671b0e6f26a20a0fcefb264e8`. Delivery workflow:
+`3a488b9f49387ef31cb779d7bccf6bf355d962bd`. CI run **38125933187 succeeded**; the
+pinned source produced 338/338 unit results and Checkstyle zero errors.
+
+[Download the APK ZIP](https://github.com/wnswlfhvkr-code/backtube/actions/runs/38125933187/artifacts/11697696580)
+(GitHub login required; expires **2026-10-14 08:52:26 UTC**).
+The ZIP contains the APK, Korean phone guide and verification metadata.
+
+- Version: **0.29.1-offline-98511ab**, code **1016**.
+- Package: `org.schabi.newpipe.debug.featclaudeautoreport`.
+- APK SHA-256: `6735ecad404f3e405f664f883ebb910445e9b33161b4d4a6452808f436b9d41a`.
+- Public signer certificate SHA-256: `979dbc6cf4a1769ad1f6c591e218c72de5df9a7ed329aa90f3ff55bf8f99525d`.
+- Downloaded APK signature verifies locally; APK metadata hash and the official
+  ZIP digest both match the downloaded bytes. Reporting remains OFF.
+
+The CI signer **differs from the previous delivered CI APK signer**. An update
+from that previous CI APK with the same package will fail signature compatibility.
+The actual installed certificate is unverified. Preserve installed data; no
+uninstall, data clearing, package change or signing-key creation was performed.
+
+Product commit above is the APK source. Later preservation commits only add this
+verification evidence and plan completion; application sources remain identical.
+No main merge or deployment occurred.
 
 Decisions and red/green history are recorded in
 `offline-playback-order-progress-2026-10-11.md`. No minor review finding remains

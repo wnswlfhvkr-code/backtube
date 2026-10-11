@@ -70,6 +70,8 @@ Consumes: store move and OfflinePlayQueue constructors.
 - [x] Run full unit suite, Checkstyle, debug/app-test build and lint once for final source; compare lint errors with recorded unchanged baseline issues.
 - [x] Attempt supported existing Android runtime validation without home/permission/auth workarounds; report actual execution count.
 - [x] Independent review of the complete new range; resolve material findings and rerun affected verification.
-- [ ] Save sanitized command/results, commits, limits and deferred findings in docs/verification; push only existing feature branch and verify remote HEAD/draft state.
+- [x] Save sanitized command/results, commits, limits and deferred findings in docs/verification; push only existing feature branch and verify remote HEAD/draft state.
 
 Latest authorized continuation: use the existing CI artifact workflow to deliver the final pinned product APK (code 1016/source suffix), with public signature/hash evidence and existing-data safeguards. This does not authorize a main merge or deployment.
+
+CI delivery complete: run 38125933187, artifact 11697696580, pinned product source 98511aba. Downloaded artifact hashes/signature verified; existing-install signer compatibility and actual Android runtime remain blocked/unverified.

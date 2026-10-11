@@ -1,5 +1,7 @@
 # Execution ledger — plan: docs/superpowers/plans/2026-10-11-offline-playback-order.md
 
+- CURRENT STATUS: approved Codex product implementation, final verification, independent review and CI APK delivery are complete. Claude/auth/connection retries remain stopped. Remaining limits are actual Android UI/ExoPlayer runtime and data-preserving existing-install signing compatibility; do not resume OAuth validation.
+
 - Base: 1c92066f4b2c066732e5bc09a533c6f75be1a843; existing feature worktree and remote agree, clean.
 - Pre-flight: no observed tracked-file writer or Claude process; 13 processes uninspectable. This is not an exhaustive process guarantee.
 - Interface scan: task 1 ordered list feeds task 2 queue snapshot and task 3 moves; task 2 local scope survives session restore and protects all task 3 playback actions.
@@ -30,3 +32,6 @@
 - Final source verification: :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug exit 0, 81.008s. 338/338 tests, 49 suites, zero failures/errors/skips; Checkstyle 0; both APKs compile. Lint 4 unchanged baseline errors / 366 warnings (not lint-clean). Full suite/build was rerun only after material fixes/style gates.
 - Task 4 source/review complete; remote final checkpoint and explicitly authorized CI artifact delivery pending. Android runtime remains 0 executed; the supported ADB attempt already failed before device enumeration, and was not repeated without an environmental change.
 - Ruling: use existing CI artifact workflow for the newly authorized APK delivery — latest parent instruction permits this bounded artifact operation; no release publication or deployment. Cost if wrong: CI standard debug signer can differ from a previous CI signer, so existing-install update compatibility must remain unconfirmed and no data reset is allowed.
+
+- Task 4: complete — product source 98511aba53f82e3671b0e6f26a20a0fcefb264e8 preserved remotely; CI workflow 3a488b9f49387ef31cb779d7bccf6bf355d962bd / run 38125933187 succeeds. Artifact 11697696580 delivered (expires 2026-10-14T08:52:26Z). Official connected download and local materialization succeeded; ZIP/APK hashes and signature verified. CI unit 338/338 and Checkstyle 0 confirmed from downloaded metadata. No new login, auth configuration, permission setup, main merge, deployment or installed-data deletion.
+- Final blockers: actual Android runtime 0; current CI signer differs from previous CI signer, installed signer unverified. No signing credential or existing installation was altered. Documentation-only final checkpoint preserves the evidence without rebuilding unchanged application code.
