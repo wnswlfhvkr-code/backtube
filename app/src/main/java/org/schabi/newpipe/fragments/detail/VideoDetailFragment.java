@@ -335,6 +335,10 @@ public final class VideoDetailFragment
     // Fragment's Lifecycle
     //////////////////////////////////////////////////////////////////////////*/
 
+    static String readSelectedTab(final SharedPreferences preferences, final String key) {
+        return preferences.getString(key, RELATED_TAB_TAG);
+    }
+
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -343,8 +347,7 @@ public final class VideoDetailFragment
         showComments = prefs.getBoolean(getString(R.string.show_comments_key), true);
         showRelatedItems = prefs.getBoolean(getString(R.string.show_next_video_key), true);
         showDescription = prefs.getBoolean(getString(R.string.show_description_key), true);
-        selectedTabTag = prefs.getString(
-                getString(R.string.stream_info_selected_tab_key), COMMENTS_TAB_TAG);
+        selectedTabTag = readSelectedTab(prefs, getString(R.string.stream_info_selected_tab_key));
         prefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener);
 
         setupBroadcastReceiver();

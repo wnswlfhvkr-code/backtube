@@ -20,10 +20,10 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
-import android.widget.Button;
 
 import androidx.appcompat.widget.Toolbar;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
@@ -191,12 +191,16 @@ public class OfflineLibraryAccessTest {
                 final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
                 final View row = shelf.findViewById(R.id.offline_saved_rows)
                         .findViewWithTag(second.id);
-                final Button up = row.findViewById(R.id.offline_move_up);
+                final View handle = row.findViewById(R.id.itemHandle);
+                final View menu = row.findViewById(R.id.offline_item_menu);
+                final View playableRow = row.findViewById(R.id.itemRoot);
                 final float density = shelf.getResources().getDisplayMetrics().density;
-                assertTrue(up.getHeight() >= 48 * density);
-                assertTrue(up.getContentDescription().toString().contains(second.title));
+                assertTrue(handle.getWidth() >= 48 * density);
+                assertTrue(handle.getHeight() >= 48 * density);
+                assertTrue(menu.getHeight() >= 48 * density);
+                assertTrue(handle.getContentDescription().toString().contains(second.title));
                 assertTrue(shelf.findViewById(R.id.offline_play_all).isEnabled());
-                up.performClick();
+                assertTrue(playableRow.performAccessibilityAction(R.id.offline_move_up, null));
                 return null;
             });
             await(() -> {
@@ -241,6 +245,58 @@ public class OfflineLibraryAccessTest {
             });
         } finally {
             library.store().delete(second.id);
+        }
+    }
+
+    @Test
+    public void savedRowsHaveCompactPlaybackAndSeparateManagementTargets() throws Exception {
+        InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitShelf();
+        main(() -> {
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final View row = shelf.findViewById(R.id.offline_saved_rows)
+                    .findViewWithTag(saved.id);
+            assertTrue(row.findViewById(R.id.itemRoot).hasOnClickListeners());
+            assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
+            assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
+            assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());
+            assertTrue(!shelf.findViewById(R.id.offline_storage_summary).isShown());
+            assertTrue(shelf.findViewById(R.id.offline_play_all).isShown());
+            shelf.findViewById(R.id.offline_manage).performClick();
+            assertTrue(shelf.findViewById(R.id.offline_storage_summary).isShown());
+            return null;
+        });
+    }
+
+    @Test
+    public void currentRowHighlightUsesLocalIdentityInsteadOfDuplicateTitles() throws Exception {
+        final OfflineStore.Entry duplicate = library.store().create(saved.title, "", 0,
+                Uri.fromFile(source).toString(), "audio/wav");
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(duplicate.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            main(() -> {
+                final RecyclerView list = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_saved_rows);
+                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                final OfflineShelfAdapter.Holder holder = adapter.onCreateViewHolder(list, 0);
+                adapter.setCurrentUrl(saved.localUrl());
+                adapter.onBindViewHolder(holder, adapter.positionOf(saved.id));
+                assertTrue(holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                adapter.onBindViewHolder(holder, adapter.positionOf(duplicate.id));
+                assertTrue(!holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                adapter.setCurrentUrl("https://example.invalid/online");
+                adapter.onBindViewHolder(holder, adapter.positionOf(saved.id));
+                assertTrue(!holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                return null;
+            });
+        } finally {
+            library.store().delete(duplicate.id);
         }
     }
 
@@ -341,7 +397,7 @@ public class OfflineLibraryAccessTest {
             title.requestRectangleOnScreen(new Rect(0, 0, title.getWidth(),
                     title.getHeight()), true);
             final Rect visible = new Rect();
-            return summary.isShown() && summary.getText().toString().contains("500")
+            return !summary.isShown() && summary.getText().toString().contains("500")
                     && title.isShown() && title.getHeight() > 0
                     && title.getGlobalVisibleRect(visible)
                     && visible.height() == title.getHeight();

@@ -6,7 +6,7 @@
     <string name="offline_playable_count">%1$d playable saves</string>
     <string name="offline_no_playable">No playable saved files</string>
     <string name="offline_manage">Manage saves and settings</string>
-    <string name="offline_order_hint">Use Up and Down to reorder. Changes and new saves apply the next time you play all.</string>
+    <string name="offline_order_hint">Drag the handle or use Up and Down in the track menu to reorder. Changes and new saves apply the next time you play all.</string>
     <string name="offline_move_up">Up</string>
     <string name="offline_move_down">Down</string>
     <string name="offline_move_up_description">%1$s · %2$d of %3$d · Move up</string>
@@ -38,4 +38,7 @@
     <string name="offline_storage_full">Offline storage is full (500 MB limit), or the device has no free space. Delete unwanted saved items, then retry. Existing saves are kept.</string>
     <string name="offline_saved_complete">Saved offline</string>
     <string name="offline_open_list">Open saved list</string>
+    <string name="offline_current_item">Current track</string>
+    <string name="offline_reorder_description">Reorder %1$s. Drag or activate for Up and Down.</string>
+    <string name="offline_item_menu_description">Saved track options: %1$s</string>
 </resources>
