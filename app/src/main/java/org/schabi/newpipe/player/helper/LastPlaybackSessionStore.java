@@ -17,6 +17,8 @@ import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
+import org.schabi.newpipe.offline.OfflineStore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -136,7 +138,10 @@ public final class LastPlaybackSessionStore {
             }
 
             // ponytail: restores only loaded entries; add pagination metadata if it becomes needed.
-            final PlayQueue queue = new SinglePlayQueue(restoredItems, index);
+            final boolean savedOnly = restoredItems.stream()
+                    .allMatch(item -> item.getUrl().startsWith(OfflineStore.LOCAL_PREFIX));
+            final PlayQueue queue = savedOnly ? new OfflinePlayQueue(restoredItems, index)
+                    : new SinglePlayQueue(restoredItems, index);
             for (int i = 0; i < autoQueued.size(); i++) {
                 queue.getItem(i).setAutoQueued(autoQueued.get(i));
             }

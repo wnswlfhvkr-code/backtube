@@ -101,6 +101,10 @@ public abstract class PlayQueue implements Serializable {
      */
     public abstract boolean isComplete();
 
+    public boolean isOfflineOnly() {
+        return false;
+    }
+
     /**
      * Load partial queue in the background, does nothing if the queue is complete.
      */

@@ -81,6 +81,19 @@ public class LastPlaybackSessionStoreTest {
     }
 
     @Test
+    public void restoredSavedSessionRetainsLocalScopeOrderAndRecovery() {
+        final StreamInfoItem first = item(0, "backtube-offline:first", "First");
+        final StreamInfoItem second = item(0, "backtube-offline:second", "Second");
+        final PlayQueue queue = new SinglePlayQueue(List.of(first, second), 1);
+        store.save(queue, 42_000L, 2);
+        final PlayQueue restored = store.load().getQueue();
+        assertTrue(restored.isOfflineOnly());
+        assertEquals(first.getUrl(), restored.getItem(0).getUrl());
+        assertEquals(second.getUrl(), restored.getItem().getUrl());
+        assertEquals(42_000L, restored.getItem().getRecoveryPosition());
+    }
+
+    @Test
     public void loadClearsMalformedAndUnsupportedSnapshots() {
         savedJson.set("not json");
 

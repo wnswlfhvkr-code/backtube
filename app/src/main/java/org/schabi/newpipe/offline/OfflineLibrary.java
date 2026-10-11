@@ -15,12 +15,13 @@ import com.google.android.exoplayer2.upstream.TransferListener;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
-import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -116,12 +117,17 @@ public final class OfflineLibrary {
         }
     }
 
-    public SinglePlayQueue queue(final OfflineStore.Entry entry) {
+    public OfflinePlayQueue queue(final OfflineStore.Entry entry) {
         final StreamInfoItem item = new StreamInfoItem(entry.serviceId, entry.localUrl(),
                 entry.title, entry.mime.startsWith("video/")
                 ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
         item.setUploaderName(context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
-        return new SinglePlayQueue(item);
+        return new OfflinePlayQueue(List.of(item), 0);
+    }
+
+    public OfflinePlayQueue queueAll() throws IOException {
+        return new OfflinePlayQueue(store,
+                context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
     }
 
     @Nullable

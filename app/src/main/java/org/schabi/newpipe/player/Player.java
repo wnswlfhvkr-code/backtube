@@ -120,6 +120,7 @@ import org.schabi.newpipe.player.helper.RecommendationExclusions;
 import org.schabi.newpipe.player.helper.SleepTimer;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineMediaTag;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.mediaitem.ExceptionTag;
@@ -1507,9 +1508,13 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        if (pruneSavedQueue(true)) {
+            return;
+        }
+
         if (playQueue.getIndex() < playQueue.size() - 1) {
             playQueue.offsetIndex(+1);
-        } else if (!(currentMetadata instanceof OfflineMediaTag)
+        } else if (!playQueue.isOfflineOnly() && !(currentMetadata instanceof OfflineMediaTag)
                 && getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
                 && getRepeatMode() == REPEAT_MODE_OFF) {
             requestNextRecommendation(false);
@@ -1721,6 +1726,13 @@ public final class Player implements PlaybackListener, Listener {
 
         // Refresh the playback if there is a transition to the next video
         final int newIndex = newPosition.mediaItemIndex;
+        if (playQueue.isOfflineOnly()
+                && discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION) {
+            playQueue.setIndex(newIndex);
+            if (pruneSavedQueue(true)) {
+                return;
+            }
+        }
         switch (discontinuityReason) {
             case DISCONTINUITY_REASON_AUTO_TRANSITION:
             case DISCONTINUITY_REASON_REMOVE:
@@ -1950,6 +1962,14 @@ public final class Player implements PlaybackListener, Listener {
         cancelPlaybackRecovery();
         if (exoPlayerIsNull()) {
             return;
+        }
+        if (playQueue != null && playQueue.isOfflineOnly() && !playQueue.isEmpty()) {
+            playQueue.remove(playQueue.getIndex());
+            if (!playQueue.isEmpty()) {
+                recoveryFailed = false;
+                recoveryCanceled = false;
+                return;
+            }
         }
         pause();
         simpleExoPlayer.stop();
@@ -2289,6 +2309,9 @@ public final class Player implements PlaybackListener, Listener {
         if (exoPlayerIsNull() || playQueue == null) {
             return;
         }
+        if (pruneSavedQueue(false)) {
+            return;
+        }
 
         if (sleepTimer.isEndOfItem()) {
             cancelSleepTimer();
@@ -2300,6 +2323,7 @@ public final class Player implements PlaybackListener, Listener {
             saveStreamProgressState();
             playQueue.offsetIndex(-1);
         }
+        pruneSavedQueue(true);
         triggerProgressUpdate();
     }
 
@@ -2318,15 +2342,19 @@ public final class Player implements PlaybackListener, Listener {
         if (playQueue == null) {
             return;
         }
+        if (pruneSavedQueue(false)) {
+            return;
+        }
 
         saveStreamProgressState();
         if (playQueue.getIndex() < playQueue.size() - 1
                 || (playQueue.isComplete() && getRepeatMode() == REPEAT_MODE_ALL)) {
             recommendationRequest.set(null);
             playQueue.offsetIndex(+1);
-        } else {
+        } else if (!playQueue.isOfflineOnly()) {
             requestNextRecommendation(true);
         }
+        pruneSavedQueue(true);
         triggerProgressUpdate();
     }
 
@@ -2655,7 +2683,8 @@ public final class Player implements PlaybackListener, Listener {
 
     @SuppressWarnings("MethodLength")
     private void requestRecommendation(final RecommendationAction action) {
-        if (currentMetadata instanceof OfflineMediaTag) {
+        if ((playQueue != null && playQueue.isOfflineOnly())
+                || currentMetadata instanceof OfflineMediaTag) {
             recommendationStatus = RecommendationStatus.EMPTY;
             triggerProgressUpdate();
             return;
@@ -2717,7 +2746,7 @@ public final class Player implements PlaybackListener, Listener {
         recommendationRequest.set(info.observeOn(AndroidSchedulers.mainThread())
                 .subscribe(current -> {
                     recommendationRequest.set(null);
-                    if (playQueue != queue || queue.getItem() != item
+                    if (playQueue != queue || queue.isOfflineOnly() || queue.getItem() != item
                             || (advance && sleepTimerExpired)
                             || (!explicit && (!isAutoQueueEnabled() || !getPlayWhenReady()
                             || getRepeatMode() != REPEAT_MODE_OFF))) {
@@ -2782,7 +2811,8 @@ public final class Player implements PlaybackListener, Listener {
 
     private void maybeAutoQueueNextStream(@NonNull final StreamInfo info) {
         syncRecommendationContext();
-        if (playQueue == null || playQueue.getIndex() != playQueue.size() - 1
+        if (playQueue == null || playQueue.isOfflineOnly()
+                || playQueue.getIndex() != playQueue.size() - 1
                 || !playQueue.isComplete() || playQueue.getItem() == null
                 || !playQueue.getItem().getUrl().equals(info.getUrl())
                 || getRepeatMode() != REPEAT_MODE_OFF
@@ -2818,6 +2848,9 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        if (pruneSavedQueue(false)) {
+            return;
+        }
         final int index = playQueue.indexOf(item);
         if (index == -1) {
             return;
@@ -2829,6 +2862,30 @@ public final class Player implements PlaybackListener, Listener {
             saveStreamProgressState();
         }
         playQueue.setIndex(index);
+        pruneSavedQueue(true);
+    }
+
+    private boolean pruneSavedQueue(final boolean includeCurrent) {
+        if (!(playQueue instanceof OfflinePlayQueue queue)) {
+            return false;
+        }
+        try {
+            final boolean removedCurrent = queue.pruneUnavailable(
+                    OfflineLibrary.get(context).store(), includeCurrent);
+            if (queue.isEmpty()) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            return removedCurrent || queue.isEmpty();
+        } catch (final java.io.IOException error) {
+            pause();
+            if (!exoPlayerIsNull()) {
+                simpleExoPlayer.stop();
+            }
+            return true;
+        }
     }
 
     @Override

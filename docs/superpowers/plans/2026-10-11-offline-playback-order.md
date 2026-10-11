@@ -40,7 +40,7 @@ Produces: `move(String id, int offset) throws IOException`; list() returns persi
 
 ### Task 2: Saved-only playback snapshot
 
-Files: new `offline/OfflinePlayQueue.java`; modify `OfflineLibrary.java`, `PlayQueue.java`,
+Files: new `player/playqueue/OfflinePlayQueue.java`; modify `OfflineLibrary.java`, `PlayQueue.java`,
 `Player.java`, `LastPlaybackSessionStore.java`; add OfflinePlayQueueTest and extend session tests.
 Consumes: ordered `OfflineStore.list()`.
 Produces: `OfflinePlayQueue(OfflineStore store, String uploader) throws IOException`,
@@ -56,7 +56,7 @@ Produces: `OfflinePlayQueue(OfflineStore store, String uploader) throws IOExcept
 ### Task 3: Library and playlist discoverability
 
 Files: `OfflineLibraryActivity.java`, values/values-ko offline_strings.xml,
-values/offline_ids.xml, layout/fragment_bookmarks.xml and appropriate playlist strings/menu.
+values/offline_ui_ids.xml, layout/fragment_bookmarks.xml and appropriate playlist strings/menu.
 Consumes: store move and OfflinePlayQueue constructors.
 
 - [ ] Add generated-media Android tests for whole-play/count, accessible move controls and persisted shelf order, plus layout/playlist discovery checks where runtime is available.

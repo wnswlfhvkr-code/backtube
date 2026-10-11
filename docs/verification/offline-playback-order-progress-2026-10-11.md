@@ -9,3 +9,6 @@
 - Workflow: retain this sanitized ledger for reconnection instead of deleting progress evidence.
 
 - Task 1: complete — missing move API observed RED at compileDebugUnitTestJavaWithJavac; targeted OfflineStoreTest GREEN 24/24, zero failures/errors/skips. Checkstyle gate issues in new test/Javadoc corrected; final task command exit 0, 18.273s.
+
+- Task 2: Ruling: place OfflinePlayQueue in existing playqueue package — reuse package-private queue/item constructors without expanding their visibility; cost if wrong: future package organization adjustment.
+- Task 2: complete — corrected package-private test construction, observed missing queue/scope API RED; targeted 9 queue + 5 session tests GREEN, then full unit suite 326/326 with zero errors/failures/skips (20.017s). Queue/local scope serialized and restored; no extractor/recommendation fallback added. Actual ExoPlayer device behavior awaits runtime QA.
