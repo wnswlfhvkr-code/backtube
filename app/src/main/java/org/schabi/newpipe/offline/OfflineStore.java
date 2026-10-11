@@ -126,6 +126,7 @@ public final class OfflineStore {
                 removeFile(candidate);
             }
         }
+        restoreOrder();
         refresh();
     }
 
@@ -259,6 +260,25 @@ public final class OfflineStore {
         return new ArrayList<>(entries.values());
     }
 
+    /**
+     * Commit a shelf move before exposing it; active player queues are independent snapshots.
+     * @param id saved entry identity
+     * @param offset signed movement within the shelf
+     */
+    public synchronized void move(final String id, final int offset) throws IOException {
+        require(id);
+        final List<String> order = new ArrayList<>(entries.keySet());
+        final int from = order.indexOf(id);
+        final int to = (int) Math.max(0, Math.min(order.size() - 1L, (long) from + offset));
+        if (from == to) {
+            return;
+        }
+        order.remove(from);
+        order.add(to, id);
+        persistOrder(order);
+        applyOrder(order);
+    }
+
     public synchronized Entry get(final String id) throws IOException {
         refresh();
         return entries.get(id);
@@ -320,6 +340,9 @@ public final class OfflineStore {
         if (entry == null) {
             return;
         }
+        final List<String> order = new ArrayList<>(entries.keySet());
+        order.remove(id);
+        persistOrder(order);
         removeFile(new File(directory, id + ".properties"));
         entries.remove(id);
         removeFile(part(id));
@@ -380,7 +403,62 @@ public final class OfflineStore {
         if (!pending.renameTo(new File(directory, entry.id + ".properties"))) {
             throw new IOException("Cannot persist offline state");
         }
+        if (!entries.containsKey(entry.id)) {
+            final List<String> order = new ArrayList<>(entries.keySet());
+            order.add(entry.id);
+            persistOrder(order);
+        }
         entries.put(entry.id, entry);
+    }
+
+    private void restoreOrder() throws IOException {
+        final Properties saved = new Properties();
+        final File file = new File(directory, "shelf-order");
+        if (file.isFile() && file.length() <= 1_000_000) {
+            try (InputStream input = new FileInputStream(file)) {
+                saved.load(input);
+            } catch (final IOException | IllegalArgumentException ignored) {
+                // A corrupt order never invalidates or removes complete media.
+                saved.clear();
+            }
+        }
+        final Map<String, Entry> ordered = new LinkedHashMap<>();
+        if ("1".equals(saved.getProperty("version"))) {
+            for (final String id : saved.getProperty("ids", "").split(",")) {
+                if (entries.containsKey(id)) {
+                    ordered.put(id, entries.get(id));
+                }
+            }
+        }
+        for (final Entry entry : entries.values()) {
+            ordered.putIfAbsent(entry.id, entry);
+        }
+        final List<String> order = new ArrayList<>(ordered.keySet());
+        persistOrder(order);
+        applyOrder(order);
+    }
+
+    private void applyOrder(final List<String> order) {
+        final Map<String, Entry> ordered = new LinkedHashMap<>();
+        for (final String id : order) {
+            ordered.put(id, entries.get(id));
+        }
+        entries.clear();
+        entries.putAll(ordered);
+    }
+
+    private void persistOrder(final List<String> order) throws IOException {
+        final Properties saved = new Properties();
+        saved.setProperty("version", "1");
+        saved.setProperty("ids", String.join(",", order));
+        final File pending = new File(directory, "shelf-order.new");
+        try (FileOutputStream output = new FileOutputStream(pending)) {
+            saved.store(output, "backtube shelf order");
+            output.getFD().sync();
+        }
+        if (!pending.renameTo(new File(directory, "shelf-order"))) {
+            throw new IOException("Cannot persist offline order");
+        }
     }
 
     private static void removeFile(final File file) throws IOException {

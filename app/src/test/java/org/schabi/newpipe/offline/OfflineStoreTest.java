@@ -35,6 +35,77 @@ public class OfflineStoreTest {
                 "content://test/recording", "audio/wav");
     }
 
+    @Test public void manualOrderSurvivesReopenAndNewSavesAppend() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final OfflineStore.Entry third = create();
+        store.move(third.id, -2);
+        assertEquals(third.id, store.list().get(0).id);
+        store = new OfflineStore(root, 100);
+        assertEquals(third.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+        assertEquals(second.id, store.list().get(2).id);
+        final OfflineStore.Entry added = create();
+        store = new OfflineStore(root, 100);
+        assertEquals(added.id, store.list().get(3).id);
+    }
+
+    @Test public void moveBoundsAndDeletionDoNotResurrectEntries() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.move(first.id, Integer.MIN_VALUE);
+        store.move(second.id, Integer.MAX_VALUE);
+        assertEquals(first.id, store.list().get(0).id);
+        store.delete(first.id);
+        store = new OfflineStore(root, 100);
+        assertEquals(1, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+    }
+
+    @Test public void failedOrderWritePreservesVisibleOrderAndMedia() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order.new").mkdir());
+        assertThrows(IOException.class, () -> store.move(second.id, -1));
+        assertEquals(first.id, store.list().get(0).id);
+        assertEquals(20, store.file(first).length());
+        assertTrue(new File(root, "shelf-order.new").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(first.id, store.list().get(0).id);
+    }
+
+    @Test public void normalizedOrderIgnoresDuplicateAndUnknownIds() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final Properties order = new Properties();
+        order.setProperty("version", "1");
+        order.setProperty("ids", second.id + "," + second.id + ",unknown");
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            order.store(output, "test order");
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(2, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+    }
+
+    @Test public void legacyAndCorruptOrderRecoveryPreserveCompleteFiles() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            output.write("version=broken\nids=unknown"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertEquals(20, store.file(entry).length());
+    }
+
     @Test public void completeCopySurvivesReopenAndPreservesOriginalIdentity() throws Exception {
         final OfflineStore.Entry entry = create();
         store.copy(entry.id, new ByteArrayInputStream(new byte[32]));

@@ -7,3 +7,5 @@
 - Ruling: use accessible up/down rather than drag gestures — reliable labeled controls with persistent order; cost if wrong: dragging would require a later UI enhancement.
 - Ruling: shelf order changes affect next Play all — preserve the running snapshot; cost if wrong: users must restart whole-play to hear a changed shelf order.
 - Workflow: retain this sanitized ledger for reconnection instead of deleting progress evidence.
+
+- Task 1: complete — missing move API observed RED at compileDebugUnitTestJavaWithJavac; targeted OfflineStoreTest GREEN 24/24, zero failures/errors/skips. Checkstyle gate issues in new test/Javadoc corrected; final task command exit 0, 18.273s.
