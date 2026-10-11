@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-11T03:32:15.229503+00:00",
+  "repository": "wnswlfhvkr-code/backtube",
+  "draft_pr": 7,
+  "branch": "feat/claude-auto-report",
+  "head_before_preservation_commit": "4def95e8ec9507827c6ceb7b2356486277f322ad",
+  "checkpoint_commit_relation": "The commit preserving this checkpoint is expected to have head_before_preservation_commit as its first parent. The exact post-commit HEAD is recorded in the local resume-checkpoint.json and GitHub draft PR metadata.",
+  "main_worktree_head_preserved": "84b4e0e85f02f29a8523486345db5fc5df9e395d",
+  "approved_scope": [
+    "Remove only the original-download sentence in Korean offline deletion confirmation",
+    "Group automatic-listening label and switch; separate timer in portrait/landscape layouts; preserve behavior",
+    "Preserve sanitized verification and resume checkpoint in existing draft PR"
+  ],
+  "approved_source_file_sha256": {
+    "app/src/main/res/layout-land/activity_player_queue_control.xml": "724aafa0471e2864e49bd1051950aee25c3ac57f41db1b617c851183557374ea",
+    "app/src/main/res/layout/activity_player_queue_control.xml": "812e744654d91f7beca71a6067654819149c41d1f2eb57ff2da7bcab98affe20",
+    "app/src/main/res/values-ko/offline_strings.xml": "56f7dd27b3a131abf480dcdc7da52ac523833637c8bc47263939bbef5f2eff85"
+  },
+  "running_commands_started_by_this_agent": [],
+  "completed_commands": [
+    {
+      "label": "Initial offline combined build",
+      "command": [
+        "./gradlew",
+        ":app:assembleDebug",
+        ":app:assembleDebugAndroidTest",
+        ":app:lintDebug",
+        "--offline",
+        "--no-daemon",
+        "--no-configuration-cache",
+        "--console=plain",
+        "-DskipFormatKtlint",
+        "-PappFaultEndpoint="
+      ],
+      "state": "completed",
+      "exit_code": 1,
+      "elapsed_seconds": 46.89,
+      "build_successful_marker": false
+    },
+    {
+      "label": "Offline failure diagnosis",
+      "command": [
+        "./gradlew",
+        ":app:assembleDebug",
+        ":app:assembleDebugAndroidTest",
+        ":app:lintDebug",
+        "--offline",
+        "--no-daemon",
+        "--no-configuration-cache",
+        "--console=plain",
+        "-DskipFormatKtlint",
+        "-PappFaultEndpoint="
+      ],
+      "state": "completed",
+      "exit_code": 1,
+      "elapsed_seconds": 24.64,
+      "build_successful_marker": false
+    },
+    {
+      "label": "Final build and lint",
+      "command": [
+        "./gradlew",
+        ":app:assembleDebug",
+        ":app:assembleDebugAndroidTest",
+        ":app:lintDebug",
+        "--no-daemon",
+        "--no-configuration-cache",
+        "--console=plain",
+        "-DskipFormatKtlint",
+        "-PappFaultEndpoint="
+      ],
+      "state": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 101.88,
+      "build_successful_marker": true
+    }
+  ],
+  "last_command_result": "Final assembleDebug + assembleDebugAndroidTest + lintDebug: exit0; build success. Lint is not clean because abortOnError=false.",
+  "verification": {
+    "compiled_portrait_and_landscape_layouts": true,
+    "compiled_korean_notice_verified": true,
+    "android_test_apk_compiled": true,
+    "android_tests_executed_this_candidate": false,
+    "lint_errors": 4,
+    "lint_warnings": 364,
+    "lint_error_locations": [
+      {
+        "id": "MissingClass",
+        "severity": "Error",
+        "locations": [
+          {
+            "file": "app/src/main/AndroidManifest.xml",
+            "line": "99",
+            "file_byte_identical_to_head": true
+          }
+        ]
+      },
+      {
+        "id": "WrongConstant",
+        "severity": "Error",
+        "locations": [
+          {
+            "file": "app/src/main/java/org/schabi/newpipe/util/KeyboardUtil.java",
+            "line": "60",
+            "file_byte_identical_to_head": true
+          }
+        ]
+      },
+      {
+        "id": "WrongConstant",
+        "severity": "Error",
+        "locations": [
+          {
+            "file": "app/src/main/java/org/schabi/newpipe/player/PlayerService.java",
+            "line": "214",
+            "file_byte_identical_to_head": true
+          }
+        ]
+      },
+      {
+        "id": "UnspecifiedRegisterReceiverFlag",
+        "severity": "Error",
+        "locations": [
+          {
+            "file": "app/src/androidTest/java/org/schabi/newpipe/player/helper/AudioFocusOwnerActivity.java",
+            "line": "83",
+            "file_byte_identical_to_head": true
+          }
+        ]
+      }
+    ],
+    "changed_resource_lint_errors": 0,
+    "independent_source_review": "No new P1/P2 issue identified.",
+    "after_change_android_screen_runs": 0,
+    "small_screen_large_font_orientation_runtime_runs": 0
+  },
+  "android_tool_review": {
+    "supported_variables_reviewed": "https://developer.android.com/tools/variables",
+    "configured_existing_avds": 2,
+    "list_avds_exit_code": 0,
+    "device_connection_enumeration_succeeded": false,
+    "adb_blocker": "adb aborts before device enumeration because /home/agent/.android cannot be created (read-only). The completed ANDROID_USER_HOME probe did not redirect this adb; legacy SDK_HOME was previously documented ineffective.",
+    "new_emulator_install_or_start": false,
+    "new_adb_auth_or_home_permission_changes": false
+  },
+  "writer_check": {
+    "observed_writable_descriptors_to_tracked_source": 0,
+    "processes_not_inspectable": 12,
+    "git_index_lock_present": false,
+    "scope_limit": "No observed duplicate writer; inaccessible/nonlocal processes cannot be ruled out solely by this check."
+  },
+  "next_resume_point": [
+    "Before editing/testing, compare current branch and exact HEAD with local resume-checkpoint.json or authoritative GitHub draft PR head. Stop on mismatch.",
+    "Compare approved source files against these SHA256 values and inspect git status. Stop on unexpected changes or another writer.",
+    "Do not repeat completed build/lint commands unless a new source change or unresolved failure requires it. Do not terminate running commands arbitrarily.",
+    "Actual Android after-render QA remains blocked; distinguish app/test APK build from UI runtime verification.",
+    "Saved-only whole-play, shelf UX and personal-playlist discovery proposals await user response. Do not implement new functionality yet."
+  ],
+  "excluded_from_commit": [
+    "User screenshots and Library metadata",
+    "Tokens, credential files, environment dumps and headers",
+    "Caches, generated APKs, raw build/device logs",
+    "Unapproved new feature implementation"
+  ],
+  "platform_callback_network_auth_environment_configuration_changed": false,
+  "merge_deploy_release_performed": false
+}
