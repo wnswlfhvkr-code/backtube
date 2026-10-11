@@ -45,7 +45,7 @@ public class OfflineShelfOrderTest {
         assertEquals(first.localUrl(), active.getItem(0).getUrl());
         assertEquals(third.localUrl(), active.getItem(2).getUrl());
         final List<OfflineStore.Entry> committed = shelf.finishDrag().commit(store);
-        shelf.replace(committed);
+        shelf.completeMove(committed);
         assertEquals(ids(committed), ids(new OfflineStore(directory, 1000).list()));
         assertEquals(first.localUrl(), active.getItem(0).getUrl());
         assertEquals(second.localUrl(), new OfflinePlayQueue(store, "Saved").getItem(0).getUrl());
@@ -87,7 +87,7 @@ public class OfflineShelfOrderTest {
         assertTrue(shelf.moveTo(0));
         final OfflineStore.Entry added = save("Added during drag");
         assertFalse(shelf.replace(store.list()));
-        shelf.replace(shelf.finishDrag().commit(store));
+        shelf.completeMove(shelf.finishDrag().commit(store));
         assertEquals(List.of(third.id, first.id, second.id, added.id), ids(shelf.items()));
     }
 
@@ -105,7 +105,7 @@ public class OfflineShelfOrderTest {
     @Test public void accessibleMovesUseTheSameDurableIdentityBasedCommit() throws Exception {
         assertNull(shelf.moveBy(first.id, -1));
         assertNull(shelf.moveBy(third.id, 1));
-        shelf.replace(shelf.moveBy(second.id, -1).commit(store));
+        shelf.completeMove(shelf.moveBy(second.id, -1).commit(store));
         assertEquals(List.of(second.id, first.id, third.id), ids(shelf.items()));
         assertEquals(ids(shelf.items()), ids(new OfflineStore(directory, 1000).list()));
     }
@@ -117,6 +117,21 @@ public class OfflineShelfOrderTest {
         assertFalse(shelf.moveTo(-1));
         assertFalse(shelf.moveTo(3));
         assertEquals(List.of(first.id, second.id, third.id), ids(shelf.items()));
+    }
+
+    @Test public void staleRefreshCannotReplacePreviewWhileDropIsBeingSaved() throws Exception {
+        assertTrue(shelf.beginDrag(first.id));
+        assertTrue(shelf.moveTo(2));
+        final OfflineShelfOrder.Move move = shelf.finishDrag();
+        assertFalse(shelf.replace(store.list()));
+        assertFalse(shelf.beginDrag(second.id));
+        assertNull(shelf.moveBy(second.id, 1));
+        assertEquals(List.of(second.id, third.id, first.id), ids(shelf.items()));
+        // A failed write/cancel releases the guard and restores the last committed order.
+        shelf.cancelDrag();
+        assertTrue(shelf.replace(store.list()));
+        assertEquals(List.of(first.id, second.id, third.id), ids(shelf.items()));
+        assertEquals(first.id, move.id);
     }
 
     @Test public void emptyShelfHasNoDragOrMove() {

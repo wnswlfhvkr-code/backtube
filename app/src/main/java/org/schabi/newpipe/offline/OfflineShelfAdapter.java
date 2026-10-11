@@ -38,6 +38,11 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         }
     }
 
+    void completeMove(final List<OfflineStore.Entry> entries) {
+        order.completeMove(entries);
+        notifyDataSetChanged();
+    }
+
     void setCurrentUrl(@Nullable final String url) {
         if (!Objects.equals(currentUrl, url)) {
             currentUrl = url;
@@ -138,7 +143,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
 
         holder.root.setOnClickListener(view -> {
             final OfflineStore.Entry selected = boundEntry(holder);
-            if (interactionEnabled && selected != null
+            if (interactionEnabled && draggedId == null && selected != null
                     && selected.state == OfflineStore.State.READY) {
                 listener.play(selected);
             }

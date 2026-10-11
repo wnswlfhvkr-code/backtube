@@ -10,6 +10,7 @@ final class OfflineShelfOrder {
     private List<OfflineStore.Entry> committed;
     private List<OfflineStore.Entry> visible;
     private String draggedId;
+    private boolean pendingCommit;
 
     OfflineShelfOrder(final List<OfflineStore.Entry> entries) {
         replace(entries);
@@ -20,7 +21,7 @@ final class OfflineShelfOrder {
     }
 
     boolean replace(final List<OfflineStore.Entry> entries) {
-        if (draggedId != null) {
+        if (draggedId != null || pendingCommit) {
             return false;
         }
         committed = new ArrayList<>(entries);
@@ -29,7 +30,7 @@ final class OfflineShelfOrder {
     }
 
     boolean beginDrag(final String id) {
-        if (draggedId != null || indexOf(visible, id) < 0) {
+        if (draggedId != null || pendingCommit || indexOf(visible, id) < 0) {
             return false;
         }
         draggedId = id;
@@ -56,16 +57,23 @@ final class OfflineShelfOrder {
         draggedId = null;
         final int from = indexOf(committed, id);
         final int to = indexOf(visible, id);
-        return from == to ? null : new Move(id, committed.get(to).id);
+        pendingCommit = from != to;
+        return pendingCommit ? new Move(id, committed.get(to).id) : null;
+    }
+
+    void completeMove(final List<OfflineStore.Entry> entries) {
+        pendingCommit = false;
+        replace(entries);
     }
 
     void cancelDrag() {
+        pendingCommit = false;
         draggedId = null;
         visible = new ArrayList<>(committed);
     }
 
     Move moveBy(final String id, final int offset) {
-        if (draggedId != null) {
+        if (draggedId != null || pendingCommit) {
             return null;
         }
         final int from = indexOf(committed, id);
@@ -73,7 +81,8 @@ final class OfflineShelfOrder {
             return null;
         }
         final int to = (int) Math.max(0, Math.min(committed.size() - 1L, (long) from + offset));
-        return from == to ? null : new Move(id, committed.get(to).id);
+        pendingCommit = from != to;
+        return pendingCommit ? new Move(id, committed.get(to).id) : null;
     }
 
     private static int indexOf(final List<OfflineStore.Entry> entries, final String id) {

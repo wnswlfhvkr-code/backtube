@@ -1,6 +1,7 @@
 package org.schabi.newpipe.offline;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.Manifest;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.concurrent.FutureTask;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /** Access paths use a generated WAV only; no remote media is downloaded. */
 @RunWith(AndroidJUnit4.class)
@@ -261,12 +263,110 @@ public class OfflineLibraryAccessTest {
             assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());
+            final float density = shelf.getResources().getDisplayMetrics().density;
+            assertTrue("saved row must stay compact", row.getHeight() <= 80 * density);
+            final Rect handle = new Rect();
+            final Rect menu = new Rect();
+            row.findViewById(R.id.itemHandle).getGlobalVisibleRect(handle);
+            row.findViewById(R.id.offline_item_menu).getGlobalVisibleRect(menu);
+            assertFalse("handle and menu targets overlap", Rect.intersects(handle, menu));
             assertTrue(!shelf.findViewById(R.id.offline_storage_summary).isShown());
             assertTrue(shelf.findViewById(R.id.offline_play_all).isShown());
             shelf.findViewById(R.id.offline_manage).performClick();
             assertTrue(shelf.findViewById(R.id.offline_storage_summary).isShown());
             return null;
         });
+    }
+
+    @Test
+    public void handleDragWritesOnlyOnDropAndCancelledDragRestoresOrder() throws Exception {
+        final OfflineStore.Entry second = library.store().create("Generated drag saved WAV",
+                "", 0, Uri.fromFile(source).toString(), "audio/wav");
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(second.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            final List<String> before = savedIds();
+            final var activeSnapshot = library.queueAll();
+            final String activeFirst = activeSnapshot.getItem(0).getUrl();
+            movePointerBetweenRows(second.id, saved.id, before, MotionEvent.ACTION_CANCEL);
+            assertEquals(before, savedIds());
+            await(() -> {
+                final RecyclerView list = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_saved_rows);
+                final View row = list.findViewWithTag(second.id);
+                return row != null && row.getTranslationY() == 0;
+            });
+            movePointerBetweenRows(second.id, saved.id, before, MotionEvent.ACTION_UP);
+            await(() -> {
+                try {
+                    final List<String> ids = savedIds();
+                    return ids.indexOf(second.id) + 1 == ids.indexOf(saved.id);
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            final OfflineStore reopened = new OfflineStore(new File(context.getFilesDir(),
+                    "offline"), OfflineStore.DEFAULT_LIMIT);
+            assertEquals(savedIds(), reopened.list().stream().map(entry -> entry.id)
+                    .collect(Collectors.toList()));
+            assertEquals(activeFirst, activeSnapshot.getItem(0).getUrl());
+            assertTrue(library.queueAll().isOfflineOnly());
+        } finally {
+            library.store().delete(second.id);
+        }
+    }
+
+    private List<String> savedIds() throws java.io.IOException {
+        return library.store().list().stream().map(entry -> entry.id).collect(Collectors.toList());
+    }
+
+    private void movePointerBetweenRows(final String fromId, final String toId,
+                                        final List<String> before, final int terminal)
+            throws Exception {
+        main(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            list.scrollToPosition(((OfflineShelfAdapter) list.getAdapter()).positionOf(fromId));
+            return null;
+        });
+        await(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            return list.findViewWithTag(fromId) != null && list.findViewWithTag(toId) != null
+                    && !list.isLayoutRequested();
+        });
+        final Rect from = trackRect(fromId, R.id.itemHandle);
+        final Rect to = trackRect(toId, R.id.itemRoot);
+        final long start = SystemClock.uptimeMillis();
+        sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
+        for (int step = 1; step <= 12; step++) {
+            SystemClock.sleep(20);
+            sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
+                    from.centerY() + (to.centerY() - from.centerY()) * step / 12.0f);
+        }
+        assertEquals("drag preview must not persist", before, savedIds());
+        sendPointer(start, terminal, from.centerX(), to.centerY());
+    }
+
+    private Rect trackRect(final String entryId, final int viewId) throws Exception {
+        return main(() -> {
+            final View row = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(entryId);
+            final Rect rect = new Rect();
+            assertTrue(row.findViewById(viewId).getGlobalVisibleRect(rect));
+            return rect;
+        });
+    }
+
+    private void sendPointer(final long start, final int action, final float x, final float y) {
+        final MotionEvent event = MotionEvent.obtain(start, SystemClock.uptimeMillis(),
+                action, x, y, 0);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(event);
+        event.recycle();
     }
 
     @Test
