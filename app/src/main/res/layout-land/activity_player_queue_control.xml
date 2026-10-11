@@ -312,14 +312,15 @@
         <HorizontalScrollView
             android:id="@+id/playback_options"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
             android:fillViewport="true"
+            android:minHeight="48dp"
             android:scrollbars="none">
 
             <LinearLayout
                 android:layout_width="wrap_content"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="8dp"
@@ -328,18 +329,30 @@
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/control_auto_queue"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
-                    android:minWidth="160dp"
+                    android:layout_height="wrap_content"
                     android:contentDescription="@string/personal_auto_queue"
-                    android:text="@string/personal_auto_queue" />
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
+                    android:text="@string/personal_auto_queue"
+                    app:switchPadding="8dp" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="?attr/separator_color"
+                    android:importantForAccessibility="no" />
 
                 <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/control_sleep_timer"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="wrap_content"
                     android:background="?attr/selectableItemBackground"
                     android:contentDescription="@string/personal_sleep_timer_title"
-                    android:minWidth="0dp"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
                     android:text="@string/personal_sleep_timer_off"
                     android:textColor="?attr/colorAccent" />
 
