@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="offline_library">임시저장 목록</string>
+    <string name="offline_play_all">전체재생</string>
+    <string name="offline_play_all_count">전체재생 (%1$d개)</string>
+    <string name="offline_playable_count">재생 가능한 저장본 %1$d개</string>
+    <string name="offline_no_playable">재생 가능한 저장본이 없습니다</string>
+    <string name="offline_manage">저장 관리·설정</string>
+    <string name="offline_order_hint">위·아래 버튼으로 순서를 바꾸세요. 순서 변경과 새 저장은 다음 전체재생에 적용됩니다.</string>
+    <string name="offline_move_up">위로</string>
+    <string name="offline_move_down">아래로</string>
+    <string name="offline_move_up_description">%1$s · %3$d개 중 %2$d번째 · 위로 이동</string>
+    <string name="offline_move_down_description">%1$s · %3$d개 중 %2$d번째 · 아래로 이동</string>
+    <string name="offline_delete_description">저장본 삭제: %1$s</string>
+    <string name="offline_moved">%1$s, %2$d번째로 이동했습니다</string>
+    <string name="personal_playlist_hint">곡 화면이나 재생 대기열에서 ‘재생목록에 추가’ → ‘새로운 재생목록’을 선택하면 내 목록을 만들 수 있습니다. 개인 재생목록과 북마크한 목록을 여기에서 찾으세요.</string>
+    <string name="playlist_add_or_create">재생목록에 추가·새로 만들기</string>
     <string name="offline_saved_copy">저장본 재생</string>
     <string name="offline_save">임시저장</string>
     <string name="offline_import">미디어 파일 가져오기</string>

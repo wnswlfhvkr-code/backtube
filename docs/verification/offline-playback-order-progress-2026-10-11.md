@@ -12,3 +12,6 @@
 
 - Task 2: Ruling: place OfflinePlayQueue in existing playqueue package — reuse package-private queue/item constructors without expanding their visibility; cost if wrong: future package organization adjustment.
 - Task 2: complete — corrected package-private test construction, observed missing queue/scope API RED; targeted 9 queue + 5 session tests GREEN, then full unit suite 326/326 with zero errors/failures/skips (20.017s). Queue/local scope serialized and restored; no extractor/recommendation fallback added. Actual ExoPlayer device behavior awaits runtime QA.
+
+- Task 3: implementation and compilation complete — Android UI test first failed compilation on absent new control IDs, then debug/app-test APKs + unit suite + Checkstyle + lint task completed exit 0 (95.744s). Unit suite 326/326; Checkstyle 0. Actual Android UI test execution 0: adb devices exits -6 before enumeration because default .android home is read-only; no home/key/permission workaround.
+- Lint remains 4 existing errors: MissingClass AndroidManifest:99; WrongConstant KeyboardUtil:60 and PlayerService:214; UnspecifiedRegisterReceiverFlag AudioFocusOwnerActivity:83. Those files are byte-identical to starting 1c92066. 366 warnings; lint abortOnError=false, so task success is not lint-clean.

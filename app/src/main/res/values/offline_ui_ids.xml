@@ -2,4 +2,9 @@
 <resources>
     <item name="offline_storage_summary" type="id" />
     <item name="offline_saved_rows" type="id" />
+    <item name="offline_play_all" type="id" />
+    <item name="offline_playable_count" type="id" />
+    <item name="offline_manage" type="id" />
+    <item name="offline_move_up" type="id" />
+    <item name="offline_move_down" type="id" />
 </resources>

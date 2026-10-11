@@ -181,8 +181,8 @@
     <string name="no_player_found_toast">스트림 플레이어를 찾을 수 없습니다 (VLC를 설치하여 동영상을 재생할 수 있습니다).</string>
     <string name="controls_download_desc">스트림 파일 다운로드하기</string>
     <string name="show_info">정보 보기</string>
-    <string name="tab_bookmarks">재생목록 북마크</string>
-    <string name="controls_add_to_playlist_title">이곳에 추가</string>
+    <string name="tab_bookmarks">재생목록</string>
+    <string name="controls_add_to_playlist_title">재생목록에 추가·새로 만들기</string>
     <string name="use_inexact_seek_title">정확하지 않은 빠른 탐색 사용</string>
     <string name="use_inexact_seek_summary">정확하지 않은 탐색을 사용하면 정확도가 떨어지는 대신 더 빠르게 위치를 탐색할 수 있습니다. 5초, 15초 또는 25초 탐색 기능은 이 기능과 같이 동작하지 않습니다</string>
     <string name="auto_queue_title">다음 스트림을 자동으로 대기열에 추가</string>

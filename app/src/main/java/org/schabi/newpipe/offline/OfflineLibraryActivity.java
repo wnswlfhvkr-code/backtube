@@ -35,6 +35,7 @@ import androidx.appcompat.widget.Toolbar;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.ThemeHelper;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,6 +51,9 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private final CompositeDisposable reads = new CompositeDisposable();
     private LinearLayout rows;
     private TextView summary;
+    private TextView playableCount;
+    private Button playAll;
+    private boolean moving;
     private OfflineLibrary library;
     private boolean resumed;
     private boolean reading;
@@ -107,12 +111,35 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
         toolbar.setNavigationOnClickListener(view -> finish());
+        final ScrollView scroll = new ScrollView(this);
+        final LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(16), dp(8), dp(16), dp(24));
+        scroll.addView(body);
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        playableCount = new TextView(this);
+        playableCount.setId(R.id.offline_playable_count);
+        playableCount.setTextSize(18);
+        body.addView(playableCount);
+        playAll = button(body, R.string.offline_play_all, () -> playSaved(null));
+        playAll.setId(R.id.offline_play_all);
+        playAll.setEnabled(false);
+        final TextView orderHint = new TextView(this);
+        orderHint.setText(R.string.offline_order_hint);
+        orderHint.setPadding(0, dp(4), 0, dp(12));
+        body.addView(orderHint);
         summary = new TextView(this);
         summary.setId(R.id.offline_storage_summary);
-        summary.setPadding(24, 16, 24, 16);
-        content.addView(summary);
+        summary.setPadding(0, dp(8), 0, dp(8));
+        body.addView(summary);
         final LinearLayout actions = new LinearLayout(this);
-        content.addView(actions);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setVisibility(View.GONE);
+        final Button manage = button(body, R.string.offline_manage, () ->
+                actions.setVisibility(actions.getVisibility() == View.VISIBLE
+                        ? View.GONE : View.VISIBLE));
+        manage.setId(R.id.offline_manage);
+        body.addView(actions);
         button(actions, R.string.offline_import, () -> picker.launch(
                 new String[]{"audio/*", "video/*"}));
         button(actions, R.string.offline_delete_all, () -> confirmDelete(null));
@@ -123,14 +150,14 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         wifiOnly.setOnCheckedChangeListener((button, checked) ->
                 PreferenceManager.getDefaultSharedPreferences(this).edit()
                         .putBoolean(OfflineDownloads.WIFI_ONLY, checked).apply());
-        content.addView(wifiOnly);
-        final ScrollView scroll = new ScrollView(this);
+        wifiOnly.setMinHeight(dp(48));
+        wifiOnly.setSwitchPadding(dp(12));
+        actions.addView(wifiOnly);
         rows = new LinearLayout(this);
         rows.setId(R.id.offline_saved_rows);
         rows.setOrientation(LinearLayout.VERTICAL);
-        rows.setPadding(24, 8, 24, 24);
-        scroll.addView(rows);
-        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        rows.setPadding(0, dp(12), 0, 0);
+        body.addView(rows);
         try {
             library = OfflineLibrary.get(this);
             bound = bindService(new Intent(this, DownloadManagerService.class), connection,
@@ -223,6 +250,11 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     }
 
     private void render(final List<OfflineStore.Entry> entries) {
+        final int ready = (int) entries.stream()
+                .filter(entry -> entry.state == OfflineStore.State.READY).count();
+        playableCount.setText(getString(R.string.offline_playable_count, ready));
+        playAll.setText(getString(R.string.offline_play_all_count, ready));
+        playAll.setEnabled(ready > 0 && !moving);
         final StringBuilder signature = new StringBuilder();
         for (final OfflineStore.Entry entry : entries) {
             signature.append(entry.id).append(entry.state).append(entry.bytes)
@@ -247,12 +279,22 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             empty.setText(R.string.offline_empty);
             rows.addView(empty);
         }
+        int position = 0;
         for (final OfflineStore.Entry entry : entries) {
+            final int index = position++;
+            final LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setTag(entry.id);
+            row.setPadding(dp(16), dp(12), dp(16), dp(8));
+            row.setBackgroundResource(R.drawable.offline_saved_item_background);
+            final LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+            rowParams.bottomMargin = dp(12);
+            rows.addView(row, rowParams);
             final TextView title = new TextView(this);
             title.setText(entry.title);
             title.setTextSize(18);
-            title.setPadding(0, 20, 0, 8);
-            rows.addView(title);
+            title.setPadding(0, 0, 0, dp(8));
+            row.addView(title);
             final TextView status = new TextView(this);
             final DownloadMission mission = downloadManager == null ? null
                     : downloadManager.getOfflineMission(entry.id);
@@ -270,7 +312,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             }
             status.setText(stateLabel + " · "
                     + getString(R.string.offline_size, entry.bytes / 1_000_000.0));
-            rows.addView(status);
+            row.addView(status);
             if (entry.state == OfflineStore.State.IMPORTING
                     || entry.state == OfflineStore.State.DOWNLOADING) {
                 final ProgressBar progress = new ProgressBar(this, null,
@@ -280,15 +322,12 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 if (total > 0) {
                     progress.setProgress((int) Math.min(100, 100.0 * mission.done / total));
                 }
-                rows.addView(progress);
+                row.addView(progress);
             }
             final LinearLayout actions = new LinearLayout(this);
-            rows.addView(actions);
+            row.addView(actions);
             if (entry.state == OfflineStore.State.READY) {
-                button(actions, R.string.offline_play, () -> {
-                    NavigationHelper.playOnBackgroundPlayer(this, library.queue(entry), true);
-                    NavigationHelper.openPlayQueue(this);
-                });
+                button(actions, R.string.offline_play, () -> playSaved(entry));
             } else if (entry.state == OfflineStore.State.DOWNLOADING) {
                 if (mission != null && mission.running) {
                     button(actions, R.string.pause, () -> downloadManager.pauseMission(mission));
@@ -301,8 +340,81 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             } else if (!"giga".equals(entry.source) && !library.isCopying(entry.id)) {
                 button(actions, R.string.retry, () -> change(() -> library.retry(entry.id)));
             }
-            button(actions, R.string.delete, () -> confirmDelete(entry));
+            final LinearLayout ordering = new LinearLayout(this);
+            row.addView(ordering);
+            final Button up = button(ordering, R.string.offline_move_up,
+                    () -> moveEntry(entry, -1));
+            up.setId(R.id.offline_move_up);
+            up.setContentDescription(getString(R.string.offline_move_up_description,
+                    entry.title, index + 1, entries.size()));
+            up.setEnabled(index > 0 && !moving);
+            final Button down = button(ordering, R.string.offline_move_down,
+                    () -> moveEntry(entry, 1));
+            down.setId(R.id.offline_move_down);
+            down.setContentDescription(getString(R.string.offline_move_down_description,
+                    entry.title, index + 1, entries.size()));
+            down.setEnabled(index < entries.size() - 1 && !moving);
+            final Button delete = new Button(this);
+            delete.setText(R.string.delete);
+            delete.setMinHeight(dp(48));
+            delete.setContentDescription(getString(R.string.offline_delete_description,
+                    entry.title));
+            delete.setOnClickListener(view -> confirmDelete(entry));
+            final LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(-2, -2);
+            deleteParams.gravity = android.view.Gravity.END;
+            row.addView(delete, deleteParams);
         }
+    }
+
+    private void playSaved(@Nullable final OfflineStore.Entry selected) {
+        reads.add(Single.fromCallable(() -> {
+            if (selected == null) {
+                return library.queueAll();
+            }
+            final OfflineStore.Entry current = library.store().get(selected.id);
+            if (current == null || current.state != OfflineStore.State.READY) {
+                throw new IOException("Saved item unavailable");
+            }
+            return library.queue(current);
+        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+                .subscribe(this::startSavedQueue, this::showError));
+    }
+
+    private void startSavedQueue(final OfflinePlayQueue queue) {
+        if (queue.isEmpty()) {
+            Toast.makeText(this, R.string.offline_no_playable, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        NavigationHelper.playOnBackgroundPlayer(this, queue, true);
+        NavigationHelper.openPlayQueue(this);
+    }
+
+    private void moveEntry(final OfflineStore.Entry entry, final int offset) {
+        if (moving) {
+            return;
+        }
+        moving = true;
+        playAll.setEnabled(false);
+        reads.add(Single.fromCallable(() -> {
+            library.store().move(entry.id, offset);
+            return library.store().list();
+        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+                .subscribe(entries -> {
+                    moving = false;
+                    rendered = "";
+                    render(entries);
+                    for (int i = 0; i < entries.size(); i++) {
+                        if (entries.get(i).id.equals(entry.id)) {
+                            rows.announceForAccessibility(getString(R.string.offline_moved,
+                                    entry.title, i + 1));
+                            break;
+                        }
+                    }
+                }, error -> {
+                    moving = false;
+                    refresh();
+                    showError(error);
+                }));
     }
 
     private static int stateText(final OfflineStore.State state) {
@@ -363,11 +475,20 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         }
     }
 
-    private void button(final LinearLayout parent, final int text, final Runnable action) {
+    private int dp(final int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private Button button(final LinearLayout parent, final int text, final Runnable action) {
         final Button button = new Button(this);
         button.setText(text);
+        button.setMinHeight(dp(48));
+        button.setMinWidth(dp(48));
         button.setOnClickListener(view -> action.run());
-        parent.addView(button, new LinearLayout.LayoutParams(0, -2, 1));
+        final boolean horizontal = parent.getOrientation() == LinearLayout.HORIZONTAL;
+        parent.addView(button, new LinearLayout.LayoutParams(horizontal ? 0 : -1,
+                -2, horizontal ? 1 : 0));
+        return button;
     }
 
     private interface LocalAction {

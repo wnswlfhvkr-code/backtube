@@ -20,6 +20,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
+import android.widget.Button;
 
 import androidx.appcompat.widget.Toolbar;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -171,6 +172,76 @@ public class OfflineLibraryAccessTest {
         await(() -> active(MainActivity.class) != null && active(MainActivity.class).getResources()
                 .getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
                 && offlineSelectorVisible());
+    }
+
+    @Test
+    public void savedOrderControlsAndWholePlayCountSurviveRotation() throws Exception {
+        final OfflineStore.Entry second = library.store().create("Generated second saved WAV",
+                "", 0, Uri.fromFile(source).toString(), "audio/wav");
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(second.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            await(() -> active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(second.id) != null);
+            main(() -> {
+                final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+                final View row = shelf.findViewById(R.id.offline_saved_rows)
+                        .findViewWithTag(second.id);
+                final Button up = row.findViewById(R.id.offline_move_up);
+                final float density = shelf.getResources().getDisplayMetrics().density;
+                assertTrue(up.getHeight() >= 48 * density);
+                assertTrue(up.getContentDescription().toString().contains(second.title));
+                assertTrue(shelf.findViewById(R.id.offline_play_all).isEnabled());
+                up.performClick();
+                return null;
+            });
+            await(() -> {
+                try {
+                    final List<OfflineStore.Entry> order = library.store().list();
+                    int firstIndex = -1;
+                    int secondIndex = -1;
+                    for (int i = 0; i < order.size(); i++) {
+                        if (order.get(i).id.equals(saved.id)) {
+                            firstIndex = i;
+                        } else if (order.get(i).id.equals(second.id)) {
+                            secondIndex = i;
+                        }
+                    }
+                    return secondIndex >= 0 && secondIndex + 1 == firstIndex;
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            final OfflineStore reopened = new OfflineStore(new File(context.getFilesDir(),
+                    "offline"), OfflineStore.DEFAULT_LIMIT);
+            assertEquals(library.store().list().get(0).id, reopened.list().get(0).id);
+            assertEquals(reopened.list().stream()
+                    .filter(entry -> entry.state == OfflineStore.State.READY).count(),
+                    library.queueAll().size());
+            main(() -> {
+                active(OfflineLibraryActivity.class)
+                        .setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                return null;
+            });
+            await(() -> active(OfflineLibraryActivity.class) != null
+                    && active(OfflineLibraryActivity.class).getResources().getConfiguration()
+                    .orientation == Configuration.ORIENTATION_LANDSCAPE);
+            awaitShelf();
+            final int playable = library.queueAll().size();
+            main(() -> {
+                final TextView count = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_playable_count);
+                assertTrue(count.getText().toString().contains(
+                        Integer.toString(playable)));
+                return null;
+            });
+        } finally {
+            library.store().delete(second.id);
+        }
     }
 
     @Test
