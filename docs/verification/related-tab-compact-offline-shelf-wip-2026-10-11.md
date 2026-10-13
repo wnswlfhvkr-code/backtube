@@ -1,5 +1,22 @@
 # Related default tab and compact saved library — resume record
 
+**Execution-server boundary (2026-10-13T20:34Z):** Source and final checks
+completed before the selected environment's exec-server transport disconnected.
+Remote record checkpoint `0f9a73330bcf93b762bb6e1aebee602048a291f0`, tree `66c18c1046e2e295b45a3b188d11d21dda2432d8`, was
+then read back through the official GitHub app: all8 published source/document
+files exactly match; the earlier product read-back verified all11 source hashes.
+The final git fetch/branch alignment command failed before process creation,
+so local alignment and final private receipt updates were not executed.
+Last verified local author HEAD was
+`8225c3e13b9035077b7cec72448bff82d71ff849`, tree66c18c1, clean before
+remote publication; no current local process/HEAD claim is made after disconnect.
+The next runner must first recheck actual process/HEAD/diff and preserve the local
+author commits; the official remote source/record and PR7 are authoritative.
+This additional resume-only checkpoint changes no app source. Its exact ref is
+reported in PR7 and the coordinator's final response. Existing private queue/
+handoff files may predate this boundary. No command-server reconnect, permission
+expansion, authentication/key check or Library401 workaround was attempted.
+
 **Latest verified product checkpoint (2026-10-13):** `b5bc608c0f6c0d85132d39caa604bdfab1bdf116`,
 tree `f13a8e02e39b452ae6f9fcc05bcfd056a9e3681d`. Approved source5files and all11
 verified source/test hashes read back exactly from the existing remote branch.
