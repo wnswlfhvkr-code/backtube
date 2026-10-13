@@ -1,88 +1,129 @@
 # Personal playlist entry and saved-only controls audit
 
-Parent-approved scope (2026-10-13): the user reports that only playlist bookmarks
-are visible and wants user-created playlists plus saved-list-only Play all/order.
-Reuse working functionality; fix only proven entry/connection gaps. Preserve
-500,000,000-byte saved quota, no automatic expiry, original-user-file ownership,
-and the active queue versus next Play all snapshot. No migration/name policy,
-new release/signing credentials, reset, uninstall, Claude or auth bypass.
+Parent-approved scope (2026-10-13): expose user-created playlists and audit
+saved-list-only Play all/order. Reuse working functions; fix demonstrated entry
+and save-lifetime gaps. PR7 description edits are explicitly authorized. Preserve
+500,000,000-byte quota, no automatic expiry, original-user-file ownership and
+active offline queue snapshot versus next Play all. No migration/name policy,
+Claude/auth/token/key checks, new signing key, paid API, permission expansion,
+reset/uninstall, main merge, deployment or new release. Deadline stays
+2026-10-14T02:00:00Z. Root owns tracked edits/Gradle; agents draft/review read-only.
 
-Audit baseline: clean `6e726c3390c095d94ab5ae424f763fb023f05b86` (record-only
-update after product `acd03b5`). PR7 description was explicitly updated/read back
-with source373/UI0/current-APK blockers before this follow-up implementation.
+Verified product snapshot: `b5bc608c0f6c0d85132d39caa604bdfab1bdf116` (after standalone entry checkpoint
+`d9dc37945828b8b6b50a00c91dac653181150741`; audit base
+`6e726c3390c095d94ab5ae424f763fb023f05b86`). Exact remote tree, approved file
+bytes and all verified source hashes were checked. The following record-only
+checkpoint changes no app source; its exact branch HEAD is in PR7 and the final
+handoff receipt. Historical 338/358/373/376 results are not this final result.
 
 ## Existing connections
 
 | User-visible operation | Source evidence | Result |
 | --- | --- | --- |
-| Playlist screen | MainActivity bookmarks navigation -> BookmarkFragment; merged local and remote items | Already present |
-| Create from a track/queue | VideoDetailFragment/StreamDialogDefaultEntry/PlayQueueActivity -> PlaylistDialog -> PlaylistCreationDialog -> LocalPlaylistManager.createPlaylist | Already present |
-| Local list selection | BookmarkFragment selected(PlaylistMetadataEntry) -> NavigationHelper.openLocalPlaylistFragment | Already present |
-| Playlist save/order | LocalPlaylistManager transaction; LocalPlaylistFragment drag/clearView/onPause -> updateJoin; ordered DAO joins | Already present |
-| Personal playlist Play all | PlayButtonHelper -> LocalPlaylistFragment.getPlayQueue; new SinglePlayQueue from copied ordered metadata | Already present |
-| Saved-library entry | MainActivity saved-library item -> OfflineLibraryActivity | Already present |
-| Saved-only Play all | header playAll -> playSaved(null) -> OfflineLibrary.queueAll -> OfflinePlayQueue(validated Store snapshot) -> background player/queue | Already present |
-| Saved reorder | handle and accessible Up/Down -> OfflineShelfOrder.Move -> synchronized atomic OfflineStore.move; reopen order | Already present |
-| Saved safety | DEFAULT_LIMIT=500_000_000; expires normalized0; app-owned media/part paths; reader-aware removal; no original URI deletion | Preserved |
+| Playlist screen | MainActivity bookmarks navigation -> BookmarkFragment, merged local and remote entries | Existing |
+| Create from track/queue | VideoDetailFragment/StreamDialogDefaultEntry/PlayQueueActivity -> PlaylistDialog -> PlaylistCreationDialog -> LocalPlaylistManager | Existing |
+| Standalone creation | Persistent New Playlist button -> existing creation dialog -> named empty metadata | Connected in this change |
+| Personal list selection | Local PlaylistMetadataEntry -> NavigationHelper.openLocalPlaylistFragment | Existing |
+| Personal content order | LocalPlaylistFragment drag/clearView/onPause -> transactional updateJoin -> ordered DAO joins | Existing; accepted save now survives teardown |
+| Bookmark display order | BookmarkFragment -> local and remote manager transactions | Existing; accepted save now survives teardown |
+| Personal Play all | PlayButtonHelper -> getPlayQueue -> new SinglePlayQueue from ordered copied metadata | Existing |
+| Saved-library entry | MainActivity -> OfflineLibraryActivity | Existing |
+| Saved-only Play all | header -> playSaved -> OfflineLibrary.queueAll -> validated Store snapshot -> OfflinePlayQueue/player | Existing |
+| Saved reorder | handle/accessibility Up/Down -> OfflineShelfOrder.Move -> atomic synchronized Store move | Existing |
+| Saved safety | quota500000000, expires0, app-owned media/part paths, reader-aware removal; original URI retained | Preserved |
 
-Existing OfflineStore/OfflineShelfOrder/OfflinePlayQueue/OfflineFirst regressions
-cover quota, expiry normalization, original-file retention, missing files,
-atomic failure/rollback, canceled drag, restart order, active snapshots and
-local-source selection. The fresh full376 suite includes those existing tests;
-no redundant saved-list feature was added. Actual Player/UI runs remain0.
+The final full suite includes OfflineStore/OfflineShelfOrder/OfflinePlayQueue/
+OfflineFirst regressions for quota/expiry normalization, source-file retention,
+missing files, atomic failure/rollback, canceled drag, restart order, active
+snapshots and local-source scope. No duplicate saved-list subsystem was added.
+Actual Player/UI execution remains0.
 
-## Proven gap and minimal connection
+## Standalone creation
 
-BookmarkFragment/fragment_bookmarks previously exposed only an explanatory hint,
-with no standalone New Playlist action. The manager returned Maybe.empty for an
-empty stream list. Existing schema already supports empty rows: metadata and
-append-choice queries LEFT JOIN playlists, and maximum join index defaults to -1.
-No schema/migration decision is required.
+Previously the bookmark screen only gave a hint and the manager returned
+Maybe.empty for empty input. Existing LEFT JOIN metadata/append-choice queries
+already support empty rows, and maximum join index defaults to -1.
 
-A permanent localized 48dp-minimum New Playlist button below the existing hint
-now directly opens PlaylistCreationDialog with an empty non-null selection.
-The list, error and empty panels follow this button. It deliberately reuses the
-creation dialog rather than routing an empty selection into PlaylistAppendDialog,
-whose existing track-choice path expects its first track. The existing transaction
-now stores a named empty playlist with DEFAULT_THUMBNAIL_ID=-1, emits an empty
-join-ID result as success, and preserves seeded creation and join-ID return values.
-No auto-open/return-ID rewrite, duplicate-name or blank-name policy was added.
+A localized New Playlist button (minimum48dp) remains above list/empty/error
+panels. It directly opens PlaylistCreationDialog with an empty selection instead
+of passing it to PlaylistAppendDialog's first-track path. Existing transaction
+stores named empty metadata with default thumbnail-1 and emits an empty join-ID
+list as successful creation. Seeded creation, thumbnail/order and join-row-ID
+result contract remain unchanged. No schema/migration, auto-open or naming-policy
+change. First append starts at index0.
 
-Meaningful JVM RED: 3 tests, 1 assertion failure, zero errors (empty creation
-completed without value/insert). GREEN3/3; controls preserve seeded thumbnail/
-join order and first append index0. These execute the real manager/transaction
-body with Room DAO infrastructure replaced explicitly; they are not SQLite or
-Android runs. Existing Android empty-list expectation now verifies persisted
-visible metadata. New compiled fixtures cover standalone cancel/confirm and an
-owned disk DB create/reopen/append/reorder/reopen without replacing the app DB.
-Both remain unexecuted.
+Meaningful manager RED3/1 assertion failure/0errors -> GREEN3. Two controls cover
+seeded thumbnail/ordered join IDs and first append. Room infrastructure is mocked,
+but real manager transaction bodies execute. Compiled Android fixtures cover
+standalone cancel/confirm and owned disk DB creation/reopen/append/reorder/reopen;
+they are unexecuted and do not replace/reset the app database.
 
-Verification: fresh JVM376/56 suites, zero failures/errors/skips; Checkstyle0;
-Kotlin lint; debug/release lint0errors/366warnings/0new warning signatures;
-Android source compilation and unsigned release build succeeded (5m30s).
-A test-only ignored-result warning was corrected by asserting returned append
-count; final Android compilation/Kotlin/debuglint passed again in43s. Product
-source hashes stayed unchanged. Whole-plan independent review follows the
-separate append-lifecycle investigation; it is not claimed complete yet.
+## Confirmed append and order save lifetime
 
-Evidence: `/workspace/scratch/backtube-overnight-20261013/personal-playlist/`
-contains creation-red.xml, creation-green.xml, entry-full-validation.log,
-entry-fixture-lint-final.log, entry-final-verification.json and progress.md.
+Actual dialog handler + manager + onDestroyView with paused IO proved an accepted
+append was canceled before its transaction. RED2/1 -> expandedRED4/3 (including
+first-track thumbnail and unhandled failure) -> GREEN4. Confirmed append and
+thumbnail writes now outlive the dialog view; list observation remains view-owned.
+Success/failure feedback uses captured application context and explicit onError.
 
-## Separate source candidate
+Actual content/bookmark save methods and destroy lifecycle likewise lost queued
+writes: two live controls passed, teardown cases gave RED4/2 assertion failures,
+expandedRED6/4. Keeping writes alive then exposed ended-view error-panel access
+(RED6/2). Errors use the original live panel or log when that view is gone.
 
-PlaylistAppendDialog adds an accepted IO write to view-owned disposables,
-requests dismissal, then disposes that collection in onDestroyView. A controlled
-scheduler regression is drafted privately; semantic cancellation has not yet
-been executed/proven. Do not claim device reproduction or change policy based
-on source suspicion alone.
+Fresh independent whole-plan review found one Important introduced issue: old
+completion could clear a replacement view's newer dirty flag; old failure could
+show on its error panel. Same-saver/replaced-adapter regressions produced RED8/2,
+expandedRED10/4 (zero errors), then GREEN10 with captured adapter/saver ownership
+guards. New dirty order stays pending and the next save writes it. Original-view
+or no-view successful completion may clear only its matching saver; a replacement
+view receives neither old completion nor old failure UI effects.
 
-## Delivery and real QA limitations
+Final focused17/17 (3creation+4append+10order), zero failures/errors/skips. These
+use real factories/handlers/save/destruction/Rx and real transaction lambdas with
+explicit Android/Room boundaries; they do not prove SQLite durability or device
+navigation. Finite writes are deliberately independent of view disposables,
+marked only at the three write methods with scoped CheckResult rationale.
+No process-death retry, serialized-write architecture or new error/naming policy
+is claimed. Preexisting live-view multi-save races, creation-dialog onError and
+mixed bookmark transaction partial-failure/retry behavior remain outside this
+bounded connection change; they were distinguished by the reviewer.
 
-Actual Android UI/drag/ExoPlayer/TalkBack runs0. SDK emulator/system images and
-KVM are absent. Official Library materialization remains HTTP401 without retry
-or bypass. Historical delivered APK1018 belongs to f82d5e0 and includes none of
-this overnight work. Only unsigned build validation was performed; current-source
-compatible signing and new Library delivery remain incomplete. No keys were
-imported/read/copied/generated; no existing app/data deletion, reset, release,
-main merge or deployment occurred. The coordinator deadline remains02:00UTC.
+## Final verification and review
+
+Fresh full JVM390 across58 suites, zero failures/errors/skips. Checkstyle0,
+Kotlin lint/dependency checks, Android test source compilation and unsigned
+release build passed (6m9s). Debug/release lint each:0errors,
+366warnings,0new issue/message/file signatures versus retained baseline XML.
+An initial task-name setup failure ran no checks. First broad pass found four
+new deliberate-subscription CheckResult warnings; scoped method annotations
+then justified the final verification/build. Prior four baseline lint errors
+are not current results. No app source changed during the final command;
+complete source manifest and exact remote read-back agree.
+
+Independent reviewer: Critical0; Important1 reproduced/fixed as above; Minor
+stale audit text corrected here. No second review pass was claimed. Evidence in
+`/workspace/scratch/backtube-overnight-20261013/personal-playlist/` includes RED/
+GREEN XML, final-validation.log, final-verification.json, frozen source manifest
+and secret-free progress ledger. No completed check was rerun without a new
+source change, failure or unresolved warning.
+
+## Delivery and actual QA limits
+
+Android UI/drag/ExoPlayer/TalkBack/narrow-font measurements:0 actual runs. SDK
+emulator/system images and KVM are absent; earlier ADB read-only-home restrictions
+were not bypassed. Instrumentation source compiles only. Required screenshot
+materialization and current APK transfer remain blocked by official Library
+HTTP401 before transfer; no retry/bypass and no local pixels claimed here.
+
+Historical delivered APK1018/Library receipt belongs to sourcef82d5e0 and contains
+none of the overnight fixes. This environment produced only unsigned normal
+release validation (org.schabi.newpipe,0.29.1/code1015), which is not the signed
+parallel-test package update. No current-source compatible signed APK or new
+Library file ID exists. No key import/read/copy/generation, existing-app/data
+operation, new release, main merge or deployment occurred.
+
+Unsigned validation receipt only:11,505,811bytes; SHA256
+`99b9a8b38f73d126f42e92fefcfc910f69e83a6755f15e00ea84bd40bf79f6c2`.
+`apksigner verify` exited1 (missing signature manifest). No signer comparison
+or current signed Library file ID can be reported. This is not a user installer.

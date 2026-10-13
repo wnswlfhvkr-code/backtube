@@ -1,18 +1,42 @@
 # Related default tab and compact saved library — resume record
 
-**Personal playlist entry follow-up:** Existing local playlist storage/order/
-playback works, but the bookmark screen had no standalone creation entry and
-empty creation was rejected. The minimal existing-dialog/manager connection is
-now implemented: New Playlist button, named empty metadata, default thumbnail,
-existing join-ID result contract and first append index0. Fresh JVM376/56 suites,
-style/lint/build and Android source compilation passed; actualAndroid0. Whole-plan
-independent review is pending the separate controlled append-disposal regression.
-See [connection audit](personal-playlist-entry-audit-2026-10-13.md) and
-[implementation plan](../superpowers/plans/2026-10-13-personal-playlist-entry.md).
-Current compatible signed APK/Library delivery remains blocked; APK1018 remains
-historical f82d5e0. No signing/auth/data/reset/release operation occurred.
+**Latest verified product checkpoint (2026-10-13):** `b5bc608c0f6c0d85132d39caa604bdfab1bdf116`,
+tree `f13a8e02e39b452ae6f9fcc05bcfd056a9e3681d`. Approved source5files and all11
+verified source/test hashes read back exactly from the existing remote branch.
+The record-only follow-up changes no app source; its exact current HEAD is in
+PR7 and the final handoff receipt. The standalone New Playlist entry creates a
+named empty list through the existing dialog/manager; first append starts at0
+and existing schemas, naming behavior, seeded creation and join-ID API remain.
+Confirmed append/thumbnail and personal/bookmark order writes now survive view
+teardown. Captured adapter/saver guards prevent old completion/error from
+altering a replacement view's new order. A fresh independent whole-plan review's
+one Important was reproduced and fixed (RED10/4 -> GREEN10); stale audit Minor
+was corrected. No second review pass is claimed.
 
-**Latest follow-up (2026-10-13T19:15Z):** The parent explicitly authorized
+Fresh full JVM390/58 suites:0failures/errors/skips; Checkstyle0;
+debug/release lint0errors/366warnings/0new warning signatures; Kotlin lint and
+dependency checks, Android test source compilation and unsigned release build
+passed (6m9s). Final app source manifest stayed unchanged during the command.
+The old338/358/373/376 counts and former four baseline lint errors are historical.
+Actual Android UI/drag/ExoPlayer/TalkBack runs remain0. Narrow-font/disk/UI
+instrumentation is compiled only. See [final connection/lifecycle audit](personal-playlist-entry-audit-2026-10-13.md)
+and [completed plan](../superpowers/plans/2026-10-13-personal-playlist-entry.md).
+
+Current signed parallel-test APK/newLibraryID: none. The unsigned normal-release
+validation artifact is org.schabi.newpipe,0.29.1/code1015,11,505,811bytes,
+SHA256 `99b9a8b38f73d126f42e92fefcfc910f69e83a6755f15e00ea84bd40bf79f6c2`;
+apksigner exits1 with missing signature manifest. It cannot update the existing
+signed parallel package. APK1018 remains the historical f82d5e0 receipt below.
+Official Library401 blocked required screenshots/current APK transfer before
+materialization; no local image pixels or current compatible signing are claimed.
+No retry/bypass, key import/read/copy/generation, auth/token check, Claude, paid
+API, permission expansion, app/data reset/uninstall, main merge, deployment or
+new release. Quota500000000, noexpiry, original files and offline snapshot rules
+are preserved. PR7 description updates are expressly authorized by the parent;
+earlier PR-body prohibitions below describe earlier scope. Fixed coordinator
+deadline remains2026-10-14T02:00:00Z. Root owns edits/builds, agents read-only.
+
+**Earlier follow-up (2026-10-13T19:15Z):** The parent explicitly authorized
 updating existing Draft PR7's description, superseding the earlier PR-body
 prohibition for this update. Product source verified at
 `acd03b5eec7588f6e4cb4834908d3e0349f84a13`, tree
