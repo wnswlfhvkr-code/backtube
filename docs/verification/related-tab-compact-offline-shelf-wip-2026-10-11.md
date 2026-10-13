@@ -1,13 +1,15 @@
 # Related default tab and compact saved library — resume record
 
 **Latest audit (2026-10-13):** Product source remains
-`f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reports APK 1018,
-`0.29.1-offline-ui-test-20261012`, already delivered. Its official Library metadata
-was found, but the official download helper returned HTTP 401 before bytes were
-obtained. This VM has not reverified that APK's producer SHA, digest, public signer
-or signed-production build receipt. Those facts must come from the existing
-production evidence; the filename alone is insufficient. Delivery remains reported
-complete, while this provenance recheck is partial. See the dated audit below.
+`f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reread the original
+production-completion turn and supplied its APK 1018 receipt: producer source is
+that exact product HEAD, version is `0.29.1-offline-ui-test-20261012`, signature
+was verified against the existing certificate, and native delivery was accepted.
+The public production metadata is preserved below, with the exact private source
+turn/receipt locators retained in the local audit record. This completes the
+historical provenance link. Today's independent byte recheck remains blocked:
+the official Library helper returned HTTP 401 before transfer. No APK bytes were
+read in this VM, and that failure was not retried or bypassed.
 No build/test rerun, installation, ADB/authentication action or new APK is part of
 this audit. The following 2026-10-11 sections are historical records.
 
@@ -416,20 +418,25 @@ source's validation. The PR body remains outside the authorized edit scope.
 
 | Fact | Evidence and status in this audit |
 | --- | --- |
-| Delivery/version | Parent reports delivered code 1018, version `0.29.1-offline-ui-test-20261012`. This preserves the delivery status; version bytes were not read here. |
+| Delivery/version | Original production receipt confirms code 1018, version `0.29.1-offline-ui-test-20261012`; native file transmission was accepted at `2026-10-12T02:34:36Z`. Parent reread that completion turn; bytes were not read here today. |
 | Official Library filename | `backtube-offline-ui-parallel-test-f82d5e0-20261012.apk` |
 | Library-reported size | 11,627,681 bytes; file identity is retained privately in the local audit receipt. |
-| Actual producing source SHA | Not reverified here. The `f82d5e0` filename label is a retrieval hint, not a production source attestation. |
-| APK SHA-256/public signer/package | Not reverified here; do not substitute the unsigned 1017 digest, 1016 certificate evidence or expected package for a 1018 binary verification. |
-| Signed production build receipt | Not available in this checkout. The retained `f82d5e0` unsigned release build is source-validation evidence, not proof of the delivered signed APK's production. |
+| Actual producing source SHA | `f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`, confirmed by the parent-read historical production receipt. It equals the source pinned to the retained 358-test/lint/build evidence. |
+| Package | `org.schabi.newpipe.continuous.testofflinelibrary20261011`, from the historical receipt. |
+| APK SHA-256 | `6bf16d8318ed72cede2be35fb883421049e090cdb08b44d52b3dd0257a1d3a2c`, from the historical receipt; not recomputed here today. |
+| Public signer certificate SHA-256 | `4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc`; the producer verified a valid signature and a match to the existing certificate. This is a public certificate digest, not private key material. |
+| Signed production build receipt | Parent reread the actual production-completion turn. The producer retained `apk-verification.json` in its own environment, reported a clean checkout and actual Android UI runs 0. Exact task/turn/message and original receipt location are retained privately. This VM does not assume that producer path exists locally or claim to have read its JSON. |
 | Current byte-read blocker | Official Library helper failed with HTTP 401 during hosted-apps tool discovery, before transfer. No authentication retry, credential inspection, direct URL transfer or alternative download route was attempted. |
 
-The existing APK production receipt was requested to resolve those missing facts;
-no new signing or production was requested. Once that receipt identifies the real
-producer SHA, compare it to the pinned product HEAD above and preserve the actual
-relationship. A future documentation-only audit commit does not imply new app
-source or a newly built APK. Do not claim a match from an APK filename, version
-string or passing JVM tests alone.
+The parent supplied the requested existing production receipt after rereading its
+original completion turn. Its Library identity matches the item found in this
+audit. The producer SHA equals the pinned product source; documentation audit
+`b428edc12e6f385bd38733c1ad79482838a84d24` and this receipt-link follow-up change
+only this Markdown file. Application, resources, tests and build configuration
+remain identical to the producer's source. Neither audit implies a new APK.
+The provenance match is grounded in the historical production receipt, separately
+from the current Library metadata, retained unsigned source-build evidence and
+unresolved current byte-materialization failure.
 
 Signed APK 1017 at source `4f8c53f` and the unsigned 1017 artifact remain historical,
 separate deliveries/evidence. This audit does not withdraw reported APK 1018
