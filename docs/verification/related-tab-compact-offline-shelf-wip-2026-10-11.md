@@ -1,5 +1,16 @@
 # Related default tab and compact saved library — resume record
 
+**Latest audit (2026-10-13):** Product source remains
+`f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reports APK 1018,
+`0.29.1-offline-ui-test-20261012`, already delivered. Its official Library metadata
+was found, but the official download helper returned HTTP 401 before bytes were
+obtained. This VM has not reverified that APK's producer SHA, digest, public signer
+or signed-production build receipt. Those facts must come from the existing
+production evidence; the filename alone is insufficient. Delivery remains reported
+complete, while this provenance recheck is partial. See the dated audit below.
+No build/test rerun, installation, ADB/authentication action or new APK is part of
+this audit. The following 2026-10-11 sections are historical records.
+
 **Latest scope (2026-10-11, follow-up):** Starting from clean
 `4f8c53f39be157f28e8e9fffd003ee087be63409`, fix the existing debug 4/release 3
 lint errors and eight compact-shelf warnings with narrow correctness/accessibility
@@ -371,3 +382,58 @@ and is not replaced by this follow-up's unsigned build. This task delivers sourc
 verification; the parent coordinates any later compatible signing/update. No new
 installable APK, new key, credential check, key transfer, Library upload, app
 uninstall/reset, merge, deployment, public release or PR-body edit was performed.
+
+## Planning, implementation and delivery provenance audit — 2026-10-13
+
+The initial checkout was clean at product HEAD
+`f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`, tree
+`7628bf43f9f1ac54e44865f42cbb786b65df4a92`. No other writing/build process was
+present. Public branch fetch and PR7 metadata read-back confirmed that exact HEAD,
+Draft status and stack base `feat/playback-feedback`. All twelve source/test/doc
+hashes in the retained source handoff matched the checkout. This is a provenance
+comparison, not a repeat of the earlier tests or builds.
+
+### Requirements and acceptance boundaries
+
+| Approved requirement | Actual implementation at product HEAD | Existing verification | Remaining Android acceptance |
+| --- | --- | --- | --- |
+| Related is the new default; preserve existing settings | Missing selection defaults to Related; stored choices retain their value. `onPause` saves the current page. Related exists only when enabled and no separate pane is present. | Four preference tests include no-write checks; phone and large-landscape XML/source guards were inspected. | Real playback-screen selection/persistence, OFF behavior and separate-panel behavior remain device-unexecuted. |
+| Playlist-like compact saved rows and local thumbnails | RecyclerView rows have local placeholder, title/status, row playback, handle, overflow deletion, collapsed management and top Play all. No online thumbnail lookup was added. | Resources and instrumentation source compiled; compact/separate-target assertions exist. | Narrow screens and large text must remain legible without overlapping or clipping targets. Existing default-font height assertions do not establish large-font acceptance. |
+| Durable drag order with safe failure/cancel | UUID preview; drop-only atomic persistence; stale refresh guard; failure/cancel restores committed order. | Order model and identity/diff regressions are part of the retained 358 JVM results; pointer instrumentation compiled. | Actual drag/recovery timing, rapid repeat gestures, pause/rotation and disabled animations remain unexecuted. |
+| Accessible reordering and safe row/handle/menu activation | Up/Down actions, positional labels, labeled playback/delete, separate targets and a per-touch accepted-drag latch. | Identity mapping/model tests; accessibility/activation assertions compiled. | TalkBack focus order, spoken labels/actions and physical touch mis-inputs require device acceptance. |
+| Local-only queue; preserve current snapshot and handle deleted/missing files | Existing OfflinePlayQueue validates local saves. Running queue keeps a snapshot; next Play all uses the new shelf order. Current row uses local URL identity. | Local queue/store/session regressions remain in the retained JVM evidence. | ExoPlayer playback, actual file disappearance/deletion, open-reader completion and current-track UI timing remain unexecuted. |
+
+The retained source validation is 358 JVM tests/52 suites with zero failures,
+errors or skips; Checkstyle zero; debug/release lint zero errors and 366 existing
+warnings each; instrumentation compilation and unsigned release packaging.
+The retained corrected combined build log ends `BUILD SUCCESSFUL in 3m 50s`.
+The source hashes and recorded log were read again for this audit; no Gradle,
+Android, emulator, ADB or installer was run. Actual Android UI/drag/ExoPlayer runs
+remain **0**. Old PR-body 338-test/1016 values describe older work and are not this
+source's validation. The PR body remains outside the authorized edit scope.
+
+### APK 1018 evidence receipt
+
+| Fact | Evidence and status in this audit |
+| --- | --- |
+| Delivery/version | Parent reports delivered code 1018, version `0.29.1-offline-ui-test-20261012`. This preserves the delivery status; version bytes were not read here. |
+| Official Library filename | `backtube-offline-ui-parallel-test-f82d5e0-20261012.apk` |
+| Library-reported size | 11,627,681 bytes; file identity is retained privately in the local audit receipt. |
+| Actual producing source SHA | Not reverified here. The `f82d5e0` filename label is a retrieval hint, not a production source attestation. |
+| APK SHA-256/public signer/package | Not reverified here; do not substitute the unsigned 1017 digest, 1016 certificate evidence or expected package for a 1018 binary verification. |
+| Signed production build receipt | Not available in this checkout. The retained `f82d5e0` unsigned release build is source-validation evidence, not proof of the delivered signed APK's production. |
+| Current byte-read blocker | Official Library helper failed with HTTP 401 during hosted-apps tool discovery, before transfer. No authentication retry, credential inspection, direct URL transfer or alternative download route was attempted. |
+
+The existing APK production receipt was requested to resolve those missing facts;
+no new signing or production was requested. Once that receipt identifies the real
+producer SHA, compare it to the pinned product HEAD above and preserve the actual
+relationship. A future documentation-only audit commit does not imply new app
+source or a newly built APK. Do not claim a match from an APK filename, version
+string or passing JVM tests alone.
+
+Signed APK 1017 at source `4f8c53f` and the unsigned 1017 artifact remain historical,
+separate deliveries/evidence. This audit does not withdraw reported APK 1018
+delivery or present an unsigned build as its installer. Source implementation,
+retained source checks, signed-artifact provenance and device acceptance are four
+distinct statuses. No PC setup, ADB authorization, emulator installation, app/data
+change, new APK, deployment, main merge, credential check or PR-body edit occurred.
