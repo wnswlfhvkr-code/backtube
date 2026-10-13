@@ -83,6 +83,25 @@ again in 35s. Review found no material product issue. Actual Android runs remain
 No new installable APK, signing, Library retry, installation, reset, PR-body edit,
 merge or deployment occurred.
 
+### Overnight acceptance fixture — narrow width and large fonts
+
+`OfflineShelfLayoutTest` inflates and binds the real resources/adapter against an
+isolated, rule-owned cache OfflineStore at 320/360 dp and fontScale 1/2 for READY,
+IMPORTING, DOWNLOADING and FAILED entries. It checks real Android text Layout
+height, two-line title, contained/disjoint thumbnail/title/details/handle/menu,
+48 dp targets, progress placement and row growth for the long title. No online
+thumbnail request, mission, Activity, player or real user store is used.
+
+Android test source compilation, Checkstyle zero and debug lint zero errors/366
+existing warnings passed. Independent source review found no material fixture
+issue. This establishes compilation only: all 16 configured row measurements
+remain unexecuted, with actual Android runs 0. The fixture covers English/light/
+portrait detached rows, not viewport, RTL/night, installed TalkBack, system-font
+settings or real gestures. Source inspection found no proven font clipping, so
+no speculative layout change was made. Evidence is
+`/workspace/scratch/backtube-overnight-20261013/layout-fixture-compile.log`.
+Second vertical is preserved at remote `9933d57eecfaeed7fcb1cc60a05c14fe74540fb7`.
+
 **Historical APK audit (2026-10-13, before overnight fixes):** Delivered product source was
 `f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reread the original
 production-completion turn and supplied its APK 1018 receipt: producer source is
