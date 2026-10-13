@@ -1,5 +1,30 @@
 # Related default tab and compact saved library — resume record
 
+**Latest follow-up (2026-10-13T19:15Z):** The parent explicitly authorized
+updating existing Draft PR7's description, superseding the earlier PR-body
+prohibition for this update. Product source verified at
+`acd03b5eec7588f6e4cb4834908d3e0349f84a13`, tree
+`ebcbe8010977d57711eb71ca2e27455e39ff990c`; clean checkout and exact remote
+file/source-hash read-back confirmed. Fresh app JVM 373/55 suites, zero failures,
+errors or skips; Checkstyle zero; debug/release lint zero errors/366 warnings,
+zero new warning signatures against retained baseline; Kotlin lint, Android test
+source compilation and unsigned release build passed (5m31s). Actual Android
+UI/ExoPlayer runs remain 0. APK1018 is a historical `f82d5e0` receipt and does
+not contain these fixes. No current-source compatible signed APK or new Library
+delivery was completed; official Library401 and unavailable emulator/system
+images/KVM remain limitations. No key import/read/copy/generation, credentials,
+new release, merge, deployment or data reset is authorized.
+
+Next approved audit: the user reports only playlist bookmarks and wants their
+own playlists, plus saved-list-only Play all and reorder. Inspect existing UI
+entry, creation/save, order/restart persistence and playback connections before
+adding anything. Fix only demonstrated missing connections with tests first;
+policy or large migration decisions remain deferred. Preserve the 500,000,000
+byte shelf limit, no automatic expiry, source-user-file ownership, and running
+queue snapshot versus the next Play all snapshot. Library/auth failures must not
+be bypassed. The fixed coordinator deadline remains `2026-10-14T02:00:00Z`.
+The following earlier PR-body prohibitions describe prior authorized scope.
+
 **Overnight queue (2026-10-13):** Fixed execution window starts
 `2026-10-13T18:09:53Z` and ends `2026-10-14T02:00:00Z` (11:00 KST).
 Started clean on `81da6b8c0b850a0cabbd4217e77915ca1f8bd9ad`, existing Draft PR7;
