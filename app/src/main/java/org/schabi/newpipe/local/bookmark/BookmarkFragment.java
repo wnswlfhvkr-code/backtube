@@ -3,6 +3,7 @@ package org.schabi.newpipe.local.bookmark;
 import static org.schabi.newpipe.local.bookmark.MergedPlaylistManager.getMergedOrderedPlaylists;
 import static org.schabi.newpipe.util.ThemeHelper.shouldUseGridLayout;
 
+import android.annotation.SuppressLint;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -360,6 +361,7 @@ public final class BookmarkFragment extends BaseLocalListFragment<List<PlaylistL
     }
 
     @Override
+    @SuppressLint("CheckResult") // Finite confirmed writes intentionally outlive the view.
     public void saveImmediate() {
         if (itemListAdapter == null) {
             return;
@@ -371,6 +373,8 @@ public final class BookmarkFragment extends BaseLocalListFragment<List<PlaylistL
             return;
         }
 
+        final var adapterForWrite = itemListAdapter;
+        final DebounceSaver saverForWrite = debounceSaver;
         final List<LocalItem> items = itemListAdapter.getItemsList();
         final List<PlaylistMetadataEntry> localItemsUpdate = new ArrayList<>();
         final List<Long> localItemsDeleteUid = new ArrayList<>();
@@ -406,18 +410,29 @@ public final class BookmarkFragment extends BaseLocalListFragment<List<PlaylistL
         // 1. Update local playlists
         // 2. Update remote playlists
         // 3. Set NoChangesToSave
-        disposables.add(localPlaylistManager.updatePlaylists(localItemsUpdate, localItemsDeleteUid)
+        // A confirmed snapshot write must outlive the list view.
+        localPlaylistManager.updatePlaylists(localItemsUpdate, localItemsDeleteUid)
                 .mergeWith(remotePlaylistManager.updatePlaylists(
                         remoteItemsUpdate, remoteItemsDeleteUid))
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(() -> {
-                            if (debounceSaver != null) {
-                                debounceSaver.setNoChangesToSave();
+                            if (debounceSaver == saverForWrite
+                                    && (itemListAdapter == null
+                                    || itemListAdapter == adapterForWrite)) {
+                                saverForWrite.setNoChangesToSave();
                             }
                         },
-                        throwable -> showError(new ErrorInfo(throwable,
-                                UserAction.REQUESTED_BOOKMARK, "Saving playlist"))
-                ));
+                        throwable -> {
+                            if (itemListAdapter == adapterForWrite
+                                    && debounceSaver == saverForWrite) {
+                                showError(new ErrorInfo(throwable,
+                                        UserAction.REQUESTED_BOOKMARK, "Saving playlist"));
+                            } else {
+                                Log.e(TAG, "Saving playlist failed outside its original view",
+                                        throwable);
+                            }
+                        }
+                );
 
     }
 
