@@ -62,6 +62,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private RecyclerView rows;
     private OfflineShelfAdapter adapter;
     private ItemTouchHelper touchHelper;
+    private final OfflineShelfTouchDispatcher touchDispatcher = new OfflineShelfTouchDispatcher();
     private TextView empty;
     private boolean dragging;
     private RecyclerView.ViewHolder dragHolder;
@@ -193,10 +194,8 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         content.addView(empty);
         rows = new RecyclerView(this) {
             @Override public boolean dispatchTouchEvent(final MotionEvent event) {
-                if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                    cancelShelfDrag();
-                }
-                return super.dispatchTouchEvent(event);
+                return touchDispatcher.dispatch(event, dragHolder != null,
+                        OfflineLibraryActivity.this::cancelShelfDrag, super::dispatchTouchEvent);
             }
         };
         rows.setId(R.id.offline_saved_rows);
@@ -253,7 +252,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     }
 
     private ItemTouchHelper createDragHelper() {
-        return new ItemTouchHelper(new ItemTouchHelper.Callback() {
+        return touchDispatcher.createHelper(new ItemTouchHelper.Callback() {
             @Override public int getMovementFlags(@NonNull final RecyclerView recyclerView,
                                                   @NonNull final RecyclerView.ViewHolder holder) {
                 return makeMovementFlags(moving ? 0 : ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
@@ -283,6 +282,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                                             @NonNull final RecyclerView.ViewHolder holder) {
                 super.clearView(recyclerView, holder);
                 if (holder == dragHolder) {
+                    touchDispatcher.onRecoveryFinished();
                     dragHolder = null;
                     if (dragging) {
                         dragging = false;

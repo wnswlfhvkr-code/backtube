@@ -21,8 +21,12 @@ ExoPlayer and Android execution remain 0. Second vertical: unavailable and tempo
 clickability and the Play accessibility action while retaining readable text and
 management controls. Meaningful real-store/binder RED became GREEN 2/2; full JVM
 363/53 suites and build/style/lint checks passed. The Android node regression is
-compiled only. Non-handle re-grab during ItemTouchHelper recovery is another
-source-confirmed candidate needing separate regression work. Earlier 358 tests
+compiled only. Third vertical now guards new input through ItemTouchHelper
+recovery and ended-animation draw cleanup, with cancellation and detach coverage.
+Final focused 10/10 and full 373/55 suites passed; independent review found no
+remaining material issue. Source work is at a stable checkpoint for coordinator
+handoff. Real Android/device scheduling and a new compatible installer remain
+blocked in this environment; no further approved demonstrated defect is known. Earlier 358 tests
 remain a baseline, not the result of this queue. APK1018 at source `f82d5e0` does
 not contain these new source fixes; no new installable APK has been produced.
 
@@ -101,6 +105,62 @@ settings or real gestures. Source inspection found no proven font clipping, so
 no speculative layout change was made. Evidence is
 `/workspace/scratch/backtube-overnight-20261013/layout-fixture-compile.log`.
 Second vertical is preserved at remote `9933d57eecfaeed7fcb1cc60a05c14fe74540fb7`.
+
+### Overnight vertical 3 — recovery touch boundaries
+
+ItemTouchHelper 1.4.0 can reselect a recovering item directly on a new DOWN,
+bypassing the shelf handle listener and disabled long-press dragging. The shelf
+now consumes a new touch sequence while its existing holder is selected or
+recovering, through UP even if recovery completes mid-sequence. The original
+handle sequence, including pointer changes and drop, is forwarded. CANCEL still
+cancels the uncommitted model and reaches RecyclerView.
+
+A second boundary exists after animation completion: clearView runs before the
+library removes its ended RecoverAnimation in onDrawOver. The dispatcher receives
+the matching-holder completion before the Activity releases that holder token.
+Its production helper factory releases the additional barrier only after real
+library draw cleanup, or after successful synchronous detach. CANCEL alone does
+not release that barrier. New title/thumbnail/menu-region input during these
+brief boundaries is consumed; the user can tap again after recovery cleanup.
+Store atomic writes, rollback, row management, queue snapshot and player behavior
+are otherwise governed by their existing implementation.
+
+A real ItemTouchHelper/callback/holder JVM control first confirmed raw-library
+reselection (1/1), with Android views/input recognition and animator scheduling
+mocked explicitly. Legacy CANCEL+forward behavior was extracted into the actual
+production dispatcher before semantic RED: 8 tests, 4 assertion failures, zero
+errors. Initial GREEN and a 371-test full run passed, but independent review found
+the animation-end/before-draw window. A separate semantic RED (9 tests, 1 wrong
+selected-holder assertion, zero errors) reproduced it. Final focused GREEN is
+10/10, covering real helper selection/recovery cleanup, modeled title/menu input,
+mid-sequence completion, fresh handle activation, CANCEL and detach/reattach.
+The fixture now uses the actual production helper factory; its callback models
+the Activity completion notification at the Android UI boundary. It does not
+instantiate the Activity or execute real ViewGroup input dispatch/animation.
+
+Final combined verification: 373 app JVM tests/55 suites, zero
+failures/errors/skips; Checkstyle zero; Kotlin lint successful/up-to-date;
+debug/release lint each zero errors/366 warnings, zero new warning signatures
+against the retained baseline XML (issue ID/message/file comparison); Android
+source compilation; unsigned release build, all successful in 5m31s.
+Independent final source review found no remaining material issue. Actual Android
+runs remain 0; real input scheduling, TalkBack, drag visuals and playback remain
+unperformed. The narrow-width/large-font fixture is compiled, not executed.
+No device/system image/KVM was available, and no installation or authentication
+bypass was attempted.
+
+Evidence under `/workspace/scratch/backtube-overnight-20261013`:
+`recovery-library-control.xml`, `recovery-helper-red.xml`,
+`recovery-sequence-red.xml`, `recovery-ended-red.xml`,
+`recovery-ended-green.xml`, `recovery-final-full-validation.log` and
+`recovery-final-source-before-build.json`. Checkpoints for the prior queue,
+row-state and layout work are recorded above; layout fixture is preserved at
+`2ebda634716d8f0941aa0876ffaa78bf10643b0b`. APK1018 remains the historical
+`f82d5e0` build and contains none of these overnight source changes. No compatible
+new installer or new Library delivery was produced in this environment; the
+existing official Library401 block was not retried or bypassed. No signing key,
+credential, user-data, PR-body, main, deployment or public-release operation was
+performed.
 
 **Historical APK audit (2026-10-13, before overnight fixes):** Delivered product source was
 `f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reread the original
