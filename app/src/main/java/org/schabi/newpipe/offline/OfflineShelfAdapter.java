@@ -11,6 +11,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.DiffUtil;
@@ -178,9 +179,18 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
                 listener.play(selected);
             }
         });
-        ViewCompat.replaceAccessibilityAction(holder.root, AccessibilityActionCompat.ACTION_CLICK,
-                holder.root.getContext().getString(R.string.offline_play), null);
         holder.root.setOnLongClickListener(view -> showMenu(holder, holder.menu, false));
+        final boolean playable = interactionEnabled && entry.state == OfflineStore.State.READY;
+        // Installing a listener sets clickable again; apply availability after listener setup.
+        holder.root.setClickable(playable);
+        if (playable) {
+            ViewCompat.replaceAccessibilityAction(holder.root,
+                    AccessibilityActionCompat.ACTION_CLICK,
+                    holder.root.getContext().getString(R.string.offline_play), null);
+        } else {
+            ViewCompat.removeAccessibilityAction(holder.root,
+                    AccessibilityNodeInfoCompat.ACTION_CLICK);
+        }
         holder.menu.setOnClickListener(view -> showMenu(holder, view, false));
         holder.handle.setOnClickListener(view -> showMenu(holder, view, true));
         addMoveActions(holder, position);

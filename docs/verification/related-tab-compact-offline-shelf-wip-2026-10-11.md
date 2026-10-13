@@ -17,8 +17,11 @@ First vertical: a pruned saved identity no longer falls back to a different curr
 queue item. Meaningful JVM RED (22 tests, 2 expected assertion failures, 0 errors)
 became GREEN 22/22, then fresh full app JVM 361/361 and build/style/lint checks passed.
 Independent review found no material issue. These are model/source checks; actual
-ExoPlayer and Android execution remain 0. Next is unavailable-row playback
-accessibility; non-handle re-grab during ItemTouchHelper recovery is another
+ExoPlayer and Android execution remain 0. Second vertical: unavailable and temporarily locked rows now remove playback
+clickability and the Play accessibility action while retaining readable text and
+management controls. Meaningful real-store/binder RED became GREEN 2/2; full JVM
+363/53 suites and build/style/lint checks passed. The Android node regression is
+compiled only. Non-handle re-grab during ItemTouchHelper recovery is another
 source-confirmed candidate needing separate regression work. Earlier 358 tests
 remain a baseline, not the result of this queue. APK1018 at source `f82d5e0` does
 not contain these new source fixes; no new installable APK has been produced.
@@ -48,7 +51,39 @@ Actual late ExoPlayer callback behavior has not been device-executed and is not
 claimed as live QA. No signing, Library retry, install, reset, PR-body edit,
 merge or deployment occurred.
 
-**Latest audit (2026-10-13):** Product source remains
+### Overnight vertical 2 — unavailable-row playback semantics
+
+The real row binder previously advertised a clickable Play action even after a
+saved file disappeared, while copying a retry, or during the interaction lock.
+The guarded callback silently refused playback. Binding now applies clickability
+after installing listeners and removes the accessibility Play action whenever
+playback is unavailable. READY rows restore it; focus, long-click management,
+overflow, drag handle and accessible movement remain governed by their existing
+controls. No file, queue or storage policy changes are involved.
+
+Two JVM regressions exercise the real adapter binder with explicit mocked Android
+view/accessibility boundaries and a real temporary OfflineStore: READY -> missing
+fixture file/FAILED -> retry/IMPORTING -> READY, plus lock/unlock on a recycled
+READY holder. RED contains six incorrect-playability assertions across two tests
+and zero errors; GREEN is 2/2. This verifies binder state and callback guards,
+not a live accessibility node or TalkBack. A separate Android test checks real
+node actions and waits for each expected rendered state label; it is compiled
+but has not been executed.
+
+Evidence: `/workspace/scratch/backtube-overnight-20261013/row-state-red.xml`,
+`row-state-green.xml`, `row-state-full-validation.log` and
+`row-state-instrumentation-final.log`. Fresh full JVM is 363 tests/53 suites,
+zero failures, errors or skips; Checkstyle zero; debug/release lint each zero
+errors and 366 existing warnings; Kotlin lint successful/up-to-date; Android
+source compilation and unsigned release build passed in 3m42s. After independent
+review identified a possible stale FAILED-state wait in the new Android test,
+the expected-label condition was added and Android compilation/debug lint passed
+again in 35s. Review found no material product issue. Actual Android runs remain
+0. First vertical is preserved at remote `9e742e016799c880b0ab55a23ff660a306e76694`.
+No new installable APK, signing, Library retry, installation, reset, PR-body edit,
+merge or deployment occurred.
+
+**Historical APK audit (2026-10-13, before overnight fixes):** Delivered product source was
 `f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reread the original
 production-completion turn and supplied its APK 1018 receipt: producer source is
 that exact product HEAD, version is `0.29.1-offline-ui-test-20261012`, signature

@@ -23,6 +23,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
 
 import androidx.appcompat.widget.Toolbar;
+import androidx.annotation.StringRes;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -323,6 +324,61 @@ public class OfflineLibraryAccessTest {
         } finally {
             library.store().delete(second.id);
         }
+    }
+
+    @Test
+    public void savedPlaybackAccessibilityFollowsMissingFileRetryAndReady() throws Exception {
+        InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitShelf();
+        awaitPlaybackAvailability(true, R.string.offline_ready);
+        assertTrue("only this generated fixture's saved bytes are removed",
+                library.store().file(library.store().get(saved.id)).delete());
+        assertEquals(OfflineStore.State.FAILED, library.store().get(saved.id).state);
+        awaitPlaybackAvailability(false, R.string.offline_failed);
+        library.store().prepareRetry(saved.id);
+        awaitPlaybackAvailability(false, R.string.offline_copying);
+        try (FileInputStream input = new FileInputStream(source)) {
+            library.store().copy(saved.id, input);
+        }
+        awaitPlaybackAvailability(true, R.string.offline_ready);
+        assertTrue("the original generated source is retained", source.isFile());
+    }
+
+    private void awaitPlaybackAvailability(final boolean playable,
+                                           @StringRes final int stateLabel) throws Exception {
+        await(() -> {
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final View row = shelf == null ? null : shelf.findViewById(R.id.offline_saved_rows)
+                    .findViewWithTag(saved.id);
+            if (row == null) {
+                return false;
+            }
+            final TextView details = row.findViewById(R.id.itemAdditionalDetails);
+            if (!details.getText().toString().startsWith(shelf.getString(stateLabel))) {
+                return false;
+            }
+            final View root = row.findViewById(R.id.itemRoot);
+            final AccessibilityNodeInfo node = root.createAccessibilityNodeInfo();
+            try {
+                final boolean offersPlay = node.getActionList().stream().anyMatch(action ->
+                        action.getId() == AccessibilityNodeInfo.ACTION_CLICK);
+                return root.isClickable() == playable && offersPlay == playable;
+            } finally {
+                node.recycle();
+            }
+        });
+        main(() -> {
+            final View row = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(saved.id);
+            final View root = row.findViewById(R.id.itemRoot);
+            assertTrue("unavailable rows remain readable", root.isFocusable());
+            assertTrue("long-click management remains available", root.isLongClickable());
+            assertTrue(root.isEnabled());
+            assertTrue(row.findViewById(R.id.itemHandle).isEnabled());
+            assertTrue(row.findViewById(R.id.offline_item_menu).isEnabled());
+            return null;
+        });
     }
 
     private List<String> savedIds() throws java.io.IOException {
