@@ -13,11 +13,21 @@
         android:padding="16dp"
         android:text="@string/personal_playlist_hint" />
 
+    <Button
+        android:id="@+id/create_personal_playlist"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/playlist_creation_hint"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:minHeight="48dp"
+        android:text="@string/create_playlist" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/items_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/playlist_creation_hint"
+        android:layout_below="@id/create_personal_playlist"
         android:scrollbars="vertical"
         app:layoutManager="LinearLayoutManager"
         tools:listitem="@layout/list_playlist_mini_item" />
@@ -29,7 +39,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@id/playlist_creation_hint"
+        android:layout_below="@id/create_personal_playlist"
         android:layout_marginTop="50dp"
         android:visibility="gone"
         tools:visibility="visible" />
@@ -40,7 +50,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@id/playlist_creation_hint"
+        android:layout_below="@id/create_personal_playlist"
         android:layout_marginTop="50dp"
         android:visibility="gone"
         tools:visibility="visible" />

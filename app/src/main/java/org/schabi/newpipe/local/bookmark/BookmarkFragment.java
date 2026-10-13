@@ -35,6 +35,7 @@ import org.schabi.newpipe.databinding.DialogEditTextBinding;
 import org.schabi.newpipe.error.ErrorInfo;
 import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.local.BaseLocalListFragment;
+import org.schabi.newpipe.local.dialog.PlaylistCreationDialog;
 import org.schabi.newpipe.local.holder.LocalBookmarkPlaylistItemHolder;
 import org.schabi.newpipe.local.holder.RemoteBookmarkPlaylistItemHolder;
 import org.schabi.newpipe.local.playlist.LocalPlaylistManager;
@@ -123,6 +124,9 @@ public final class BookmarkFragment extends BaseLocalListFragment<List<PlaylistL
     protected void initViews(final View rootView, final Bundle savedInstanceState) {
         super.initViews(rootView, savedInstanceState);
 
+        rootView.findViewById(R.id.create_personal_playlist).setOnClickListener(ignored ->
+                PlaylistCreationDialog.newInstance(List.of()).show(getParentFragmentManager(),
+                        PlaylistCreationDialog.class.getSimpleName()));
         itemListAdapter.setUseItemHandle(true);
     }
 

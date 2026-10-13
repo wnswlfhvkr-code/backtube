@@ -1,5 +1,17 @@
 # Related default tab and compact saved library — resume record
 
+**Personal playlist entry follow-up:** Existing local playlist storage/order/
+playback works, but the bookmark screen had no standalone creation entry and
+empty creation was rejected. The minimal existing-dialog/manager connection is
+now implemented: New Playlist button, named empty metadata, default thumbnail,
+existing join-ID result contract and first append index0. Fresh JVM376/56 suites,
+style/lint/build and Android source compilation passed; actualAndroid0. Whole-plan
+independent review is pending the separate controlled append-disposal regression.
+See [connection audit](personal-playlist-entry-audit-2026-10-13.md) and
+[implementation plan](../superpowers/plans/2026-10-13-personal-playlist-entry.md).
+Current compatible signed APK/Library delivery remains blocked; APK1018 remains
+historical f82d5e0. No signing/auth/data/reset/release operation occurred.
+
 **Latest follow-up (2026-10-13T19:15Z):** The parent explicitly authorized
 updating existing Draft PR7's description, superseding the earlier PR-body
 prohibition for this update. Product source verified at
