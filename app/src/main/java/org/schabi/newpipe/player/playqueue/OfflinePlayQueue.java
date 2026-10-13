@@ -113,8 +113,8 @@ public final class OfflinePlayQueue extends PlayQueue {
                                                         final OfflineStore store,
                                                         final boolean repeatAll)
             throws IOException {
-        final PlayQueueItem tagged = itemWithUrl(localUrl);
-        final PlayQueueItem target = tagged == null ? getItem() : tagged;
+        // Missing metadata may use the current identity; an unknown tag must never impersonate it.
+        final PlayQueueItem target = localUrl == null ? getItem() : itemWithUrl(localUrl);
         if (target == null) {
             return null;
         }

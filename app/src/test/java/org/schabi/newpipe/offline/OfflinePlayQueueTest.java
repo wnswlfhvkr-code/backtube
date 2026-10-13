@@ -285,4 +285,42 @@ public class OfflinePlayQueueTest {
         store.delete(next.id);
         assertNull(queue.completionSuccessor(store, true));
     }
+
+    @Test public void prunedAutomaticIdentityCannotResolveToAnotherCurrentFile() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflineStore.Entry pruned = saved("pruned");
+        final OfflineStore.Entry next = saved("next");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        store.delete(pruned.id);
+        assertFalse(queue.pruneUnavailable(store, false));
+        assertEquals(2, queue.size());
+
+        // A late timeline callback still names the file removed from this snapshot.
+        assertNull(queue.transitionTarget(pruned.localUrl(), store, false));
+        assertEquals(-1, queue.reconcileTransition(pruned.localUrl(), store, true, false));
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+        assertEquals(next.localUrl(), queue.getItem(1).getUrl());
+    }
+
+    @Test public void newSaveOutsideSnapshotCannotBecomeAnAutomaticTransition() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+        final OfflineStore.Entry later = saved("saved after playback started");
+
+        assertNull(queue.transitionTarget(later.localUrl(), store, true));
+        assertEquals(-1, queue.reconcileTransition(later.localUrl(), store, true, true));
+        assertEquals(1, queue.size());
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+        assertEquals(2, new OfflinePlayQueue(store, "Saved copy").size());
+    }
+
+    @Test public void absentTransitionMetadataMayUseTheKnownCurrentIdentity() throws Exception {
+        final OfflineStore.Entry first = saved("first");
+        saved("next");
+        final OfflinePlayQueue queue = new OfflinePlayQueue(store, "Saved copy");
+
+        assertEquals(first.localUrl(), queue.transitionTarget(null, store, false).getUrl());
+        assertEquals(0, queue.reconcileTransition(null, store, true, false));
+        assertEquals(first.localUrl(), queue.getItem().getUrl());
+    }
 }

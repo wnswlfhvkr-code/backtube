@@ -1,5 +1,53 @@
 # Related default tab and compact saved library — resume record
 
+**Overnight queue (2026-10-13):** Fixed execution window starts
+`2026-10-13T18:09:53Z` and ends `2026-10-14T02:00:00Z` (11:00 KST).
+Started clean on `81da6b8c0b850a0cabbd4217e77915ca1f8bd9ad`, existing Draft PR7;
+no concurrent writer or checkout-specific AGENTS/skills were found. Root owns
+implementation/Gradle; separate read-only agents own layout/accessibility planning
+and drag/player investigation plus independent review. Installed SDK has no
+emulator or system image, PATH has no emulator/ADB command and `/dev/kvm` is absent;
+no emulator installation, ADB/authentication or app/data operation is scheduled.
+Actual Android runs remain 0. Existing APK1018 historical receipt and current
+Library401 distinction remain unchanged; no Library authentication retry or bypass.
+Only demonstrated defects in approved saved-list/player UX and reproducible
+regressions are authorized. No new features/design, Claude, paid API, credential,
+key, permission expansion, data reset/deletion, main merge/deploy or PR-body edit.
+First vertical: a pruned saved identity no longer falls back to a different current
+queue item. Meaningful JVM RED (22 tests, 2 expected assertion failures, 0 errors)
+became GREEN 22/22, then fresh full app JVM 361/361 and build/style/lint checks passed.
+Independent review found no material issue. These are model/source checks; actual
+ExoPlayer and Android execution remain 0. Next is unavailable-row playback
+accessibility; non-handle re-grab during ItemTouchHelper recovery is another
+source-confirmed candidate needing separate regression work. Earlier 358 tests
+remain a baseline, not the result of this queue. APK1018 at source `f82d5e0` does
+not contain these new source fixes; no new installable APK has been produced.
+
+### Overnight vertical 1 — saved transition identity
+
+`OfflinePlayQueue.transitionTarget` previously substituted the current item for
+any unknown non-null transition URL. A real-store JVM trace removes B from an
+active `[A, B, C]` snapshot, then supplies a late callback naming B: it incorrectly
+resolved to A. A separately saved identity outside the active snapshot did the
+same, even under repeat ALL. The fix permits current-item fallback only when
+metadata is absent (`null`); a present identity must belong to the active snapshot.
+The existing Player branch then rejects the unresolvable automatic target.
+
+Three regressions cover the pruned callback, new save outside the snapshot and
+absent-metadata control. Existing known missing middle/tail, repeat ALL, deleted
+reader and serialized local queue checks remain passing. No queue expansion,
+online fallback, current-item mutation or new recovery policy was added.
+
+Evidence: `/workspace/scratch/backtube-overnight-20261013/queue-identity-red.xml`,
+`queue-identity-green.xml`, `queue-full-validation.log` and `queue-state.json`.
+The combined full run succeeded in 4m19s: app JVM 361/52 suites, zero failures,
+errors or skips; Checkstyle zero; Kotlin lint successful/up-to-date; debug/release
+lint each zero errors and 366 existing warnings; Android test source compilation;
+unsigned release build. Independent source review found no material issue.
+Actual late ExoPlayer callback behavior has not been device-executed and is not
+claimed as live QA. No signing, Library retry, install, reset, PR-body edit,
+merge or deployment occurred.
+
 **Latest audit (2026-10-13):** Product source remains
 `f82d5e0d6044f0e318c4c7d62ed6c6e3ac4d48f8`. The parent reread the original
 production-completion turn and supplied its APK 1018 receipt: producer source is
