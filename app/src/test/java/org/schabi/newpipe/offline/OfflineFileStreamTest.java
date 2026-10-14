@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
+import java.io.File;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -28,13 +29,18 @@ public class OfflineFileStreamTest {
         }
     }
 
-    @Test public void deletedDownloadCannotWriteMoreBytes() throws Exception {
+    @Test public void deletedIdentityCannotWriteThroughStillOpenHandle() throws Exception {
         final OfflineStore store = new OfflineStore(temporary.newFolder(), 100);
         final OfflineStore.Entry entry = store.beginDownload("One", "", 0, "audio/wav");
-        try (OfflineFileStream output = new OfflineFileStream(store.file(entry), store, entry.id)) {
+        // Windows cannot unlink an open RandomAccessFile. Keep a live backing handle here;
+        // OfflineFileStreamDeviceTest verifies Android unlink of the actual store file.
+        final File backing = temporary.newFile("live-output");
+        try (OfflineFileStream output = new OfflineFileStream(backing, store, entry.id)) {
             output.write(new byte[20]);
             store.delete(entry.id);
             assertThrows(IOException.class, () -> output.write(new byte[10]));
+            assertThrows(IOException.class, () -> output.setLength(30));
+            assertEquals(20, backing.length());
         }
         assertEquals(0, store.usedBytes());
     }
