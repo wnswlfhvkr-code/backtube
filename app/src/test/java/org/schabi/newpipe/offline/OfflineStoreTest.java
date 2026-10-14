@@ -162,6 +162,18 @@ public class OfflineStoreTest {
         assertEquals(32, store.file(store.find(0, entry.origin)).length());
     }
 
+    @Test public void internalIdentityCannotBeReplacedByAnEarlierOriginAlias() throws Exception {
+        final OfflineStore.Entry target = create();
+        store.copy(target.id, new ByteArrayInputStream(new byte[20]));
+        final OfflineStore.Entry alias = store.create("Different recording", target.localUrl(),
+                0, "content://test/other", "audio/wav");
+        store.copy(alias.id, new ByteArrayInputStream(new byte[20]));
+        store.move(alias.id, -1);
+        assertEquals(target.id, store.find(0, target.localUrl()).id);
+        assertEquals(target.id, store.find(-1, target.localUrl()).id);
+        assertNull(store.find(0, "backtube-offline:unknown"));
+    }
+
     @Test public void unknownLengthCannotExceedQuotaAndFailureIsNotPlayable() throws Exception {
         final OfflineStore.Entry entry = create();
         assertThrows(IOException.class,

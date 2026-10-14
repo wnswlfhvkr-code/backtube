@@ -2,7 +2,7 @@
 
 Issue: https://github.com/wnswlfhvkr-code/backtube/issues/8
 
-This is a source checkpoint, not confirmation of the user's Samsung playback scenario.
+This is source verification, not confirmation of the user's Samsung playback scenario.
 The issue stays open until equivalent runtime evidence or user confirmation is available.
 Baseline APK1019 source: `61d1103a16e4c811d58bf2211fe3330f0ae4208d`.
 
@@ -40,14 +40,18 @@ order; stopped-but-surviving Activity callbacks; and the controller expansion ga
 Test harness compile, Android Log plumbing, and formatting failures were corrected
 separately and are not counted as bug reproduction evidence.
 
-Fresh core-source verification: all **412 JVM tests passed**, no errors/skips.
+Fresh final-source verification: all **412 JVM tests passed**, no errors/skips.
 Checkstyle, Kotlin lint, dependency ordering, and `git diff --check` passed.
+Instrumentation Java compiled. Android debug lint reports **0 errors, 321 warnings**;
+the new navigation ignored-subscription warning was removed. Existing warning counts
+are recorded without claiming a warning-free build.
 Command (existing toolchain, offline dependencies):
 
 ```text
 ./gradlew --offline --console=plain -DskipFormatKtlint -PappFaultEndpoint= \
   --max-workers=2 :app:testDebugUnitTest :app:runCheckstyle \
-  :app:runKtlint :app:checkDependenciesOrder
+  :app:runKtlint :app:checkDependenciesOrder \
+  :app:compileDebugAndroidTestJavaWithJavac :app:lintDebug
 ```
 
 ## Runtime and delivery work still pending
@@ -57,8 +61,24 @@ but adb host startup failed with read-only-filesystem error (exit -6). No permis
 bypass, new auth/key, existing AVD reset, or user-data deletion was attempted.
 The earlier Windows Android counts and APK1019 checks do not establish this fix works.
 
-Normal service/controller/restore device regression coverage, instrumentation compile,
-final independent review, and the compatible signed APK are still pending at this checkpoint.
+Compiled device coverage now includes the normal saved queue-all service intent, actual
+Next control, repeated controller expand action with pause retention, actual service
+restore action and recovery position, and unreadable saved bytes without deletion.
+The existing shelf-row test also exercises controller expansion. The separate process
+restore phase no longer overwrites the engine with a reflected test initialization.
+These tests remain **unexecuted**, and no runtime RED/GREEN is claimed for them.
+
+The network boundary rejects/counts HTTP requests and restores its previous downloader,
+localization, and country on failure. Zero requests alone cannot exclude extractor entry
+that fails before HTTP; the real JVM routing regressions and controller assertions provide
+complementary evidence. Test readiness waits for bound metadata/title and the accessibility
+action. Longer generated media and first-item assertions prevent natural advance from
+masquerading as a successful Next action. History/resume preference presence and values
+are restored, and failure cleanup covers playback screens across lifecycle stages.
+
+Independent core and final instrumentation reviews found no remaining source blocker.
+The compatible signed APK is pending at this checkpoint; the source is a candidate
+for signing while device behavior remains unverified.
 Original worktrees, signing input, and saved media are preserved. No Claude, OAuth,
 paid API, main merge, deployment, or PR7 body edit is part of this work.
 

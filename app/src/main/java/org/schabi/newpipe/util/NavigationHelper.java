@@ -63,6 +63,7 @@ import org.schabi.newpipe.local.subscription.SubscriptionsImportFragment;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineLibraryActivity;
 import org.schabi.newpipe.offline.OfflineStore;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 import org.schabi.newpipe.player.PlayQueueActivity;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.PlayerIntentType;
@@ -85,6 +86,7 @@ import java.util.WeakHashMap;
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.observers.DisposableSingleObserver;
 
 public final class NavigationHelper {
     private static final Map<Context, Object> SAVED_NAVIGATION_REQUESTS =
@@ -700,19 +702,25 @@ public final class NavigationHelper {
             SAVED_NAVIGATION_REQUESTS.put(context, request);
             Single.fromCallable(() -> OfflineLibrary.get(context).queueFor(serviceId, url))
                     .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(saved -> {
-                        if (!SAVED_NAVIGATION_REQUESTS.remove(context, request)
-                                || !navigationContextAlive(context)) {
-                            return;
+                    .subscribe(new DisposableSingleObserver<OfflinePlayQueue>() {
+                        @Override
+                        public void onSuccess(final OfflinePlayQueue saved) {
+                            if (!SAVED_NAVIGATION_REQUESTS.remove(context, request)
+                                    || !navigationContextAlive(context)) {
+                                return;
+                            }
+                            playOnBackgroundPlayer(context, saved, true);
+                            openSavedController(context);
                         }
-                        playOnBackgroundPlayer(context, saved, true);
-                        openSavedController(context);
-                    }, error -> {
-                        if (SAVED_NAVIGATION_REQUESTS.remove(context, request)
-                                && navigationContextAlive(context)) {
-                            Toast.makeText(context, R.string.offline_no_playable,
-                                    Toast.LENGTH_SHORT).show();
-                            openSavedActivity(context, OfflineLibraryActivity.class);
+
+                        @Override
+                        public void onError(final Throwable error) {
+                            if (SAVED_NAVIGATION_REQUESTS.remove(context, request)
+                                    && navigationContextAlive(context)) {
+                                Toast.makeText(context, R.string.offline_no_playable,
+                                        Toast.LENGTH_SHORT).show();
+                                openSavedActivity(context, OfflineLibraryActivity.class);
+                            }
                         }
                     });
         }
