@@ -77,11 +77,36 @@ masquerading as a successful Next action. History/resume preference presence and
 are restored, and failure cleanup covers playback screens across lifecycle stages.
 
 Independent core and final instrumentation reviews found no remaining source blocker.
-The compatible signed APK is pending at this checkpoint; the source is a candidate
-for signing while device behavior remains unverified.
+The compatible signed candidate APK was built and saved to Library as a single file.
+Device behavior remains unverified.
 Original worktrees, signing input, and saved media are preserved. No Claude, OAuth,
 paid API, main merge, deployment, or PR7 body edit is part of this work.
 
 Saved entries still have unknown duration where recorded that way. This change does
 not claim new per-track history completion/resume semantics. Last-session recovery
 position is a separate existing behavior requiring runtime verification.
+
+## Delivered candidate APK
+
+- File: `backtube-offline-uri-fix-81f219a-1020-20261015.apk`
+- Product source: `81f219a0ce99e6e353cb3d29444c7d5f195a637d`
+- Version: `0.29.1-offline-uri-fix-20261015`, code **1020** (previous 1019)
+- Package: `org.schabi.newpipe.continuous.testofflinelibrary20261011`
+- Size: **11,627,838 bytes**
+- SHA-256: `9cd8a5d92c396ce1590824423ec2897bb03e6d53007177bb042a676ebefd933d`
+- Public APK certificate SHA-256:
+  `4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc`
+- Mapping ID: `a4d0fb736ca4c0254f9807aa49d56215c24aa841f9dd77849c7a6f976309d2f0`
+
+Build exit 0; the existing signer guard passed and the signing input identity remained
+unchanged. APK signatures match APK1019; package, minimum SDK, and permissions remain
+compatible; version code increases; 16KiB zip alignment passes. The existing APK1019
+hash matches its retained record. No key was generated, inspected, or copied.
+The new saved-identity guard is present in the APK dex and the new saved resolver and
+navigation paths are present in the build mapping. The build source and original
+worktrees remain clean and preserved.
+
+These are APK update prerequisites, not an installation, update, or playback result.
+Actual installation/update and Android runtime tests remain **unexecuted**. Issue #8
+stays open for user confirmation or equivalent reproduction. Machine-readable evidence
+is in `evidence/offline-uri-issue8-2026-10-15/summary.json`.
