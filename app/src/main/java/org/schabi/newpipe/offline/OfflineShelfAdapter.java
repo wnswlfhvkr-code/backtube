@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
@@ -133,6 +134,8 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     public Holder onCreateViewHolder(@NonNull final ViewGroup parent, final int viewType) {
         final Holder holder = new Holder(LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.offline_shelf_item, parent, false));
+        // The shared queue thumbnail plus margins is 47dp; match-constraint handles follow it.
+        ((ConstraintLayout) holder.root).setMinHeight(dp(holder.root, 48));
         installHandleTouch(holder);
         return holder;
     }

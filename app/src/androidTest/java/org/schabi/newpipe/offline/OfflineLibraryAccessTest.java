@@ -303,6 +303,12 @@ public class OfflineLibraryAccessTest {
             await(() -> {
                 final RecyclerView list = active(OfflineLibraryActivity.class)
                         .findViewById(R.id.offline_saved_rows);
+                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                for (int i = 0; i < before.size(); i++) {
+                    if (adapter.positionOf(before.get(i)) != i) {
+                        return false;
+                    }
+                }
                 final View row = list.findViewWithTag(second.id);
                 return row != null && row.getTranslationY() == 0;
             });
@@ -391,7 +397,10 @@ public class OfflineLibraryAccessTest {
         main(() -> {
             final RecyclerView list = active(OfflineLibraryActivity.class)
                     .findViewById(R.id.offline_saved_rows);
-            list.scrollToPosition(((OfflineShelfAdapter) list.getAdapter()).positionOf(fromId));
+            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+            assertTrue("each gesture starts with the source below its destination",
+                    adapter.positionOf(fromId) > adapter.positionOf(toId));
+            list.scrollToPosition(adapter.positionOf(fromId));
             return null;
         });
         await(() -> {
@@ -402,15 +411,28 @@ public class OfflineLibraryAccessTest {
         });
         final Rect from = trackRect(fromId, R.id.itemHandle);
         final Rect to = trackRect(toId, R.id.itemRoot);
+        // ItemTouchHelper requires the dragged top to cross the target top, not just align.
+        final float destinationY = to.centerY()
+                - 16 * context.getResources().getDisplayMetrics().density;
         final long start = SystemClock.uptimeMillis();
         sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        assertFalse("touching the handle must start drag and disable Play all", main(() ->
+                active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
+                        .isEnabled()));
         for (int step = 1; step <= 12; step++) {
             SystemClock.sleep(20);
             sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
-                    from.centerY() + (to.centerY() - from.centerY()) * step / 12.0f);
+                    from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
         }
+        await(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+            return adapter.positionOf(fromId) < adapter.positionOf(toId);
+        });
         assertEquals("drag preview must not persist", before, savedIds());
-        sendPointer(start, terminal, from.centerX(), to.centerY());
+        sendPointer(start, terminal, from.centerX(), destinationY);
     }
 
     private Rect trackRect(final String entryId, final int viewId) throws Exception {

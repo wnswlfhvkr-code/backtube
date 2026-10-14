@@ -1,5 +1,20 @@
 # Related default tab and compact saved library — resume record
 
+**Windows actual Android follow-up (2026-10-14):** Starting from remote
+`4e8a34e4cec488fdd8b295bd855301fadac6655a` in an independent worktree, the first
+actual emulator run reproduced four failures. The offline playback root/handle
+was47dp for short titles; an explicit48dp ConstraintLayout minimum fixes it.
+Two layout failures were missing fixture LayoutManagers; the drag failure was a
+fixture gesture stopping at, rather than crossing, RecyclerView1.4.0's strict
+drop boundary. The strengthened actual preview/CANCEL visual+disk rollback/UP
+reopen and snapshot checks now pass. Final selected Android is15/15; full Windows
+JVM390/58 and Checkstyle0 pass after honest URI/live-handle fixture corrections;
+debug/release lint each0errors/308warnings in this environment. No player, store,
+quota, expiry or drag-commit policy changed. Existing keys are not generated or
+transferred; the parent coordinates signing in the original APK1018 environment.
+See [executed Android and Windows evidence](windows-android-shelf-2026-10-14.md).
+The older zero-Android and local-signing blockers below remain historical records.
+
 **Execution-server boundary (2026-10-13T20:34Z):** Source and final checks
 completed before the selected environment's exec-server transport disconnected.
 Remote record checkpoint `0f9a73330bcf93b762bb6e1aebee602048a291f0`, tree `66c18c1046e2e295b45a3b188d11d21dda2432d8`, was

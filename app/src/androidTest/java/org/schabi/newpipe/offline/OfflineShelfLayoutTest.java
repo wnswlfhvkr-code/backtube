@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.appcompat.view.ContextThemeWrapper;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -79,11 +80,28 @@ public class OfflineShelfLayoutTest {
         checkWidth(360);
     }
 
+    @Test
+    public void shortTitleKeepsFullSizedTargetsAtBothFontScales() throws Exception {
+        final OfflineStore store = new OfflineStore(temporary.newFolder("short-title"), 1024);
+        final OfflineStore.Entry shortEntry = store.create("Short", "", 0,
+                "content://layout-fixture/short", "audio/wav");
+        store.copy(shortEntry.id, new ByteArrayInputStream(new byte[32]));
+        final FutureTask<Void> task = new FutureTask<>(() -> {
+            for (final int width : new int[]{320, 360}) {
+                measureAndCheck(store.get(shortEntry.id), width, 1.0f, false);
+                measureAndCheck(store.get(shortEntry.id), width, 2.0f, false);
+            }
+            return null;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(task);
+        task.get();
+    }
+
     private void checkWidth(final int widthDp) throws Exception {
         final FutureTask<Void> task = new FutureTask<>(() -> {
             for (final OfflineStore.Entry entry : entries) {
-                final int defaultHeight = measureAndCheck(entry, widthDp, 1.0f);
-                final int largeHeight = measureAndCheck(entry, widthDp, 2.0f);
+                final int defaultHeight = measureAndCheck(entry, widthDp, 1.0f, true);
+                final int largeHeight = measureAndCheck(entry, widthDp, 2.0f, true);
                 assertTrue(entry.state + "/" + widthDp
                         + "dp: long-title row must grow to accommodate large text",
                         largeHeight > defaultHeight);
@@ -95,7 +113,7 @@ public class OfflineShelfLayoutTest {
     }
 
     private int measureAndCheck(final OfflineStore.Entry entry, final int widthDp,
-                               final float fontScale) {
+                               final float fontScale, final boolean expectWrapping) {
         final Context context = configuredContext(widthDp, fontScale);
         final String stage = entry.state + "/" + widthDp + "dp/font=" + fontScale;
         assertEquals(stage + " fixture font scale", fontScale,
@@ -106,6 +124,7 @@ public class OfflineShelfLayoutTest {
         // The actual adapter inflates offline_shelf_item and applies the production binder.
         // A detached RecyclerView only supplies inflation LayoutParams; no click is performed.
         final RecyclerView parent = new RecyclerView(context);
+        parent.setLayoutManager(new LinearLayoutManager(context));
         final OfflineShelfAdapter adapter = new OfflineShelfAdapter(new LayoutListener(context));
         adapter.setEntries(List.of(entry));
         final OfflineShelfAdapter.Holder holder = adapter.onCreateViewHolder(parent, 0);
@@ -123,8 +142,10 @@ public class OfflineShelfLayoutTest {
                 holder.thumbnail.getVisibility());
         assertTextFits(stage + " title", holder.title);
         assertTextFits(stage + " details", holder.details);
-        assertTrue(stage + " long title exercises wrapping", holder.title.getLayout()
-                .getLineCount() > 1);
+        if (expectWrapping) {
+            assertTrue(stage + " long title exercises wrapping", holder.title.getLayout()
+                    .getLineCount() > 1);
+        }
         assertTrue(stage + " title remains at most two visible lines", holder.title.getLayout()
                 .getLineCount() <= 2);
 
@@ -209,8 +230,10 @@ public class OfflineShelfLayoutTest {
 
     private static void assertTarget(final String stage, final View target) {
         final int minimum = dp(target.getContext(), 48);
-        assertTrue(stage + " target narrower than 48dp", target.getWidth() >= minimum);
-        assertTrue(stage + " target shorter than 48dp", target.getHeight() >= minimum);
+        assertTrue(stage + " target width=" + target.getWidth() + " requires " + minimum,
+                target.getWidth() >= minimum);
+        assertTrue(stage + " target height=" + target.getHeight() + " requires " + minimum,
+                target.getHeight() >= minimum);
     }
 
     private static int dp(final Context context, final int value) {
