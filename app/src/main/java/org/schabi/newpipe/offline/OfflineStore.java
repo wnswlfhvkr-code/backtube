@@ -17,6 +17,10 @@ public final class OfflineStore {
     public static final long DEFAULT_LIMIT = 500_000_000L;
     public static final String LOCAL_PREFIX = "backtube-offline:";
 
+    public static boolean isLocalUrl(final String url) {
+        return url != null && url.startsWith(LOCAL_PREFIX);
+    }
+
     // EXPIRED is read only to migrate records written by older versions.
     public enum State { IMPORTING, DOWNLOADING, READY, INTERRUPTED, FAILED, EXPIRED }
 
@@ -286,10 +290,14 @@ public final class OfflineStore {
 
     public synchronized Entry find(final int serviceId, final String url) throws IOException {
         refresh();
+        if (isLocalUrl(url)) {
+            final Entry entry = entries.get(url.substring(LOCAL_PREFIX.length()));
+            return entry != null && entry.state == State.READY && entry.localUrl().equals(url)
+                    ? entry : null;
+        }
         for (final Entry entry : entries.values()) {
-            if (entry.state == State.READY && (entry.localUrl().equals(url)
-                    || (entry.serviceId == serviceId && !entry.origin.isEmpty()
-                    && entry.origin.equals(url)))) {
+            if (entry.state == State.READY && entry.serviceId == serviceId
+                    && !entry.origin.isEmpty() && entry.origin.equals(url)) {
                 return entry;
             }
         }

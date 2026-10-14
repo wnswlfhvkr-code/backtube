@@ -378,7 +378,8 @@ public final class PlayQueueActivity extends AppCompatActivity
                 || player.getPlayQueue().getItem() == null || openingPlaybackScreen) {
             return;
         }
-        openingPlaybackScreen = true;
+        openingPlaybackScreen = !org.schabi.newpipe.offline.OfflineStore.isLocalUrl(
+                player.getPlayQueue().getItem().getUrl());
         player.setRecovery();
         NavigationHelper.playOnMainPlayer(this, player.getPlayQueue(), true);
     }

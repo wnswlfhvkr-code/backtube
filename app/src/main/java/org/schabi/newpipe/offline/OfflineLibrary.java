@@ -13,6 +13,7 @@ import com.google.android.exoplayer2.upstream.FileDataSource;
 import com.google.android.exoplayer2.upstream.TransferListener;
 
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
+import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
@@ -128,6 +129,33 @@ public final class OfflineLibrary {
     public OfflinePlayQueue queueAll() throws IOException {
         return new OfflinePlayQueue(store,
                 context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+    }
+
+    /**
+     * Resolve an internal identity from owned saved metadata, never its original web URL.
+     * @param serviceId caller's service selection; the saved identity remains authoritative
+     * @param url saved internal identity
+     * @return metadata from the owned copy
+     */
+    public StreamInfo streamInfo(final int serviceId, final String url) throws IOException {
+        final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
+        return new OfflineMediaTag(queue(entry).getItem()).getMaybeStreamInfo().orElseThrow();
+    }
+
+    public OfflinePlayQueue queueFor(final int serviceId, final String url) throws IOException {
+        return queue(requireSavedEntry(serviceId, url));
+    }
+
+    private OfflineStore.Entry requireSavedEntry(final int serviceId, final String url)
+            throws IOException {
+        if (!OfflineStore.isLocalUrl(url)) {
+            throw new IOException("Saved identity required");
+        }
+        final OfflineStore.Entry entry = store.find(serviceId, url);
+        if (entry == null || !store.file(entry).canRead()) {
+            throw new IOException("Saved copy unavailable");
+        }
+        return entry;
     }
 
     @Nullable

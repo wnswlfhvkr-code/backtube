@@ -125,6 +125,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -201,6 +202,7 @@ public final class VideoDetailFragment
     @State
     @Nullable
     protected String url = null;
+    private boolean savedDetailsRedirected;
     @Nullable
     protected PlayQueue playQueue = null;
     @State
@@ -868,6 +870,10 @@ public final class VideoDetailFragment
     }
 
     private void runWorker(final boolean forceLoad, final boolean addToBackStack) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+            redirectSavedDetails();
+            return;
+        }
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
         currentWorker = ExtractorHelper.getStreamInfo(serviceId, url, forceLoad)
                 .subscribeOn(Schedulers.io())
@@ -897,6 +903,16 @@ public final class VideoDetailFragment
                     }
                 }, throwable -> showError(new ErrorInfo(throwable, UserAction.REQUESTED_STREAM,
                         url == null ? "no url" : url, serviceId, url)));
+    }
+
+    private void redirectSavedDetails() {
+        isLoading.set(false);
+        hideLoading();
+        if (!savedDetailsRedirected && activity != null) {
+            savedDetailsRedirected = true;
+            NavigationHelper.openVideoDetail(activity, serviceId, url, title, playQueue,
+                    false, false);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -1373,6 +1389,9 @@ public final class VideoDetailFragment
                                   @Nullable final String newUrl,
                                   @NonNull final String newTitle,
                                   @Nullable final PlayQueue newPlayQueue) {
+        if (!Objects.equals(url, newUrl)) {
+            savedDetailsRedirected = false;
+        }
         this.serviceId = newServiceId;
         this.url = newUrl;
         this.title = newTitle;
@@ -1851,6 +1870,15 @@ public final class VideoDetailFragment
 
     @Override
     public void onMetadataUpdate(final StreamInfo info, final PlayQueue queue) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+            if (queue.equalStreams(playQueue)) {
+                updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
+            }
+            if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+                redirectSavedDetails();
+            }
+            return;
+        }
         final StackItem item = findQueueInStack(queue);
         if (item != null) {
             // When PlayQueue can have multiple streams (PlaylistPlayQueue or ChannelPlayQueue)

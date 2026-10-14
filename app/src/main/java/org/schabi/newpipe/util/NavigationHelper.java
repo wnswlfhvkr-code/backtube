@@ -21,6 +21,8 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleOwner;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
@@ -58,6 +60,9 @@ import org.schabi.newpipe.local.history.StatisticsPlaylistFragment;
 import org.schabi.newpipe.local.playlist.LocalPlaylistFragment;
 import org.schabi.newpipe.local.subscription.SubscriptionFragment;
 import org.schabi.newpipe.local.subscription.SubscriptionsImportFragment;
+import org.schabi.newpipe.offline.OfflineLibrary;
+import org.schabi.newpipe.offline.OfflineLibraryActivity;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.PlayQueueActivity;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.PlayerIntentType;
@@ -72,9 +77,18 @@ import org.schabi.newpipe.settings.SettingsActivity;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
 import java.util.List;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public final class NavigationHelper {
+    private static final Map<Context, Object> SAVED_NAVIGATION_REQUESTS =
+            Collections.synchronizedMap(new WeakHashMap<>());
     public static final String MAIN_FRAGMENT_TAG = "main_fragment_tag";
     public static final String SEARCH_FRAGMENT_TAG = "search_fragment_tag";
 
@@ -426,6 +440,12 @@ public final class NavigationHelper {
                                                @Nullable final PlayQueue playQueue,
                                                final boolean switchingPlayers,
                                                final boolean playImmediately) {
+        SAVED_NAVIGATION_REQUESTS.remove(context);
+        if (OfflineStore.isLocalUrl(url)) {
+            openSavedPlayback(context, serviceId, url, playQueue,
+                    switchingPlayers, playImmediately);
+            return;
+        }
         @Nullable final PlayerType playerType = PlayerHolder.getInstance().getType();
         final boolean autoPlay = switchingPlayers ? PlayerHolder.getInstance().getPlayWhenReady()
                 : playImmediately || ((playerType == null || playerType == PlayerType.MAIN)
@@ -645,6 +665,12 @@ public final class NavigationHelper {
                                        @Nullable final PlayQueue playQueue,
                                        final boolean switchingPlayers,
                                        final boolean playImmediately) {
+        SAVED_NAVIGATION_REQUESTS.remove(context);
+        if (OfflineStore.isLocalUrl(url)) {
+            openSavedPlayback(context, serviceId, url, playQueue,
+                    switchingPlayers, playImmediately);
+            return;
+        }
         final Intent intent = getStreamIntent(context, serviceId, url, title)
                 .putExtra(VideoDetailFragment.KEY_SWITCHING_PLAYERS, switchingPlayers)
                 .putExtra(VideoDetailFragment.KEY_PLAY_IMMEDIATELY, playImmediately);
@@ -654,6 +680,62 @@ public final class NavigationHelper {
             if (cacheKey != null) {
                 intent.putExtra(Player.PLAY_QUEUE_KEY, cacheKey);
             }
+        }
+        context.startActivity(intent);
+    }
+
+    private static void openSavedPlayback(final Context context, final int serviceId,
+                                          final String url, @Nullable final PlayQueue queue,
+                                          final boolean switchingPlayers,
+                                          final boolean playImmediately) {
+        if (queue != null) {
+            if (playImmediately && !switchingPlayers) {
+                playOnBackgroundPlayer(context, queue, true);
+            }
+            openSavedController(context);
+        } else if (!playImmediately) {
+            openSavedActivity(context, OfflineLibraryActivity.class);
+        } else {
+            final Object request = new Object();
+            SAVED_NAVIGATION_REQUESTS.put(context, request);
+            Single.fromCallable(() -> OfflineLibrary.get(context).queueFor(serviceId, url))
+                    .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(saved -> {
+                        if (!SAVED_NAVIGATION_REQUESTS.remove(context, request)
+                                || !navigationContextAlive(context)) {
+                            return;
+                        }
+                        playOnBackgroundPlayer(context, saved, true);
+                        openSavedController(context);
+                    }, error -> {
+                        if (SAVED_NAVIGATION_REQUESTS.remove(context, request)
+                                && navigationContextAlive(context)) {
+                            Toast.makeText(context, R.string.offline_no_playable,
+                                    Toast.LENGTH_SHORT).show();
+                            openSavedActivity(context, OfflineLibraryActivity.class);
+                        }
+                    });
+        }
+    }
+
+    private static boolean navigationContextAlive(final Context context) {
+        return !(context instanceof Activity activity)
+                || (!activity.isFinishing() && !activity.isDestroyed()
+                && (!(context instanceof LifecycleOwner owner)
+                || owner.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)));
+    }
+
+    private static void openSavedController(final Context context) {
+        if (!(context instanceof PlayQueueActivity)) {
+            openSavedActivity(context, PlayQueueActivity.class);
+        }
+    }
+
+    private static void openSavedActivity(final Context context,
+                                          final Class<? extends Activity> target) {
+        final Intent intent = new Intent(context, target);
+        if (!(context instanceof Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         }
         context.startActivity(intent);
     }
