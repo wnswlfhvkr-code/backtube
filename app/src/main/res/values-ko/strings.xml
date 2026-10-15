@@ -376,6 +376,8 @@
     <string name="no_comments">댓글 없음</string>
     <string name="error_unable_to_load_comments">댓글을 불러올 수 없음</string>
     <string name="close">닫기</string>
+    <string name="playback_progress_details_title">상세 화면 재생 기록</string>
+    <string name="playback_progress_details_summary">상세 화면에 저장된 시청 진행 상황 표시</string>
     <string name="enable_playback_resume_title">재생 위치 기억</string>
     <string name="enable_playback_resume_summary">마지막 재생 위치부터 재생</string>
     <string name="enable_playback_state_lists_title">리스트 내 위치 표시</string>

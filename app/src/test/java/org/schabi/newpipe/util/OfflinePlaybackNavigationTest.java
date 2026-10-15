@@ -35,6 +35,7 @@ import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineLibraryActivity;
 import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.PlayQueueActivity;
+import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.PlayerService;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 
@@ -234,6 +235,18 @@ public class OfflinePlaybackNavigationTest {
         io.triggerActions();
         assertEquals(List.of(OfflineLibraryActivity.class), targets);
         assertTrue(deliveredQueues.isEmpty());
+    }
+
+    @Test
+    public void freshSavedSelectionAndPlayerSwitchCarryDifferentPlaybackIntent() {
+        NavigationHelper.playOnBackgroundPlayer(context, queue, true);
+        verify(intents.constructed().get(0)).putExtra(Player.FRESH_SELECTION, true);
+        verify(intents.constructed().get(0)).putExtra(Player.PLAY_WHEN_READY, true);
+        final Player pausedPlayer = mock(Player.class);
+        when(pausedPlayer.getPlayWhenReady()).thenReturn(false);
+        NavigationHelper.playOnBackgroundPlayer(context, queue, true, pausedPlayer);
+        verify(intents.constructed().get(1)).putExtra(Player.FRESH_SELECTION, false);
+        verify(intents.constructed().get(1)).putExtra(Player.PLAY_WHEN_READY, false);
     }
 
     private static void resetLibrary() throws Exception {

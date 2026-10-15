@@ -219,12 +219,12 @@ public final class PlayQueueActivity extends AppCompatActivity
         } else if (itemId == R.id.action_switch_popup) {
             if (PermissionHelper.isPopupEnabledElseAsk(this)) {
                 this.player.setRecovery();
-                NavigationHelper.playOnPopupPlayer(this, player.getPlayQueue(), true);
+                NavigationHelper.playOnPopupPlayer(this, player.getPlayQueue(), true, player);
             }
             return true;
         } else if (itemId == R.id.action_switch_background) {
             this.player.setRecovery();
-            NavigationHelper.playOnBackgroundPlayer(this, player.getPlayQueue(), true);
+            NavigationHelper.playOnBackgroundPlayer(this, player.getPlayQueue(), true, player);
             return true;
         }
 

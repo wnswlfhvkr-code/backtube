@@ -1113,7 +1113,9 @@ public final class VideoDetailFragment
             NavigationHelper.enqueueOnPlayer(activity, queue, PlayerType.POPUP);
         } else {
             replaceQueueIfUserConfirms(() -> NavigationHelper
-                    .playOnPopupPlayer(activity, queue, true));
+                    .playOnPopupPlayer(activity, queue, true, !playOnSelection
+                            && player != null && player.getPlayQueue() != null
+                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null));
         }
     }
 
@@ -1191,7 +1193,10 @@ public final class VideoDetailFragment
                 NavigationHelper.getPlayerIntent(context, PlayerService.class, queue,
                                 PlayerIntentType.AllOthers)
                         .putExtra(Player.PLAY_WHEN_READY, autoPlayEnabled)
-                        .putExtra(Player.RESUME_PLAYBACK, true);
+                        .putExtra(Player.RESUME_PLAYBACK, true)
+                        .putExtra(Player.FRESH_SELECTION, playOnSelection
+                                || player.getPlayQueue() == null
+                                || !player.getPlayQueue().equalStreamsAndIndex(queue));
         ContextCompat.startForegroundService(activity, playerIntent);
         playOnSelection = false;
     }

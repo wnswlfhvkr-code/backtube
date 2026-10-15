@@ -394,7 +394,8 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
                 case MINIMIZE_ON_EXIT_MODE_POPUP:
                     getParentActivity().ifPresent(activity -> {
                         player.setRecovery();
-                        NavigationHelper.playOnPopupPlayer(activity, player.getPlayQueue(), true);
+                        NavigationHelper.playOnPopupPlayer(activity,
+                                player.getPlayQueue(), true, player);
                     });
                     break;
                 case MINIMIZE_ON_EXIT_MODE_NONE: default:

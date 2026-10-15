@@ -160,6 +160,12 @@ public final class NavigationHelper {
     public static void playOnPopupPlayer(final Context context,
                                          final PlayQueue queue,
                                          final boolean resumePlayback) {
+        playOnPopupPlayer(context, queue, resumePlayback, null);
+    }
+
+    public static void playOnPopupPlayer(final Context context, final PlayQueue queue,
+                                         final boolean resumePlayback,
+                                         @Nullable final Player switchingPlayer) {
         if (!PermissionHelper.isPopupEnabledElseAsk(context)) {
             return;
         }
@@ -169,20 +175,32 @@ public final class NavigationHelper {
         final var intent = getPlayerIntent(context, PlayerService.class, queue,
                 PlayerIntentType.AllOthers)
                 .putExtra(Player.PLAYER_TYPE, PlayerType.POPUP)
-                .putExtra(Player.RESUME_PLAYBACK, resumePlayback);
+                .putExtra(Player.RESUME_PLAYBACK, resumePlayback)
+                .putExtra(Player.FRESH_SELECTION, switchingPlayer == null)
+                .putExtra(Player.PLAY_WHEN_READY, switchingPlayer == null
+                        || switchingPlayer.getPlayWhenReady());
         ContextCompat.startForegroundService(context, intent);
     }
 
     public static void playOnBackgroundPlayer(final Context context,
                                               final PlayQueue queue,
                                               final boolean resumePlayback) {
+        playOnBackgroundPlayer(context, queue, resumePlayback, null);
+    }
+
+    public static void playOnBackgroundPlayer(final Context context, final PlayQueue queue,
+                                              final boolean resumePlayback,
+                                              @Nullable final Player switchingPlayer) {
         Toast.makeText(context, R.string.background_player_playing_toast, Toast.LENGTH_SHORT)
                 .show();
 
         final Intent intent = getPlayerIntent(context, PlayerService.class, queue,
                 PlayerIntentType.AllOthers)
                 .putExtra(Player.PLAYER_TYPE, PlayerType.AUDIO)
-                .putExtra(Player.RESUME_PLAYBACK, resumePlayback);
+                .putExtra(Player.RESUME_PLAYBACK, resumePlayback)
+                .putExtra(Player.FRESH_SELECTION, switchingPlayer == null)
+                .putExtra(Player.PLAY_WHEN_READY, switchingPlayer == null
+                        || switchingPlayer.getPlayWhenReady());
         ContextCompat.startForegroundService(context, intent);
     }
 

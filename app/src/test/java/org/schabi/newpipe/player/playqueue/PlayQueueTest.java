@@ -21,6 +21,23 @@ import static org.mockito.Mockito.spy;
 
 @SuppressWarnings("checkstyle:HideUtilityClassConstructor")
 public class PlayQueueTest {
+
+    @Test
+    public void baselineSerializedQueueRetainsIndexAndActiveRecovery() throws Exception {
+        try (java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                java.util.Objects.requireNonNull(getClass().getResourceAsStream(
+                        "/player/legacy-play-queue.bin")))) {
+            final PlayQueue queue = (PlayQueue) input.readObject();
+            assertEquals(2, queue.size());
+            assertEquals(1, queue.getIndex());
+            assertEquals("https://example.invalid/legacy-active", queue.getItem().getUrl());
+            assertEquals(23_000, queue.getItem().getRecoveryPosition());
+            assertEquals(PlayQueueItem.RECOVERY_UNSET,
+                    queue.getItem().getExplicitStartPositionMillis());
+            assertEquals(4099004261666648821L,
+                    java.io.ObjectStreamClass.lookup(PlayQueue.class).getSerialVersionUID());
+        }
+    }
     static PlayQueue makePlayQueue(final int index, final List<PlayQueueItem> streams) {
         // I tried using Mockito, but it didn't work for some reason
         return new PlayQueue(index, streams) {

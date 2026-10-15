@@ -140,7 +140,6 @@ import org.schabi.newpipe.player.ui.PlayerUi;
 import org.schabi.newpipe.player.ui.PlayerUiList;
 import org.schabi.newpipe.player.ui.PopupPlayerUi;
 import org.schabi.newpipe.player.ui.VideoPlayerUi;
-import org.schabi.newpipe.util.DependentPreferenceHelper;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.ListHelper;
 import org.schabi.newpipe.util.InfoCache;
@@ -192,6 +191,7 @@ public final class Player implements PlaybackListener, Listener {
     public static final String PLAYBACK_QUALITY = "playback_quality";
     public static final String PLAY_QUEUE_KEY = "play_queue_key";
     public static final String RESUME_PLAYBACK = "resume_playback";
+    public static final String FRESH_SELECTION = "fresh_selection";
     public static final String PLAY_WHEN_READY = "play_when_ready";
     public static final String PLAYER_TYPE = "player_type";
     public static final String PLAYER_INTENT_TYPE = "player_intent_type";
@@ -584,7 +584,6 @@ public final class Player implements PlaybackListener, Listener {
                         .observeOn(AndroidSchedulers.mainThread())
                         .subscribe(info -> {
                             final @Nullable PlayQueue oldPlayQueue = playQueue;
-                            info.setStartPosition(data.getSeconds());
                             final PlayQueueItem playQueueItem = new PlayQueueItem(info);
 
                             // If the stream is already playing,
@@ -616,6 +615,8 @@ public final class Player implements PlaybackListener, Listener {
                                     }
                                     newPlayQueue = oldPlayQueue;
                                 }
+                                newPlayQueue.setRecovery(newPlayQueue.getIndex(),
+                                        data.getSeconds() * 1000L);
                                 initPlayback(newPlayQueue, playWhenReady);
                             }
 
@@ -647,15 +648,28 @@ public final class Player implements PlaybackListener, Listener {
         // branching parameters for below
         final boolean samePlayQueue = playQueue != null && playQueue.equalStreamsAndIndex(newQueue);
 
-        /*
-         * TODO As seen in #7427 this does not work:
-         * There are 3 situations when playback shouldn't be started from scratch (zero timestamp):
-         * 1. User pressed on a timestamp link and the same video should be rewound to the timestamp
-         * 2. User changed a player from, for example. main to popup, or from audio to main, etc
-         * 3. User chose to resume a video based on a saved timestamp from history of played videos
-         * In those cases time will be saved because re-init of the play queue is a not an instant
-         *  task and requires network calls
-         * */
+        final boolean freshSelection = intent.getBooleanExtra(FRESH_SELECTION, false);
+        if (freshSelection) {
+            cancelPlaybackRecovery();
+            playbackRecovery.reset();
+            recoveryFailed = false;
+            recoveryCanceled = false;
+            recoveryRefreshingSource = false;
+            recoveryReloading = false;
+            // Queue recovery also holds temporary state from a previous player/view. A new
+            // selection retains only its explicit timestamp, never per-item stop positions.
+            final long start = newQueue.getItem() == null ? PlayQueueItem.RECOVERY_UNSET
+                    : newQueue.getItem().getExplicitStartPositionMillis();
+            newQueue.clearRecovery();
+            if (samePlayQueue && playQueue != newQueue) {
+                playQueue.clearRecovery();
+            }
+            if (newQueue.getItem() != null) {
+                newQueue.setRecovery(newQueue.getIndex(),
+                        start == PlayQueueItem.RECOVERY_UNSET ? 0 : start);
+            }
+        }
+
         // seek to timestamp if stream is already playing
         if (!exoPlayerIsNull()
                 && newQueue.size() == 1 && newQueue.getItem() != null
@@ -669,6 +683,7 @@ public final class Player implements PlaybackListener, Listener {
                 simpleExoPlayer.prepare();
             }
             simpleExoPlayer.seekTo(playQueue.getIndex(), newQueue.getItem().getRecoveryPosition());
+            playQueue.unsetRecovery(playQueue.getIndex());
             simpleExoPlayer.setPlayWhenReady(playWhenReady);
 
         } else if (!exoPlayerIsNull()
@@ -682,45 +697,17 @@ public final class Player implements PlaybackListener, Listener {
                     == com.google.android.exoplayer2.Player.STATE_IDLE) {
                 simpleExoPlayer.prepare();
             }
+            if (freshSelection && newQueue.getItem() != null) {
+                simpleExoPlayer.seekTo(playQueue.getIndex(),
+                        newQueue.getItem().getRecoveryPosition());
+                playQueue.unsetRecovery(playQueue.getIndex());
+            }
             simpleExoPlayer.setPlayWhenReady(playWhenReady);
 
-        } else if (intent.getBooleanExtra(RESUME_PLAYBACK, false)
-                && DependentPreferenceHelper.getResumePlaybackEnabled(context)
-                // !samePlayQueue
-                && (playQueue == null || !playQueue.equalStreamsAndIndex(newQueue))
-                && !newQueue.isEmpty()
-                && newQueue.getItem() != null
-                && newQueue.getItem().getRecoveryPosition() == PlayQueueItem.RECOVERY_UNSET) {
-            databaseUpdateDisposable.add(recordManager.loadStreamState(newQueue.getItem())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    // Do not place initPlayback() in doFinally() because
-                    // it restarts playback after destroy()
-                    //.doFinally()
-                    .subscribe(
-                            state -> {
-                                if (!state.isFinished(newQueue.getItem().getDuration())) {
-                                    // resume playback only if the stream was not played to the end
-                                    newQueue.setRecovery(newQueue.getIndex(),
-                                            state.getProgressMillis());
-                                }
-                                initPlayback(newQueue, playWhenReady);
-                            },
-                            error -> {
-                                if (DEBUG) {
-                                    Log.w(TAG, "Failed to start playback", error);
-                                }
-                                // In case any error we can start playback without history
-                                initPlayback(newQueue, playWhenReady);
-                            },
-                            () -> {
-                                // Completed but not found in history
-                                initPlayback(newQueue, playWhenReady);
-                            }
-                    ));
         } else {
-            // Good to go...
-            // In a case of equal PlayQueues we can re-init old one but only when it is disposed
-            initPlayback(samePlayQueue ? playQueue : newQueue, playWhenReady);
+            // Fresh requests use the prepared incoming queue, including its explicit timestamp.
+            // Rebinds can reinitialize the equal old queue with its pending session recovery.
+            initPlayback(samePlayQueue && !freshSelection ? playQueue : newQueue, playWhenReady);
         }
 
     }
@@ -2477,9 +2464,8 @@ public final class Player implements PlaybackListener, Listener {
             // playQueue index and currentMetadata still haven't updated)
             return;
         }
-        // Save current position. It will help to restore this position once a user
-        // wants to play prev or next stream from the queue
-        playQueue.setRecovery(playQueue.getIndex(), simpleExoPlayer.getContentPosition());
+        // History remains available for progress displays. Session recovery is saved separately;
+        // returning to another queue item must not resume its old stop position.
         saveStreamProgressState(simpleExoPlayer.getCurrentPosition());
     }
 
@@ -2570,8 +2556,7 @@ public final class Player implements PlaybackListener, Listener {
         }
         final PlayQueueItem item = playQueue.getItem();
         long position = item == null ? 0 : Math.max(0, item.getRecoveryPosition());
-        if (item != null && item.getRecoveryPosition() == PlayQueueItem.RECOVERY_UNSET
-                && !exoPlayerIsNull()
+        if (item != null && !exoPlayerIsNull()
                 && simpleExoPlayer.getCurrentMediaItemIndex() == playQueue.getIndex()
                 && MediaItemTag.from(simpleExoPlayer.getCurrentMediaItem())
                 .filter(tag -> tag.getServiceId() == item.getServiceId()
@@ -2921,6 +2906,7 @@ public final class Player implements PlaybackListener, Listener {
         } else {
             saveStreamProgressState();
         }
+        playQueue.unsetRecovery(index);
         playQueue.setIndex(index);
         pruneSavedQueue(true);
     }
