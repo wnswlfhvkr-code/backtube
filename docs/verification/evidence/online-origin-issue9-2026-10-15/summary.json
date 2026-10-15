@@ -1,0 +1,18 @@
+{
+  "tests": 419,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "actual_android_executions": 0,
+  "instrumentation_compiled": true,
+  "lint_errors": 0,
+  "lint_warnings": 321,
+  "issue": 9,
+  "baseline": "997f0ba2c8f7f3354d19925ddd0441d0b552fc27",
+  "new_regressions": 7,
+  "baseline_red_cases": 5,
+  "installed_user_version_confirmed": false,
+  "independent_source_review_blockers": 0,
+  "actual_rendered_ui_or_video_verified": false,
+  "issue_closed": false
+}

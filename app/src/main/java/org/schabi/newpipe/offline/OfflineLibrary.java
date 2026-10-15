@@ -160,6 +160,10 @@ public final class OfflineLibrary {
 
     @Nullable
     public MediaSource source(final PlayQueueItem item) throws IOException {
+        // An origin match describes the saved entry; it does not request saved playback.
+        if (!OfflineStore.isLocalUrl(item.getUrl())) {
+            return null;
+        }
         final OfflineStore.Entry entry = store.find(item.getServiceId(), item.getUrl());
         if (entry == null) {
             return null;
