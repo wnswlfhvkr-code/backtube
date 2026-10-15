@@ -56,8 +56,8 @@ as saved metadata. Same-item source retention and listener rebinding can expose 
 No cache-key collision or cache insertion of synthetic local metadata was found.
 InfoCache uses service/type/literal URL keys; the queue item identity fields are final.
 The regression's original cache stays full while the selected playback tag becomes sparse.
-This identifies a source mechanism matching the reported symptoms without claiming the
-user's exact installed build or rendered-device reproduction has been verified.
+This establishes the source selection/tag mechanism. Independent QA establishes the
+matching baseline symptoms and build; APK1021 device success remains unverified.
 
 ## Change
 
@@ -124,7 +124,7 @@ Build exit 0, original signer guard and input identity preservation passed. Sign
 and package match APK1020; version code increases; minimum SDK is not raised; permissions
 are unchanged; 16KiB zip alignment passes; APK1020's hash matches its retained record.
 No private key was generated, inspected, or copied. These are update prerequisites,
-not confirmation of installation or compatibility with an unconfirmed device build.
+not confirmation of candidate installation or device runtime success.
 
 Actual Android tests/install/update in this environment: **0**. The earlier adb
 read-only-filesystem blocker was not retried or bypassed; Windows QA is separate.
