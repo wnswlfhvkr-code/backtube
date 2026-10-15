@@ -83,7 +83,29 @@ environment is **0**; the prior adb read-only-filesystem blocker is not bypassed
 
 ## Candidate and remaining device checks
 
-Existing-signature APK1021 is pending source checkpoint and build at this record.
+Existing-signature APK1021 was built, verified against retained APK1020, and delivered
+to Library as a single candidate file. Product source is
+`f37097120ed2b695ed957279395542d408d25352`; this subsequent delivery record changes
+only documentation/evidence. Build/source worktrees and retained originals are clean.
+
+- File: `backtube-online-origin-fix-f370971-1021-20261015.apk`
+- Version: `0.29.1-online-origin-fix-20261015`, code **1021**
+- Package: `org.schabi.newpipe.continuous.testofflinelibrary20261011`
+- Size: **11,627,840 bytes**
+- SHA-256: `575567121b878fe9bb10e7d962676d75332475bf89418ebfb4d9fb1df4bcaecd`
+- Public APK certificate SHA-256:
+  `4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc`
+- Mapping ID: `4d9691f474f7fa76cb4200a0f36d43d2c24e4095373574527cfa35e489b4a806`
+
+Build exit 0, original signer guard and input identity preservation passed. Signatures
+and package match APK1020; version code increases; minimum SDK is not raised; permissions
+are unchanged; 16KiB zip alignment passes; APK1020's hash matches its retained record.
+No private key was generated, inspected, or copied. These are update prerequisites,
+not confirmation of installation or compatibility with an unconfirmed device build.
+
+Actual Android tests/install/update in this environment: **0**. The earlier adb
+read-only-filesystem blocker was not retried or bypassed; Windows QA is separate.
+The installed user version remains unconfirmed by this source task. Issue #9 stays open.
 No main merge, deployment, PR7 body edit, Claude execution, new auth/key/permission,
 or added paid service is part of this task.
 
