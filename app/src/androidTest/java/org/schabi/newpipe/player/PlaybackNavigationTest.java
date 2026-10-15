@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
 import android.content.ComponentName;
@@ -49,6 +50,8 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
+import org.schabi.newpipe.player.helper.PlayerHelper;
+import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
 import org.schabi.newpipe.player.ui.MainPlayerUi;
 import org.schabi.newpipe.player.ui.PopupPlayerUi;
@@ -237,6 +240,93 @@ public class PlaybackNavigationTest {
             assertTrue(player.isPlaying());
             assertEquals(1, player.getPlayQueue().getIndex());
             assertFalse(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+        });
+    }
+
+    @Test
+    public void miniPlayerDescriptionTracksTheNextPlayPauseAction() throws Exception {
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        prepareOrientationVideo();
+        onMain(() -> {
+            player.pause();
+            activity.onBackPressed();
+        });
+        await(() -> sheetState() == BottomSheetBehavior.STATE_COLLAPSED
+                && !player.getPlayWhenReady()
+                && context.getString(R.string.play).contentEquals(activity
+                        .findViewById(R.id.overlay_play_pause_button).getContentDescription()));
+        onMain(() -> activity.findViewById(R.id.overlay_play_pause_button).performClick());
+        await(() -> player.getPlayWhenReady()
+                && context.getString(R.string.pause).contentEquals(activity
+                        .findViewById(R.id.overlay_play_pause_button).getContentDescription()));
+        onMain(() -> activity.findViewById(R.id.overlay_play_pause_button).performClick());
+        await(() -> !player.getPlayWhenReady()
+                && context.getString(R.string.play).contentEquals(activity
+                        .findViewById(R.id.overlay_play_pause_button).getContentDescription()));
+    }
+
+    @Test
+    public void explicitFullscreenPreservesPauseAcrossLockedOrientationRecreation()
+            throws Exception {
+        // Requires existing system rotation lock; never change the user's system setting.
+        assumeTrue("enable system rotation lock on the disposable test device first",
+                PlayerHelper.globalScreenOrientationLocked(context));
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        prepareOrientationVideo();
+        onMain(() -> {
+            player.pause();
+            player.setPlaybackSpeed(1.25f);
+        });
+        await(() -> player.getCurrentState() == Player.STATE_PAUSED);
+        final MainActivity previous = activity;
+        final PlayQueue[] queue = new PlayQueue[1];
+        final long[] position = new long[1];
+        final int[] index = new int[1];
+        onMain(() -> {
+            assertFalse(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            queue[0] = player.getPlayQueue();
+            index[0] = queue[0].getIndex();
+            position[0] = player.getExoPlayer().getCurrentPosition();
+            activity.findViewById(R.id.screenRotationButton).performClick();
+            assertTrue(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            assertFalse(player.getPlayWhenReady());
+        });
+        await(() -> refreshActivity(Configuration.ORIENTATION_LANDSCAPE) && activity != previous
+                && activity.findViewById(R.id.screenRotationButton) != null
+                && player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+        onMain(() -> {
+            assertFalse(player.getPlayWhenReady());
+            assertEquals(Player.STATE_PAUSED, player.getCurrentState());
+            assertSame(queue[0], player.getPlayQueue());
+            assertEquals(index[0], player.getPlayQueue().getIndex());
+            assertEquals(position[0], player.getExoPlayer().getCurrentPosition(), 500);
+            assertEquals(1.25f, player.getPlaybackSpeed(), 0.001f);
+        });
+    }
+
+    @Test
+    public void pausedLandscapeInlineFullscreenDoesNotRequestPortrait() throws Exception {
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        prepareOrientationVideo();
+        onMain(player::pause);
+        await(() -> player.getCurrentState() == Player.STATE_PAUSED);
+        final MainActivity previous = activity;
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+        await(() -> refreshActivity(Configuration.ORIENTATION_LANDSCAPE) && activity != previous
+                && activity.findViewById(R.id.screenRotationButton) != null);
+        onMain(() -> {
+            assertFalse(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            final int orientation = activity.getRequestedOrientation();
+            final long position = player.getExoPlayer().getCurrentPosition();
+            activity.findViewById(R.id.screenRotationButton).performClick();
+            assertEquals(orientation, activity.getRequestedOrientation());
+            assertTrue(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            assertFalse(player.getPlayWhenReady());
+            assertEquals(Player.STATE_PAUSED, player.getCurrentState());
+            assertEquals(position, player.getExoPlayer().getCurrentPosition(), 500);
         });
     }
 

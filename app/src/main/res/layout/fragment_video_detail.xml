@@ -707,7 +707,7 @@
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:background="?attr/selectableItemBackground"
-                android:contentDescription="@string/pause"
+                android:contentDescription="@string/play"
                 android:focusable="true"
                 android:focusedByDefault="true"
                 android:scaleType="center"

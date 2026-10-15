@@ -2154,16 +2154,8 @@ public final class VideoDetailFragment
     }
 
     private void checkLandscape() {
-        if ((!player.isPlaying() && player.getPlayQueue() != playQueue)
-                || player.getPlayQueue() == null) {
-            setAutoPlay(true);
-        }
-
+        // Reconnecting after rotation must preserve playback and autoplay state.
         player.UIs().get(MainPlayerUi.class).ifPresent(MainPlayerUi::checkLandscape);
-        // Let's give a user time to look at video information page if video is not playing
-        if (globalScreenOrientationLocked(activity) && !player.isPlaying()) {
-            player.play();
-        }
     }
 
     /*
@@ -2466,6 +2458,8 @@ public final class VideoDetailFragment
                 ? R.drawable.ic_pause
                 : R.drawable.ic_play_arrow;
         binding.overlayPlayPauseButton.setImageResource(drawable);
+        binding.overlayPlayPauseButton.setContentDescription(
+                getString(playerIsPlaying ? R.string.pause : R.string.play));
     }
 
     private void setOverlayLook(final AppBarLayout appBar,
