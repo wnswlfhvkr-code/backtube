@@ -158,9 +158,18 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
         binding.screenRotationButton.setOnClickListener(makeOnClickListener(() -> {
             // Only if it's not a vertical video or vertical video but in landscape with locked
             // orientation a screen orientation can be changed automatically
-            if (!isVerticalVideo || (isLandscape() && globalScreenOrientationLocked(context))) {
+            if (!isFullscreen && !isVerticalVideo && isLandscape()) {
+                // Already in the video's orientation: enter without rotating back to portrait.
+                toggleFullscreen();
+            } else if (!isVerticalVideo
+                    || (isLandscape() && globalScreenOrientationLocked(context))) {
+                final boolean wasFullscreen = isFullscreen;
                 player.getFragmentListener()
                         .ifPresent(PlayerServiceEventListener::onScreenRotationButtonClicked);
+                if (!wasFullscreen && !isFullscreen) {
+                    // A paused player will not auto-enter fullscreen after rotation.
+                    toggleFullscreen();
+                }
             } else {
                 toggleFullscreen();
             }
@@ -385,7 +394,8 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
                 case MINIMIZE_ON_EXIT_MODE_POPUP:
                     getParentActivity().ifPresent(activity -> {
                         player.setRecovery();
-                        NavigationHelper.playOnPopupPlayer(activity, player.getPlayQueue(), true);
+                        NavigationHelper.playOnPopupPlayer(activity,
+                                player.getPlayQueue(), true, player);
                     });
                     break;
                 case MINIMIZE_ON_EXIT_MODE_NONE: default:

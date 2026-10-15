@@ -788,7 +788,8 @@ public class DownloadDialog extends DialogFragment
 
         filenameTmp = getNameEditText().concat(".");
 
-        final int checkedRadioButtonId = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+        final int checkedRadioButtonId =
+                    dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
         if (checkedRadioButtonId == R.id.audio_button) {
             selectedMediaType = getString(R.string.last_download_type_audio_key);
             mainStorage = mainStorageAudio;
@@ -837,17 +838,14 @@ public class DownloadDialog extends DialogFragment
             try {
                 final org.schabi.newpipe.offline.OfflineLibrary library =
                         org.schabi.newpipe.offline.OfflineLibrary.get(context);
-                if (size > 0 && size > org.schabi.newpipe.offline.OfflineStore.DEFAULT_LIMIT
-                        - library.store().usedBytes()) {
-                    showFailedDialog(R.string.offline_storage_full);
-                    return;
-                }
                 final org.schabi.newpipe.offline.OfflineStore.Entry entry =
-                        library.store().beginDownload(currentInfo.getName(), currentInfo.getUrl(),
-                                currentInfo.getServiceId(), mimeTmp);
-                final StoredFileHelper storage = new StoredFileHelper(context, null,
-                        Uri.fromFile(library.store().file(entry)), "offline:" + entry.id);
-                continueSelectedDownload(storage);
+                        library.beginDownload(currentInfo.getName(), currentInfo.getUrl(),
+                                currentInfo.getServiceId(), mimeTmp, size);
+                if ("giga".equals(entry.source)) {
+                    final StoredFileHelper storage = new StoredFileHelper(context, null,
+                            Uri.fromFile(library.store().file(entry)), "offline:" + entry.id);
+                    continueSelectedDownload(storage);
+                }
                 org.schabi.newpipe.offline.OfflineLibraryActivity.open(context);
             } catch (final IOException error) {
                 showFailedDialog(error
@@ -1074,111 +1072,148 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void continueSelectedDownload(@NonNull final StoredFileHelper storage) {
-        if (!storage.canWrite()) {
-            showFailedDialog(R.string.permission_denied);
-            return;
+        org.schabi.newpipe.offline.OfflineStore offlineStore = null;
+        String offlineId = null;
+        if (storage.getTag() != null && storage.getTag().startsWith("offline:")) {
+            try {
+                offlineStore = org.schabi.newpipe.offline.OfflineLibrary.get(context).store();
+                offlineId = storage.getTag().substring("offline:".length());
+                final var owner = downloadManager == null ? null
+                        : downloadManager.getOfflineMission(offlineId);
+                if (owner != null) {
+                    downloadManager.resumeMission(owner);
+                    return;
+                }
+                if (!offlineStore.claimDownload(offlineId)) {
+                    return;
+                }
+                // Acceptance can occur between the first owner lookup and acquiring the claim.
+                final var accepted = downloadManager == null ? null
+                        : downloadManager.getOfflineMission(offlineId);
+                if (accepted != null) {
+                    offlineStore.releaseDownloadClaim(offlineId);
+                    downloadManager.resumeMission(accepted);
+                    return;
+                }
+            } catch (final IOException error) {
+                showFailedDialog(R.string.offline_storage_error);
+                return;
+            }
         }
-
-        // check if the selected file has to be overwritten, by simply checking its length
+        boolean dispatched = false;
         try {
-            if (storage.length() > 0) {
-                storage.truncate();
+            if (!storage.canWrite()) {
+                showFailedDialog(R.string.permission_denied);
+                return;
             }
-        } catch (final IOException e) {
-            Log.e(TAG, "Failed to truncate the file: " + storage.getUri().toString(), e);
-            showFailedDialog(R.string.overwrite_failed);
-            return;
-        }
 
-        final Stream selectedStream;
-        Stream secondaryStream = null;
-        final char kind;
-        int threads = dialogBinding.threads.getProgress() + 1;
-        final String[] urls;
-        final List<MissionRecoveryInfo> recoveryInfo;
-        String psName = null;
-        String[] psArgs = null;
-        long nearLength = 0;
-
-        // more download logic: select muxer, subtitle converter, etc.
-        final int checkedRadioButtonId = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
-        if (checkedRadioButtonId == R.id.audio_button) {
-            kind = 'a';
-            selectedStream = audioStreamsAdapter.getItem(selectedAudioIndex);
-
-            if (selectedStream.getFormat() == MediaFormat.M4A) {
-                psName = Postprocessing.ALGORITHM_M4A_NO_DASH;
-            } else if (selectedStream.getFormat() == MediaFormat.WEBMA_OPUS) {
-                psName = Postprocessing.ALGORITHM_OGG_FROM_WEBM_DEMUXER;
-            }
-        } else if (checkedRadioButtonId == R.id.video_button) {
-            kind = 'v';
-            selectedStream = videoStreamsAdapter.getItem(selectedVideoIndex);
-
-            final SecondaryStreamHelper<AudioStream> secondary = videoStreamsAdapter
-                    .getAllSecondary()
-                    .get(wrappedVideoStreams.getStreamsList().indexOf(selectedStream));
-
-            if (secondary != null) {
-                secondaryStream = secondary.getStream();
-
-                if (selectedStream.getFormat() == MediaFormat.MPEG_4) {
-                    psName = Postprocessing.ALGORITHM_MP4_FROM_DASH_MUXER;
-                } else {
-                    psName = Postprocessing.ALGORITHM_WEBM_MUXER;
+            // check if the selected file has to be overwritten, by simply checking its length
+            try {
+                if (storage.length() > 0) {
+                    storage.truncate();
                 }
-
-                final long videoSize = wrappedVideoStreams.getSizeInBytes(
-                        (VideoStream) selectedStream);
-
-                // set nearLength, only, if both sizes are fetched or known. This probably
-                // does not work on slow networks but is later updated in the downloader
-                if (secondary.getSizeInBytes() > 0 && videoSize > 0) {
-                    nearLength = secondary.getSizeInBytes() + videoSize;
-                }
+            } catch (final IOException e) {
+                Log.e(TAG, "Failed to truncate the file: " + storage.getUri().toString(), e);
+                showFailedDialog(R.string.overwrite_failed);
+                return;
             }
-        } else if (checkedRadioButtonId == R.id.subtitle_button) {
-            threads = 1; // use unique thread for subtitles due small file size
-            kind = 's';
-            selectedStream = subtitleStreamsAdapter.getItem(selectedSubtitleIndex);
 
-            if (selectedStream.getFormat() == MediaFormat.TTML) {
-                psName = Postprocessing.ALGORITHM_TTML_CONVERTER;
-                psArgs = new String[]{
-                        selectedStream.getFormat().getSuffix(),
-                        "false" // ignore empty frames
+            final Stream selectedStream;
+            Stream secondaryStream = null;
+            final char kind;
+            int threads = dialogBinding.threads.getProgress() + 1;
+            final String[] urls;
+            final List<MissionRecoveryInfo> recoveryInfo;
+            String psName = null;
+            String[] psArgs = null;
+            long nearLength = 0;
+
+            // more download logic: select muxer, subtitle converter, etc.
+            final int checkedRadioButtonId =
+                    dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+            if (checkedRadioButtonId == R.id.audio_button) {
+                kind = 'a';
+                selectedStream = audioStreamsAdapter.getItem(selectedAudioIndex);
+
+                if (selectedStream.getFormat() == MediaFormat.M4A) {
+                    psName = Postprocessing.ALGORITHM_M4A_NO_DASH;
+                } else if (selectedStream.getFormat() == MediaFormat.WEBMA_OPUS) {
+                    psName = Postprocessing.ALGORITHM_OGG_FROM_WEBM_DEMUXER;
+                }
+            } else if (checkedRadioButtonId == R.id.video_button) {
+                kind = 'v';
+                selectedStream = videoStreamsAdapter.getItem(selectedVideoIndex);
+
+                final SecondaryStreamHelper<AudioStream> secondary = videoStreamsAdapter
+                        .getAllSecondary()
+                        .get(wrappedVideoStreams.getStreamsList().indexOf(selectedStream));
+
+                if (secondary != null) {
+                    secondaryStream = secondary.getStream();
+
+                    if (selectedStream.getFormat() == MediaFormat.MPEG_4) {
+                        psName = Postprocessing.ALGORITHM_MP4_FROM_DASH_MUXER;
+                    } else {
+                        psName = Postprocessing.ALGORITHM_WEBM_MUXER;
+                    }
+
+                    final long videoSize = wrappedVideoStreams.getSizeInBytes(
+                            (VideoStream) selectedStream);
+
+                    // set nearLength, only, if both sizes are fetched or known. This probably
+                    // does not work on slow networks but is later updated in the downloader
+                    if (secondary.getSizeInBytes() > 0 && videoSize > 0) {
+                        nearLength = secondary.getSizeInBytes() + videoSize;
+                    }
+                }
+            } else if (checkedRadioButtonId == R.id.subtitle_button) {
+                threads = 1; // use unique thread for subtitles due small file size
+                kind = 's';
+                selectedStream = subtitleStreamsAdapter.getItem(selectedSubtitleIndex);
+
+                if (selectedStream.getFormat() == MediaFormat.TTML) {
+                    psName = Postprocessing.ALGORITHM_TTML_CONVERTER;
+                    psArgs = new String[]{
+                            selectedStream.getFormat().getSuffix(),
+                            "false" // ignore empty frames
+                    };
+                }
+            } else {
+                return;
+            }
+
+            if (secondaryStream == null) {
+                urls = new String[] {
+                        selectedStream.getContent()
                 };
+                recoveryInfo = List.of(new MissionRecoveryInfo(selectedStream));
+            } else {
+                if (secondaryStream.getDeliveryMethod() != PROGRESSIVE_HTTP) {
+                    throw new IllegalArgumentException("Unsupported stream delivery format"
+                            + secondaryStream.getDeliveryMethod());
+                }
+
+                urls = new String[] {
+                        selectedStream.getContent(), secondaryStream.getContent()
+                };
+                recoveryInfo = List.of(
+                        new MissionRecoveryInfo(selectedStream),
+                        new MissionRecoveryInfo(secondaryStream)
+                );
             }
-        } else {
-            return;
-        }
 
-        if (secondaryStream == null) {
-            urls = new String[] {
-                    selectedStream.getContent()
-            };
-            recoveryInfo = List.of(new MissionRecoveryInfo(selectedStream));
-        } else {
-            if (secondaryStream.getDeliveryMethod() != PROGRESSIVE_HTTP) {
-                throw new IllegalArgumentException("Unsupported stream delivery format"
-                        + secondaryStream.getDeliveryMethod());
+            DownloadManagerService.startMission(context, urls, storage, kind, threads,
+                    currentInfo, psName, psArgs, nearLength, new ArrayList<>(recoveryInfo));
+            dispatched = true;
+
+            Toast.makeText(context, getString(R.string.download_has_started),
+                    Toast.LENGTH_SHORT).show();
+
+            dismiss();
+        } finally {
+            if (!dispatched && offlineStore != null && offlineId != null) {
+                offlineStore.releaseDownloadClaim(offlineId);
             }
-
-            urls = new String[] {
-                    selectedStream.getContent(), secondaryStream.getContent()
-            };
-            recoveryInfo = List.of(
-                    new MissionRecoveryInfo(selectedStream),
-                    new MissionRecoveryInfo(secondaryStream)
-            );
         }
-
-        DownloadManagerService.startMission(context, urls, storage, kind, threads,
-                currentInfo, psName, psArgs, nearLength, new ArrayList<>(recoveryInfo));
-
-        Toast.makeText(context, getString(R.string.download_has_started),
-                Toast.LENGTH_SHORT).show();
-
-        dismiss();
     }
 }

@@ -51,13 +51,14 @@ class LocalPlaylistManagerTest {
     }
 
     @Test
-    fun createPlaylist_emptyPlaylistMustReturnEmpty() {
+    fun createPlaylist_emptyPlaylistPersistsVisibleMetadata() {
         val result = manager.createPlaylist("name", emptyList())
 
-        // This should not behave like this.
-        // It should throw an error because currently the result is null
-        result.test().await().assertComplete()
-        manager.playlists.test().awaitCount(1).assertValue(emptyList())
+        result.test().await().assertValue(emptyList()).assertComplete()
+        manager.playlists.test().awaitCount(1).assertValue { playlists ->
+            playlists.size == 1 && playlists[0].orderingName == "name" &&
+                playlists[0].streamCount == 0L && playlists[0].thumbnailStreamId == -1L
+        }
     }
 
     @Test()

@@ -181,8 +181,8 @@
     <string name="no_player_found_toast">스트림 플레이어를 찾을 수 없습니다 (VLC를 설치하여 동영상을 재생할 수 있습니다).</string>
     <string name="controls_download_desc">스트림 파일 다운로드하기</string>
     <string name="show_info">정보 보기</string>
-    <string name="tab_bookmarks">재생목록 북마크</string>
-    <string name="controls_add_to_playlist_title">이곳에 추가</string>
+    <string name="tab_bookmarks">재생목록</string>
+    <string name="controls_add_to_playlist_title">재생목록에 추가·새로 만들기</string>
     <string name="use_inexact_seek_title">정확하지 않은 빠른 탐색 사용</string>
     <string name="use_inexact_seek_summary">정확하지 않은 탐색을 사용하면 정확도가 떨어지는 대신 더 빠르게 위치를 탐색할 수 있습니다. 5초, 15초 또는 25초 탐색 기능은 이 기능과 같이 동작하지 않습니다</string>
     <string name="auto_queue_title">다음 스트림을 자동으로 대기열에 추가</string>
@@ -376,6 +376,8 @@
     <string name="no_comments">댓글 없음</string>
     <string name="error_unable_to_load_comments">댓글을 불러올 수 없음</string>
     <string name="close">닫기</string>
+    <string name="playback_progress_details_title">상세 화면 재생 기록</string>
+    <string name="playback_progress_details_summary">상세 화면에 저장된 시청 진행 상황 표시</string>
     <string name="enable_playback_resume_title">재생 위치 기억</string>
     <string name="enable_playback_resume_summary">마지막 재생 위치부터 재생</string>
     <string name="enable_playback_state_lists_title">리스트 내 위치 표시</string>
@@ -854,4 +856,6 @@
     <string name="api23_requirement_dialog_message">NewPipe는 Android 5.0 및 5.1 지원을 중단한 몇 라이브러리에 의존합니다. 따라서 유감스럽게도 다음NewPipe 버전은 Android 6 이상 기기에서만 작동할 예정입니다. 자세한 내용은 블로그 게시글을 참조하세요.</string>
     <string name="api23_requirement_dialog_blogpost">블로그 게시글</string>
     <string name="playback_recovery_failed">재생할 수 없습니다. 재생 버튼을 눌러 다시 시도하세요.</string>
+    <string name="playlist_duration_unknown">%1$s (일부 길이 미확인)</string>
+    <string name="youtube_trending_unavailable">YouTube의 일반 인기 급상승 페이지는 종료되었습니다. 검색을 이용하거나 메뉴에서 음악·게임 등 분야별 인기 차트를 선택하세요.</string>
 </resources>

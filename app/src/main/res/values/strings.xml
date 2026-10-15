@@ -34,12 +34,12 @@
     <string name="subscription_update_failed">Could not update subscription</string>
     <string name="show_info">Show info</string>
     <string name="tab_subscriptions">Subscriptions</string>
-    <string name="tab_bookmarks">Bookmarked Playlists</string>
+    <string name="tab_bookmarks">Playlists</string>
     <string name="tab_bookmarks_short">Playlists</string>
     <string name="tab_choose">Choose Tab</string>
     <string name="controls_background_title">Background</string>
     <string name="controls_popup_title">Popup</string>
-    <string name="controls_add_to_playlist_title">Add To</string>
+    <string name="controls_add_to_playlist_title">Add to playlist / Create new</string>
     <string name="download_path_title">Video download folder</string>
     <string name="download_path_summary">Downloaded video files are stored here</string>
     <string name="download_path_dialog_title">Choose download folder for video files</string>
@@ -123,6 +123,8 @@
     <string name="enable_search_history_title">Search history</string>
     <string name="enable_search_history_summary">Store search queries locally</string>
     <string name="enable_watch_history_title">Watch history</string>
+    <string name="playback_progress_details_title">Playback progress on details</string>
+    <string name="playback_progress_details_summary">Show saved watch progress on the details screen</string>
     <string name="enable_playback_resume_title">Resume playback</string>
     <string name="enable_playback_resume_summary">Restore last playback position</string>
     <string name="enable_playback_state_lists_title">Positions in lists</string>
@@ -904,4 +906,6 @@
     <string name="api23_requirement_dialog_message">Unfortunately NewPipe depends on a few libraries that dropped support for Android 5.0 and 5.1. The next NewPipe release will therefore only work on devices with Android 6 or higher, sadly. Read more in the blogpost.</string>
     <string name="api23_requirement_dialog_blogpost">Blogpost</string>
     <string name="playback_recovery_failed">Playback unavailable. Press play to retry.</string>
+    <string name="playlist_duration_unknown">%1$s (some durations unknown)</string>
+    <string name="youtube_trending_unavailable">YouTube retired the general Trending page. Use search or choose a category chart from the menu, such as trending music or gaming.</string>
 </resources>

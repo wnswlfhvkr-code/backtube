@@ -1,11 +1,17 @@
 package org.schabi.newpipe.player.helper;
 
 import android.content.Context;
+import android.text.InputType;
+import android.text.method.TextKeyListener;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.ListView;
-import android.widget.NumberPicker;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -59,11 +65,11 @@ public final class SleepTimerDialog {
         final int[] minutes = {15, 30, 60, 90, 120};
         final CharSequence[] options = new CharSequence[minutes.length + 4];
         for (int index = 0; index < minutes.length; index++) {
-            options[index] = context.getString(
+            options[index + 1] = context.getString(
                     R.string.personal_sleep_timer_minutes, minutes[index]);
         }
-        final int customIndex = minutes.length;
-        final int endOfItemIndex = customIndex + 1;
+        final int customIndex = 0;
+        final int endOfItemIndex = minutes.length + 1;
         final int extendIndex = endOfItemIndex + 1;
         final int cancelIndex = extendIndex + 1;
         options[customIndex] = context.getString(R.string.personal_sleep_timer_custom);
@@ -92,10 +98,11 @@ public final class SleepTimerDialog {
                     if (currentDialog != dialog) {
                         return;
                     }
-                    if (which < minutes.length) {
-                        player.setSleepTimer(minutes[which] * 60_000L);
-                    } else if (which == customIndex) {
+                    if (which == customIndex) {
                         showCustomSleepTimerDialog();
+                        return;
+                    } else if (which <= minutes.length) {
+                        player.setSleepTimer(minutes[which - 1] * 60_000L);
                     } else if (which == endOfItemIndex) {
                         if (!player.canSetSleepTimerAtEndOfItem()) {
                             return;
@@ -136,25 +143,96 @@ public final class SleepTimerDialog {
 
     private void showCustomSleepTimerDialog() {
         dismiss();
-        final NumberPicker minutesPicker = new NumberPicker(context);
-        minutesPicker.setMinValue(1);
-        minutesPicker.setMaxValue(1440);
-        minutesPicker.setValue(30);
-        minutesPicker.setWrapSelectorWheel(false);
+        final LinearLayout fields = new LinearLayout(context);
+        fields.setOrientation(LinearLayout.HORIZONTAL);
+        final int padding = (int) (24 * context.getResources().getDisplayMetrics().density);
+        fields.setPadding(padding, padding / 2, padding, padding / 2);
+        final EditText hours = durationField(R.id.timer_duration_hours,
+                R.string.personal_timer_hours, "0", EditorInfo.IME_ACTION_NEXT);
+        final EditText minutes = durationField(R.id.timer_duration_minutes,
+                R.string.personal_timer_minutes, "30", EditorInfo.IME_ACTION_DONE);
+        addDurationField(fields, hours, R.string.personal_timer_hours);
+        addDurationField(fields, minutes, R.string.personal_timer_minutes);
+        final ScrollView scroll = new ScrollView(context);
+        scroll.setFillViewport(true);
+        scroll.addView(fields);
 
-        currentDialog = new AlertDialog.Builder(context)
+        final AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle(R.string.personal_sleep_timer_custom)
-                .setView(minutesPicker)
-                .setPositiveButton(R.string.ok, (dialog, which) -> {
-                    if (currentDialog != dialog) {
-                        return;
-                    }
-                    minutesPicker.clearFocus();
-                    player.setSleepTimer(minutesPicker.getValue() * 60_000L);
-                    onChanged.run();
-                })
+                .setView(scroll)
+                .setPositiveButton(R.string.ok, null)
                 .setNegativeButton(R.string.cancel, null)
-                .show();
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setSoftInputMode(
+                        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                        | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                if (currentDialog != dialog) {
+                    return;
+                }
+                final long duration;
+                try {
+                    duration = parseDurationMillis(hours.getText().toString(),
+                            minutes.getText().toString());
+                } catch (final IllegalArgumentException error) {
+                    minutes.setError(context.getString(R.string.personal_timer_invalid_duration));
+                    return;
+                }
+                player.setSleepTimer(duration);
+                onChanged.run();
+                dismiss();
+            });
+            hours.requestFocus();
+        });
+        currentDialog = dialog;
+        dialog.show();
     }
 
+    private EditText durationField(final int id, final int label, final String value,
+                                   final int imeAction) {
+        final EditText field = new EditText(context);
+        field.setId(id);
+        field.setSingleLine(true);
+        // Request a numeric keyboard without a digits filter that silently changes invalid paste.
+        field.setKeyListener(TextKeyListener.getInstance());
+        field.setRawInputType(InputType.TYPE_CLASS_NUMBER);
+        field.setImeOptions(imeAction);
+        field.setSelectAllOnFocus(true);
+        field.setMinEms(2);
+        field.setText(value);
+        field.setContentDescription(context.getString(label));
+        return field;
+    }
+
+    private void addDurationField(final LinearLayout row, final EditText input, final int unit) {
+        row.addView(input, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        final TextView label = new TextView(context);
+        label.setText(unit);
+        row.addView(label);
+    }
+
+    static long parseDurationMillis(final String hours, final String minutes) {
+        final long hourValue = durationNumber(hours);
+        final long minuteValue = durationNumber(minutes);
+        if (hourValue > 24 || minuteValue > 59) {
+            throw new IllegalArgumentException("Duration out of range");
+        }
+        final long total = hourValue * 60 + minuteValue;
+        if (total < 1 || total > 1440) {
+            throw new IllegalArgumentException("Duration out of range");
+        }
+        return total * 60_000;
+    }
+
+    private static long durationNumber(final String text) {
+        final String value = text.trim();
+        if (!value.matches("[0-9]*")) {
+            throw new IllegalArgumentException("Invalid duration");
+        }
+        return value.isEmpty() ? 0 : Long.parseLong(value);
+    }
 }

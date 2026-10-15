@@ -43,7 +43,18 @@ public class DownloadManager {
     private boolean canStartMission(DownloadMission mission) {
         return canDownloadInCurrentNetwork()
                 && (!org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
-                || org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext));
+                || ((mission.running || !hasLiveOfflineWorkers(mission))
+                && org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext)));
+    }
+
+    private static boolean hasLiveOfflineWorkers(DownloadMission mission) {
+        if (mission.init != null && mission.init.isAlive()) return true;
+        if (mission.threads != null) {
+            for (Thread worker : mission.threads) {
+                if (worker != null && worker.isAlive()) return true;
+            }
+        }
+        return false;
     }
 
     private static final String TAG = DownloadManager.class.getSimpleName();
@@ -247,6 +258,18 @@ public class DownloadManager {
      */
     void startMission(DownloadMission mission) {
         synchronized (this) {
+            if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
+                final String id = org.schabi.newpipe.offline.OfflineDownloads.id(mission);
+                if (getOfflineMission(id) != null) return;
+                try {
+                    final var entry = org.schabi.newpipe.offline.OfflineLibrary.get(offlineContext)
+                            .store().get(id);
+                    if (entry == null || entry.state
+                            != org.schabi.newpipe.offline.OfflineStore.State.DOWNLOADING) return;
+                } catch (IOException error) {
+                    return;
+                }
+            }
             mission.timestamp = System.currentTimeMillis();
             mission.mHandler = mHandler;
             mission.maxRetry = mPrefMaxRetry;
@@ -268,6 +291,15 @@ public class DownloadManager {
 
             mSelfMissionsControl = true;
             mMissionsPending.add(mission);
+            if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
+                try {
+                    org.schabi.newpipe.offline.OfflineLibrary.get(offlineContext).store()
+                            .releaseDownloadClaim(org.schabi.newpipe.offline.OfflineDownloads
+                                    .id(mission));
+                } catch (IOException ignored) {
+                    // The pending mission still owns dispatch if the library is unavailable.
+                }
+            }
 
             // Before continue, save the metadata in case the internet connection is not available
             Utility.writeToFile(mission.metadata, mission);
@@ -291,6 +323,7 @@ public class DownloadManager {
 
     public void resumeMission(DownloadMission mission) {
         if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
+            if (!mission.running && hasLiveOfflineWorkers(mission)) return;
             mSelfMissionsControl = true;
             mission.setEnqueued(true);
             if (!canStartMission(mission)) return;
@@ -309,6 +342,16 @@ public class DownloadManager {
 
     public void deleteMission(Mission mission, boolean alsoDeleteFile) {
         synchronized (this) {
+            if (!alsoDeleteFile && mission instanceof DownloadMission
+                    && org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
+                final DownloadMission pending = (DownloadMission) mission;
+                if (pending.isPsRunning()) return;
+                pauseMission(pending);
+                // pause() interrupts but does not join. Keep ownership until writes have stopped.
+                if (hasLiveOfflineWorkers(pending)) return;
+                forgetMission(mission.storage);
+                return;
+            }
             if (mission instanceof DownloadMission) {
                 mMissionsPending.remove(mission);
             } else if (mission instanceof FinishedMission) {

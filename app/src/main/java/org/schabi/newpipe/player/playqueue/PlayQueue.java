@@ -37,6 +37,7 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
  * </p>
  */
 public abstract class PlayQueue implements Serializable {
+    private static final long serialVersionUID = 4099004261666648821L;
     public static final boolean DEBUG = MainActivity.DEBUG;
     @NonNull
     private final AtomicInteger queueIndex;
@@ -100,6 +101,10 @@ public abstract class PlayQueue implements Serializable {
      * @return whether the queue is complete
      */
     public abstract boolean isComplete();
+
+    public boolean isOfflineOnly() {
+        return false;
+    }
 
     /**
      * Load partial queue in the background, does nothing if the queue is complete.
@@ -307,6 +312,17 @@ public abstract class PlayQueue implements Serializable {
     }
 
     /**
+     * Enqueue a timestamped item and select it, unless the queue rejects that scope.
+     * @param item timestamped stream to enqueue
+     * @return whether the queue accepted and selected the item
+     */
+    public synchronized boolean enqueueNextAndSelect(@NonNull final PlayQueueItem item) {
+        enqueueNext(item, true);
+        offsetIndex(1);
+        return true;
+    }
+
+    /**
      * Removes the item at the given index from the play queue.
      * <p>
      * The current playing index will decrement if it is greater than the index being removed.
@@ -430,6 +446,20 @@ public abstract class PlayQueue implements Serializable {
      */
     public synchronized void unsetRecovery(final int index) {
         setRecovery(index, PlayQueueItem.RECOVERY_UNSET);
+    }
+
+    /** Clear all recovery records with at most one notification for the whole queue. */
+    public synchronized void clearRecovery() {
+        boolean changed = false;
+        for (final PlayQueueItem item : streams) {
+            if (item.getRecoveryPosition() != PlayQueueItem.RECOVERY_UNSET) {
+                item.setRecoveryPosition(PlayQueueItem.RECOVERY_UNSET);
+                changed = true;
+            }
+        }
+        if (changed) {
+            broadcast(new RecoveryEvent(getIndex(), PlayQueueItem.RECOVERY_UNSET));
+        }
     }
 
     /**

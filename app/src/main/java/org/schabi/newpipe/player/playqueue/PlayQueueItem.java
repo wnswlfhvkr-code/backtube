@@ -16,6 +16,7 @@ import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class PlayQueueItem implements Serializable {
+    private static final long serialVersionUID = 6054959748728707165L;
     public static final long RECOVERY_UNSET = Long.MIN_VALUE;
     private static final String EMPTY_STRING = "";
 
@@ -35,6 +36,9 @@ public class PlayQueueItem implements Serializable {
 
     private boolean isAutoQueued;
 
+    // Nullable so queues serialized before this field existed have no explicit timestamp.
+    @Nullable
+    private Long explicitStartPositionMillis;
     private long recoveryPosition;
     private Throwable error;
 
@@ -44,7 +48,8 @@ public class PlayQueueItem implements Serializable {
                 info.getUploaderUrl(), info.getStreamType());
 
         if (info.getStartPosition() > 0) {
-            setRecoveryPosition(info.getStartPosition() * 1000);
+            explicitStartPositionMillis = info.getStartPosition() * 1000;
+            setRecoveryPosition(explicitStartPositionMillis);
         }
     }
 
@@ -124,12 +129,20 @@ public class PlayQueueItem implements Serializable {
         return streamType;
     }
 
+    public long getExplicitStartPositionMillis() {
+        return explicitStartPositionMillis == null ? RECOVERY_UNSET : explicitStartPositionMillis;
+    }
+
     public long getRecoveryPosition() {
         return recoveryPosition;
     }
 
     /*package-private*/ void setRecoveryPosition(final long recoveryPosition) {
         this.recoveryPosition = recoveryPosition;
+        if (recoveryPosition == RECOVERY_UNSET) {
+            // A timestamp belongs to its initial play request, not to later queue selections.
+            explicitStartPositionMillis = null;
+        }
     }
 
     @Nullable

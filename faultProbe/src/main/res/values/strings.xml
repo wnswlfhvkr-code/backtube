@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="probe_app_name">backtube 로컬 기록 테스트</string>
+    <string name="probe_intro">이 앱은 오류 기록 저장 방식만 확인하는 작은 테스트 앱입니다. 실제 오류를 일으키지 않고, 인터넷을 사용하지 않으며, 개인 정보를 입력받지 않습니다. 기록은 이 앱 전용 내부 저장소에만 남습니다.</string>
+    <string name="probe_capture">합성 오류 저장</string>
+    <string name="probe_capture_again">같은 오류 다시 저장 (중복 확인)</string>
+    <string name="probe_refresh">로컬 기록 다시 확인</string>
+    <string name="probe_busy">처리 중…</string>
+    <string name="probe_no_result">마지막 결과: 아직 저장하지 않음</string>
+    <string name="probe_result_label">마지막 결과: %1$s</string>
+    <string name="probe_snapshot_title">로컬 기록 상태</string>
+</resources>

@@ -7,6 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.schabi.newpipe.extractor.NewPipe;
+import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -16,6 +22,10 @@ import java.util.UUID;
 public final class OfflineStore {
     public static final long DEFAULT_LIMIT = 500_000_000L;
     public static final String LOCAL_PREFIX = "backtube-offline:";
+
+    public static boolean isLocalUrl(final String url) {
+        return url != null && url.startsWith(LOCAL_PREFIX);
+    }
 
     // EXPIRED is read only to migrate records written by older versions.
     public enum State { IMPORTING, DOWNLOADING, READY, INTERRUPTED, FAILED, EXPIRED }
@@ -66,6 +76,7 @@ public final class OfflineStore {
     private final long limit;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final Map<String, Integer> readers = new LinkedHashMap<>();
+    private final Set<String> downloadClaims = new HashSet<>();
 
     public OfflineStore(final File directory, final long limit) throws IOException {
         this.directory = directory;
@@ -126,20 +137,76 @@ public final class OfflineStore {
                 removeFile(candidate);
             }
         }
+        restoreOrder();
         refresh();
     }
 
     public synchronized Entry beginDownload(final String title, final String origin,
                                             final int serviceId, final String mime)
             throws IOException {
+        return beginDownload(title, origin, serviceId, mime, 0);
+    }
+
+    public synchronized Entry beginDownload(final String title, final String origin,
+                                            final int serviceId, final String mime,
+                                            final long estimatedBytes) throws IOException {
+        final Entry existing = existingSave(serviceId, origin, "giga", mime);
+        if (existing != null) {
+            if ("giga".equals(existing.source) && existing.state != State.READY) {
+                if (!file(existing).exists() && !file(existing).createNewFile()) {
+                    throw new IOException("Cannot reopen offline download");
+                }
+                if (existing.state != State.DOWNLOADING) {
+                    final Entry retry = existing.changed(State.DOWNLOADING,
+                            file(existing).length(), 0);
+                    save(retry);
+                    return retry;
+                }
+            }
+            return existing;
+        }
         requireCapacity();
+        if (estimatedBytes > limit - usedBytes()) {
+            throw new StorageFullException();
+        }
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 "giga", mime, State.DOWNLOADING, 0, 0);
-        save(entry);
         if (!file(entry).createNewFile()) {
             throw new IOException("Cannot create offline download");
         }
+        save(entry);
         return entry;
+    }
+
+    /**
+     * Reserve dispatch before any caller can truncate or enqueue the owned output.
+     * @param id owned saved entry
+     * @return whether this caller acquired dispatch ownership
+     */
+    public synchronized boolean claimDownload(final String id) throws IOException {
+        final Entry entry = require(id);
+        return entry.state == State.DOWNLOADING && "giga".equals(entry.source)
+                && downloadClaims.add(id);
+    }
+
+    public synchronized void releaseDownloadClaim(final String id) {
+        downloadClaims.remove(id);
+    }
+
+    // The library coordinates its queued/running copier before requesting this handoff.
+    public synchronized Entry handoffDownload(final String id, final String mime)
+            throws IOException {
+        final Entry entry = require(id);
+        if (entry.state != State.FAILED && entry.state != State.INTERRUPTED) {
+            return entry;
+        }
+        if (!file(entry).exists() && !file(entry).createNewFile()) {
+            throw new IOException("Cannot reopen offline download");
+        }
+        final Entry download = new Entry(entry.id, entry.title, entry.origin, entry.serviceId,
+                "giga", mime, State.DOWNLOADING, file(entry).length(), 0);
+        save(download);
+        return download;
     }
 
     public synchronized void checkGrowth(final String id, final long targetLength)
@@ -165,10 +232,21 @@ public final class OfflineStore {
             throw new IOException("Incomplete or oversized download");
         }
         save(entry.changed(State.READY, size, 0));
+        downloadClaims.remove(id);
     }
 
     public synchronized Entry create(final String title, final String origin, final int serviceId,
                                      final String source, final String mime) throws IOException {
+        final Entry existing = existingSave(serviceId, origin, source, mime);
+        if (existing != null) {
+            if (existing.state == State.FAILED || existing.state == State.INTERRUPTED) {
+                final Entry retry = new Entry(existing.id, existing.title, existing.origin,
+                        existing.serviceId, source, mime, existing.state, existing.bytes, 0);
+                save(retry);
+                return retry;
+            }
+            return existing;
+        }
         requireCapacity();
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 source, mime, State.IMPORTING, 0, 0);
@@ -232,10 +310,15 @@ public final class OfflineStore {
         }
     }
 
-    public synchronized void prepareRetry(final String id) throws IOException {
+    public synchronized boolean prepareRetry(final String id) throws IOException {
         final Entry entry = require(id);
+        if (entry.state == State.READY || entry.state == State.DOWNLOADING
+                || "giga".equals(entry.source)) {
+            return false;
+        }
         removeFile(part(id));
         save(entry.changed(State.IMPORTING, 0, 0));
+        return true;
     }
 
     public synchronized void interrupt(final String id) throws IOException {
@@ -251,12 +334,32 @@ public final class OfflineStore {
                 && entry.state != State.INTERRUPTED) {
             removeFile(part(id));
             save(entry.changed(State.FAILED, 0, 0));
+            downloadClaims.remove(id);
         }
     }
 
     public synchronized List<Entry> list() throws IOException {
         refresh();
         return new ArrayList<>(entries.values());
+    }
+
+    /**
+     * Commit a shelf move before exposing it; active player queues are independent snapshots.
+     * @param id saved entry identity
+     * @param offset signed movement within the shelf
+     */
+    public synchronized void move(final String id, final int offset) throws IOException {
+        require(id);
+        final List<String> order = new ArrayList<>(entries.keySet());
+        final int from = order.indexOf(id);
+        final int to = (int) Math.max(0, Math.min(order.size() - 1L, (long) from + offset));
+        if (from == to) {
+            return;
+        }
+        order.remove(from);
+        order.add(to, id);
+        persistOrder(order);
+        applyOrder(order);
     }
 
     public synchronized Entry get(final String id) throws IOException {
@@ -266,10 +369,14 @@ public final class OfflineStore {
 
     public synchronized Entry find(final int serviceId, final String url) throws IOException {
         refresh();
+        if (isLocalUrl(url)) {
+            final Entry entry = entries.get(url.substring(LOCAL_PREFIX.length()));
+            return entry != null && entry.state == State.READY && entry.localUrl().equals(url)
+                    ? entry : null;
+        }
         for (final Entry entry : entries.values()) {
-            if (entry.state == State.READY && (entry.localUrl().equals(url)
-                    || (entry.serviceId == serviceId && !entry.origin.isEmpty()
-                    && entry.origin.equals(url)))) {
+            if (entry.state == State.READY && entry.serviceId == serviceId
+                    && !entry.origin.isEmpty() && entry.origin.equals(url)) {
                 return entry;
             }
         }
@@ -320,12 +427,95 @@ public final class OfflineStore {
         if (entry == null) {
             return;
         }
+        final List<String> order = new ArrayList<>(entries.keySet());
+        order.remove(id);
+        persistOrder(order);
         removeFile(new File(directory, id + ".properties"));
         entries.remove(id);
+        downloadClaims.remove(id);
         removeFile(part(id));
         if (!readers.containsKey(id)) {
             removeFile(file(entry));
         }
+    }
+
+    private Entry existingSave(final int serviceId, final String origin, final String source,
+                                final String mime) throws IOException {
+        refresh();
+        final String identity = saveIdentity(serviceId, origin, source, new HashSet<>());
+        if (identity.isEmpty()) {
+            return null;
+        }
+        Entry match = null;
+        for (final Entry entry : entries.values()) {
+            if (entry.serviceId != serviceId || !mediaKind(entry.mime).equals(mediaKind(mime))
+                    || !identity.equals(saveIdentity(entry.serviceId, entry.origin, entry.source,
+                    new HashSet<>()))) {
+                continue;
+            }
+            if (entry.state == State.READY) {
+                return entry;
+            }
+            if (match == null || entry.state == State.IMPORTING
+                    || entry.state == State.DOWNLOADING) {
+                match = entry;
+            }
+        }
+        return match;
+    }
+
+    private String saveIdentity(final int serviceId, final String origin, final String source,
+                                 final Set<String> visited) {
+        final String value = origin.isEmpty() ? source : origin;
+        if (value.isEmpty() || "giga".equals(value)) {
+            return "";
+        }
+        Entry owned = null;
+        if (isLocalUrl(value)) {
+            owned = entries.get(value.substring(LOCAL_PREFIX.length()));
+        } else if (value.startsWith("file:")) {
+            try {
+                final File local = new File(java.net.URI.create(value))
+                        .toPath().normalize().toFile();
+                for (final Entry entry : entries.values()) {
+                    if (file(entry).equals(local)) {
+                        owned = entry;
+                        break;
+                    }
+                }
+            } catch (final IllegalArgumentException ignored) {
+                // Unknown local forms retain their complete identity below.
+            }
+        }
+        if (owned != null && owned.serviceId == serviceId && visited.add(owned.id)) {
+            return saveIdentity(serviceId, owned.origin, owned.source, visited);
+        }
+        // SoundCloud and custom Bandcamp factory paths may resolve over the network. Only use
+        // audited local parsers here; other services retain the caller's full canonical origin.
+        if (serviceId != ServiceList.YouTube.getServiceId()
+                && serviceId != ServiceList.PeerTube.getServiceId()
+                && serviceId != ServiceList.MediaCCC.getServiceId()) {
+            return "literal:" + value;
+        }
+        try {
+            // Provider canonical URLs preserve instance hosts, unlike a bare federated stream id.
+            return "origin:" + NewPipe.getService(serviceId).getStreamLHFactory()
+                    .fromUrl(value).getUrl();
+        } catch (final ExtractionException | IllegalArgumentException
+                       | UnsupportedOperationException ignored) {
+            // Preserve meaningful queries on unrecognized origins; never strip queries globally.
+            return "literal:" + value;
+        }
+    }
+
+    private static String mediaKind(final String mime) {
+        if (mime.startsWith("audio/")) {
+            return "audio";
+        }
+        if (mime.startsWith("video/")) {
+            return "video";
+        }
+        return mime;
     }
 
     private void refresh() throws IOException {
@@ -380,7 +570,69 @@ public final class OfflineStore {
         if (!pending.renameTo(new File(directory, entry.id + ".properties"))) {
             throw new IOException("Cannot persist offline state");
         }
+        if (!entries.containsKey(entry.id)) {
+            final List<String> order = new ArrayList<>(entries.keySet());
+            order.add(entry.id);
+            persistOrder(order);
+        }
         entries.put(entry.id, entry);
+    }
+
+    private void restoreOrder() throws IOException {
+        final Properties saved = new Properties();
+        final File file = new File(directory, "shelf-order");
+        if (file.isFile() && file.length() <= 1_000_000) {
+            try (InputStream input = new FileInputStream(file)) {
+                saved.load(input);
+            } catch (final IOException | IllegalArgumentException ignored) {
+                // A corrupt order never invalidates or removes complete media.
+                saved.clear();
+            }
+        }
+        final Map<String, Entry> ordered = new LinkedHashMap<>();
+        if ("1".equals(saved.getProperty("version"))) {
+            for (final String id : saved.getProperty("ids", "").split(",")) {
+                if (entries.containsKey(id)) {
+                    ordered.put(id, entries.get(id));
+                }
+            }
+        }
+        for (final Entry entry : entries.values()) {
+            ordered.putIfAbsent(entry.id, entry);
+        }
+        final List<String> order = new ArrayList<>(ordered.keySet());
+        if (!"1".equals(saved.getProperty("version"))
+                || !String.join(",", order).equals(saved.getProperty("ids"))) {
+            try {
+                persistOrder(order);
+            } catch (final IOException ignored) {
+                // Order repair is best effort; complete saved files remain readable.
+            }
+        }
+        applyOrder(order);
+    }
+
+    private void applyOrder(final List<String> order) {
+        final Map<String, Entry> ordered = new LinkedHashMap<>();
+        for (final String id : order) {
+            ordered.put(id, entries.get(id));
+        }
+        entries.clear();
+        entries.putAll(ordered);
+    }
+
+    private void persistOrder(final List<String> order) throws IOException {
+        final Properties saved = new Properties();
+        saved.setProperty("version", "1");
+        saved.setProperty("ids", String.join(",", order));
+        final File pending = new File(directory, "shelf-order.new");
+        try (FileOutputStream output = new FileOutputStream(pending)) {
+            saved.store(output, "backtube shelf order");
+            output.getFD().sync();
+        }
+        if (!pending.renameTo(new File(directory, "shelf-order"))) {
+            throw new IOException("Cannot persist offline order");
+        }
     }
 
     private static void removeFile(final File file) throws IOException {

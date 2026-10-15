@@ -79,7 +79,7 @@ class ErrorInfo private constructor(
         isReportable(throwable),
         isRetryable(throwable),
         (throwable as? ReCaptchaException)?.url,
-        openInBrowserUrl
+        openInBrowserUrl.takeUnless { throwable is YoutubeTrendingUnavailableException }
     )
 
     @JvmOverloads
@@ -259,6 +259,9 @@ class ErrorInfo private constructor(
 
                 throwable is ContentNotAvailableException ->
                     ErrorMessage(R.string.content_not_available)
+
+                throwable is YoutubeTrendingUnavailableException ->
+                    ErrorMessage(R.string.youtube_trending_unavailable)
 
                 // other extractor exceptions
                 throwable is ContentNotSupportedException ->

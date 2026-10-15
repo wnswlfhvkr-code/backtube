@@ -24,6 +24,7 @@ public class OfflineStoreTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     private File root;
     private OfflineStore store;
+    private int nextRecording;
 
     @Before public void setup() throws IOException {
         root = temporary.newFolder();
@@ -31,8 +32,124 @@ public class OfflineStoreTest {
     }
 
     private OfflineStore.Entry create() throws IOException {
-        return store.create("My recording", "https://example.invalid/owned", 0,
+        return store.create("My recording", "https://example.invalid/owned/" + nextRecording++, 0,
                 "content://test/recording", "audio/wav");
+    }
+
+    @Test public void manualOrderSurvivesReopenAndNewSavesAppend() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final OfflineStore.Entry third = create();
+        store.move(third.id, -2);
+        assertEquals(third.id, store.list().get(0).id);
+        store = new OfflineStore(root, 100);
+        assertEquals(third.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+        assertEquals(second.id, store.list().get(2).id);
+        final OfflineStore.Entry added = create();
+        store = new OfflineStore(root, 100);
+        assertEquals(added.id, store.list().get(3).id);
+    }
+
+    @Test public void moveBoundsAndDeletionDoNotResurrectEntries() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.move(first.id, Integer.MIN_VALUE);
+        store.move(second.id, Integer.MAX_VALUE);
+        assertEquals(first.id, store.list().get(0).id);
+        store.delete(first.id);
+        store = new OfflineStore(root, 100);
+        assertEquals(1, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+    }
+
+    @Test public void failedOrderWritePreservesVisibleOrderAndMedia() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order.new").mkdir());
+        assertThrows(IOException.class, () -> store.move(second.id, -1));
+        assertEquals(first.id, store.list().get(0).id);
+        assertEquals(20, store.file(first).length());
+        assertTrue(new File(root, "shelf-order.new").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(first.id, store.list().get(0).id);
+    }
+
+    @Test public void normalizedOrderIgnoresDuplicateAndUnknownIds() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final Properties order = new Properties();
+        order.setProperty("version", "1");
+        order.setProperty("ids", second.id + "," + second.id + ",unknown");
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            order.store(output, "test order");
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(2, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+    }
+
+    @Test public void legacyAndCorruptOrderRecoveryPreserveCompleteFiles() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            output.write("version=broken\nids=unknown"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertEquals(20, store.file(entry).length());
+    }
+
+    @Test public void validOrderReopensWithoutRequiringAnOrderWrite() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        store.move(second.id, -1);
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        // Hide the write-fault fixture from orphan cleanup, while all actual I/O remains real.
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(first.id).state);
+        assertEquals(20, store.retain(first.id).length());
+        store.release(first.id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+        assertTrue(pending.delete());
+    }
+
+    @Test public void corruptOrderRepairWriteFailureStillAllowsExistingMedia() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        try (FileOutputStream out = new FileOutputStream(new File(root, "shelf-order"))) {
+            out.write("version=broken".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertTrue(pending.delete());
     }
 
     @Test public void completeCopySurvivesReopenAndPreservesOriginalIdentity() throws Exception {
@@ -44,6 +161,30 @@ public class OfflineStoreTest {
         assertEquals(32, store.usedBytes());
         assertEquals(entry.id, store.find(0, entry.origin).id);
         assertEquals(32, store.file(store.find(0, entry.origin)).length());
+    }
+
+    @Test public void internalIdentityCannotBeReplacedByAnEarlierOriginAlias() throws Exception {
+        final OfflineStore.Entry target = create();
+        store.copy(target.id, new ByteArrayInputStream(new byte[20]));
+        final OfflineStore.Entry alias = store.create("Different recording",
+                "https://example.invalid/alias",
+                0, "content://test/other", "audio/wav");
+        store.copy(alias.id, new ByteArrayInputStream(new byte[20]));
+        // A generated legacy alias must remain distinguishable from the owned target identity.
+        final File metadata = new File(root, alias.id + ".properties");
+        final Properties properties = new Properties();
+        try (InputStream input = new FileInputStream(metadata)) {
+            properties.load(input);
+        }
+        properties.setProperty("origin", target.localUrl());
+        try (FileOutputStream output = new FileOutputStream(metadata)) {
+            properties.store(output, "generated legacy alias");
+        }
+        store = new OfflineStore(root, 100);
+        store.move(alias.id, -1);
+        assertEquals(target.id, store.find(0, target.localUrl()).id);
+        assertEquals(target.id, store.find(-1, target.localUrl()).id);
+        assertNull(store.find(0, "backtube-offline:unknown"));
     }
 
     @Test public void unknownLengthCannotExceedQuotaAndFailureIsNotPlayable() throws Exception {

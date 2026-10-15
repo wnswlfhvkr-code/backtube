@@ -14,6 +14,8 @@ import android.os.Process;
 import android.util.Log;
 import android.widget.TextView;
 
+import androidx.core.content.ContextCompat;
+
 import java.io.File;
 
 /** A real, separately installed focus owner. Only packaged in the instrumentation APK. */
@@ -77,11 +79,9 @@ public final class AudioFocusOwnerActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) {
             modernRequest = Api26.createRequest(gainType, focusListener);
         }
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(control, new IntentFilter(CONTROL), Context.RECEIVER_EXPORTED);
-        } else {
-            registerReceiver(control, new IntentFilter(CONTROL));
-        }
+        // The separately installed target app controls this token-checked fixture across UIDs.
+        ContextCompat.registerReceiver(this, control, new IntentFilter(CONTROL),
+                ContextCompat.RECEIVER_EXPORTED);
         configured = true;
         registered = true;
     }

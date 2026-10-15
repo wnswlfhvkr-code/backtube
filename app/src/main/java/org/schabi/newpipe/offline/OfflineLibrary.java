@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.WorkerThread;
 
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.ProgressiveMediaSource;
@@ -13,14 +14,16 @@ import com.google.android.exoplayer2.upstream.FileDataSource;
 import com.google.android.exoplayer2.upstream.TransferListener;
 
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
+import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
-import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,16 +62,33 @@ public final class OfflineLibrary {
         return capacityFailures.contains(id);
     }
 
-    public OfflineStore.Entry importUri(final Uri uri, final String title, final String origin,
+    public synchronized OfflineStore.Entry beginDownload(final String title, final String origin,
+                                                         final int serviceId, final String mime,
+                                                         final long estimatedBytes)
+            throws IOException {
+        final OfflineStore.Entry entry = store.beginDownload(title, origin, serviceId, mime,
+                estimatedBytes);
+        if (!"giga".equals(entry.source) && !jobs.contains(entry.id)
+                && (entry.state == OfflineStore.State.FAILED
+                || entry.state == OfflineStore.State.INTERRUPTED)) {
+            return store.handoffDownload(entry.id, mime);
+        }
+        return entry;
+    }
+
+    public synchronized OfflineStore.Entry importUri(final Uri uri, final String title,
+                                                      final String origin,
                                         final int serviceId, final String mime) throws IOException {
         requireLocal(uri);
         final OfflineStore.Entry entry = store.create(title, origin, serviceId,
                 uri.toString(), mime);
-        retry(entry.id);
+        if (!"giga".equals(entry.source)) {
+            retry(entry.id);
+        }
         return entry;
     }
 
-    public void retry(final String id) throws IOException {
+    public synchronized void retry(final String id) throws IOException {
         final OfflineStore.Entry entry = store.get(id);
         if (entry == null || entry.state == OfflineStore.State.READY || !jobs.add(id)) {
             return;
@@ -77,7 +97,10 @@ public final class OfflineLibrary {
         final Uri uri = Uri.parse(entry.source);
         try {
             requireLocal(uri);
-            store.prepareRetry(id);
+            if (!store.prepareRetry(id)) {
+                jobs.remove(id);
+                return;
+            }
         } catch (final IOException error) {
             jobs.remove(id);
             throw error;
@@ -116,16 +139,76 @@ public final class OfflineLibrary {
         }
     }
 
-    public SinglePlayQueue queue(final OfflineStore.Entry entry) {
+    @WorkerThread
+    public OfflinePlayQueue queue(final OfflineStore.Entry entry) {
         final StreamInfoItem item = new StreamInfoItem(entry.serviceId, entry.localUrl(),
                 entry.title, entry.mime.startsWith("video/")
                 ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
         item.setUploaderName(context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
-        return new SinglePlayQueue(item);
+        item.setDuration(durationSeconds(entry.serviceId, entry.localUrl()));
+        return new OfflinePlayQueue(List.of(item), 0);
+    }
+
+    /**
+     * Best-effort local metadata, also usable for playlists saved before duration was supplied.
+     * @param serviceId stream service
+     * @param url internal saved identity
+     * @return duration in seconds, or -1 when metadata is unavailable
+     */
+    @WorkerThread
+    public long durationSeconds(final int serviceId, final String url) {
+        if (!OfflineStore.isLocalUrl(url)) {
+            return -1;
+        }
+        try {
+            final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
+            return OfflineMediaDuration.readSeconds(store.file(entry));
+        } catch (final IOException ignored) {
+            return -1;
+        }
+    }
+
+    @WorkerThread
+    public OfflinePlayQueue queueAll() throws IOException {
+        return new OfflinePlayQueue(store,
+                context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+    }
+
+    /**
+     * Resolve an internal identity from owned saved metadata, never its original web URL.
+     * @param serviceId caller's service selection; the saved identity remains authoritative
+     * @param url saved internal identity
+     * @return metadata from the owned copy
+     */
+    @WorkerThread
+    public StreamInfo streamInfo(final int serviceId, final String url) throws IOException {
+        final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
+        return new OfflineMediaTag(queue(entry).getItem()).getMaybeStreamInfo().orElseThrow();
+    }
+
+    @WorkerThread
+    public OfflinePlayQueue queueFor(final int serviceId, final String url) throws IOException {
+        return queue(requireSavedEntry(serviceId, url));
+    }
+
+    private OfflineStore.Entry requireSavedEntry(final int serviceId, final String url)
+            throws IOException {
+        if (!OfflineStore.isLocalUrl(url)) {
+            throw new IOException("Saved identity required");
+        }
+        final OfflineStore.Entry entry = store.find(serviceId, url);
+        if (entry == null || !store.file(entry).canRead()) {
+            throw new IOException("Saved copy unavailable");
+        }
+        return entry;
     }
 
     @Nullable
     public MediaSource source(final PlayQueueItem item) throws IOException {
+        // An origin match describes the saved entry; it does not request saved playback.
+        if (!OfflineStore.isLocalUrl(item.getUrl())) {
+            return null;
+        }
         final OfflineStore.Entry entry = store.find(item.getServiceId(), item.getUrl());
         if (entry == null) {
             return null;

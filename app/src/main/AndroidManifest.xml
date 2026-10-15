@@ -59,6 +59,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".error.autoreport.AppFaultEventReceiver"
+            android:exported="false" />
+
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
@@ -92,7 +96,7 @@
             android:label="@string/settings" />
 
         <activity
-            android:name=".about.AboutActivity"
+            android:name="net.newpipe.app.ComposeActivity"
             android:exported="false"
             android:label="@string/title_activity_about" />
 

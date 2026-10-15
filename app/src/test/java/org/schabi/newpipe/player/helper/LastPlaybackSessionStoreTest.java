@@ -81,6 +81,19 @@ public class LastPlaybackSessionStoreTest {
     }
 
     @Test
+    public void restoredSavedSessionRetainsLocalScopeOrderAndRecovery() {
+        final StreamInfoItem first = item(0, "backtube-offline:first", "First");
+        final StreamInfoItem second = item(0, "backtube-offline:second", "Second");
+        final PlayQueue queue = new SinglePlayQueue(List.of(first, second), 1);
+        store.save(queue, 42_000L, 2);
+        final PlayQueue restored = store.load().getQueue();
+        assertTrue(restored.isOfflineOnly());
+        assertEquals(first.getUrl(), restored.getItem(0).getUrl());
+        assertEquals(second.getUrl(), restored.getItem().getUrl());
+        assertEquals(42_000L, restored.getItem().getRecoveryPosition());
+    }
+
+    @Test
     public void loadClearsMalformedAndUnsupportedSnapshots() {
         savedJson.set("not json");
 
@@ -123,6 +136,26 @@ public class LastPlaybackSessionStoreTest {
 
         assertNull(store.load());
         assertNull(savedJson.get());
+    }
+
+    @Test
+    public void allRepeatModesRoundTripAndInvalidModesClearTheSession() {
+        final PlayQueue queue = new SinglePlayQueue(item(0, "backtube-offline:one", "One"));
+        for (final int mode : new int[]{0, 1, 2}) {
+            store.save(queue, 123, mode);
+            assertEquals(mode, store.load().getRepeatMode());
+            assertTrue(store.load().getQueue().isOfflineOnly());
+        }
+        for (final int invalid : new int[]{-1, 3, Integer.MAX_VALUE}) {
+            store.save(queue, 123, invalid);
+            assertNull(store.load());
+            assertNull(savedJson.get());
+            store.save(queue, 123, 0);
+            savedJson.set(savedJson.get().replace("\"repeat_mode\":0",
+                    "\"repeat_mode\":" + invalid));
+            assertNull(store.load());
+            assertNull(savedJson.get());
+        }
     }
 
     private static StreamInfoItem item(final int serviceId, final String url, final String title) {

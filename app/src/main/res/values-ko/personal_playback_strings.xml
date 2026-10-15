@@ -22,14 +22,17 @@
     <string name="personal_repeat_all">전체</string>
     <string name="personal_repeat_mode">반복: %s</string>
     <string name="personal_repeat_mode_off">반복: 끔</string>
-    <string name="personal_sleep_timer_title">취침 타이머</string>
+    <string name="personal_sleep_timer_title">타이머</string>
     <string name="personal_sleep_timer_off">타이머: 끔</string>
     <string name="personal_sleep_timer_remaining">타이머: %d분</string>
     <string name="personal_sleep_timer_end_of_item">끝나면 정지</string>
     <string name="personal_sleep_timer_minutes">%d분</string>
-    <string name="personal_sleep_timer_custom">직접 설정 (분)</string>
+    <string name="personal_sleep_timer_custom">직접 설정</string>
     <string name="personal_sleep_timer_end_current_item">현재 항목 끝나면 종료</string>
     <string name="personal_sleep_timer_extend">15분 추가</string>
     <string name="personal_sleep_timer_fade">종료 전 음량 줄이기</string>
     <string name="personal_sleep_timer_cancel_timer">타이머 취소</string>
+    <string name="personal_timer_hours">시간</string>
+    <string name="personal_timer_minutes">분</string>
+    <string name="personal_timer_invalid_duration">1분부터 24시간까지 입력하세요. 분은 0~59로 입력하세요.</string>
 </resources>

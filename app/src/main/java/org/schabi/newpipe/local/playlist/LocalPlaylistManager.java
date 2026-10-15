@@ -37,18 +37,14 @@ public class LocalPlaylistManager {
     }
 
     public Maybe<List<Long>> createPlaylist(final String name, final List<StreamEntity> streams) {
-        // Disallow creation of empty playlists
-        if (streams.isEmpty()) {
-            return Maybe.empty();
-        }
-
         // Save to the database directly.
         // Make sure the new playlist is always on the top of bookmark.
         // The index will be reassigned to non-negative number in BookmarkFragment.
         return Maybe.fromCallable(() -> database.runInTransaction(() -> {
                     final List<Long> streamIds = streamTable.upsertAll(streams);
                     final PlaylistEntity newPlaylist = new PlaylistEntity(name, false,
-                            streamIds.get(0), -1);
+                            streamIds.isEmpty() ? PlaylistEntity.DEFAULT_THUMBNAIL_ID
+                                    : streamIds.get(0), -1);
 
                     return insertJoinEntities(playlistTable.insert(newPlaylist),
                             streamIds, 0);

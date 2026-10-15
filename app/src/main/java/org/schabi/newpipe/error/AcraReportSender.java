@@ -11,6 +11,7 @@ import org.acra.sender.ReportSender;
 import org.schabi.newpipe.BuildConfig;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.error.autoreport.AppFaultRecorder;
+import org.schabi.newpipe.error.autoreport.AppFaultScheduler;
 
 import java.io.File;
 
@@ -39,10 +40,13 @@ public class AcraReportSender implements ReportSender {
     @Override
     public void send(@NonNull final Context context, @NonNull final CrashReportData report) {
         try {
-            AppFaultRecorder.record(report.getString(ReportField.STACK_TRACE),
+            if (AppFaultRecorder.record(report.getString(ReportField.STACK_TRACE),
                     BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT,
                     new File(context.getNoBackupFilesDir(), "sanitized-app-faults"),
-                    System.currentTimeMillis());
+                    System.currentTimeMillis())) {
+                // Explicit broadcast only; WorkManager stays out of the ACRA sender process.
+                AppFaultScheduler.signal(context);
+            }
         } catch (final RuntimeException ignored) {
             // Optional local capture must not interfere with the existing manual report screen.
         }

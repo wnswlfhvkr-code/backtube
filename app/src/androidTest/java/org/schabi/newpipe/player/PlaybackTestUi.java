@@ -14,6 +14,15 @@ import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.EditText;
+import android.text.InputType;
+import android.text.method.TextKeyListener;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+
+import androidx.appcompat.app.AlertDialog;
+
+import org.schabi.newpipe.player.helper.SleepTimerDialog;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -144,6 +153,7 @@ final class PlaybackTestUi {
                 readOnMain(() -> ((TextView) activity.get().findViewById(
                         R.id.detail_controls_sleep_timer)).getText().toString()));
         assertFalse("setting a timer resumed paused playback", readOnMain(player::isPlaying));
+        exerciseCustomDuration(context, player, activity);
         captureDetailTimer(context, activity, "backtube-detail-timer-generated.png");
         for (final boolean playing : new boolean[]{false, true}) {
             runOnMain(() -> {
@@ -182,6 +192,78 @@ final class PlaybackTestUi {
         awaitUi(() -> player.getSleepTimerRemainingMillis() == 0,
                 "cancel selection did not stop the timer");
         assertFalse("cancelling timer resumed playback", readOnMain(player::isPlaying));
+    }
+
+    private static void exerciseCustomDuration(final Context context, final Player player,
+                                                final Supplier<MainActivity> activity) {
+        final SleepTimerDialog controls = readOnMain(() -> {
+            final SleepTimerDialog timer = new SleepTimerDialog(activity.get(), player, () -> { });
+            timer.show();
+            final AlertDialog choices = timerDialog(timer);
+            assertEquals(context.getString(R.string.personal_sleep_timer_custom),
+                    choices.getListView().getAdapter().getItem(0));
+            final int[] presets = {15, 30, 60, 90, 120};
+            for (int i = 0; i < presets.length; i++) {
+                assertEquals(context.getString(R.string.personal_sleep_timer_minutes, presets[i]),
+                        choices.getListView().getAdapter().getItem(i + 1));
+            }
+            choices.getListView().performItemClick(null, 0, 0);
+            return timer;
+        });
+        try {
+            final AlertDialog custom = readOnMain(() -> timerDialog(controls));
+            runOnMain(() -> {
+                final EditText hours = custom.findViewById(R.id.timer_duration_hours);
+                final EditText minutes = custom.findViewById(R.id.timer_duration_minutes);
+                assertEquals(InputType.TYPE_CLASS_NUMBER, hours.getInputType());
+                assertEquals(InputType.TYPE_CLASS_NUMBER, minutes.getInputType());
+                assertTrue(hours.getKeyListener() instanceof TextKeyListener);
+                assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+                        custom.getWindow().getAttributes().softInputMode
+                                & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST);
+                for (final String invalid : new String[]{"-1", "1a", "100",
+                        "99999999999999999999999999"}) {
+                    hours.setText("");
+                    minutes.getText().replace(0, minutes.length(), invalid);
+                    assertEquals("raw invalid paste must not become a valid value", invalid,
+                            minutes.getText().toString());
+                    custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+                    assertTrue(custom.isShowing());
+                    assertTrue(player.getSleepTimerRemainingMillis() > 14 * 60_000L);
+                    assertTrue(player.getSleepTimerRemainingMillis() <= 15 * 60_000L);
+                }
+                hours.setText("");
+                minutes.setText("30");
+                hours.requestFocus();
+                ((InputMethodManager) activity.get().getSystemService(Context.INPUT_METHOD_SERVICE))
+                        .showSoftInput(hours, InputMethodManager.SHOW_IMPLICIT);
+            });
+            awaitUi(() -> {
+                final View apply = custom.getButton(AlertDialog.BUTTON_POSITIVE);
+                final Rect visibleFrame = new Rect();
+                final Rect button = new Rect();
+                custom.getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
+                return apply.getGlobalVisibleRect(button) && visibleFrame.contains(button);
+            }, "timer apply button is obscured while editing the duration");
+            runOnMain(() -> custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick());
+            assertTrue(readOnMain(() -> player.getSleepTimerRemainingMillis() > 29 * 60_000L));
+            assertFalse(readOnMain(custom::isShowing));
+        } finally {
+            runOnMain(() -> {
+                controls.dismiss();
+                player.setSleepTimer(15 * 60_000L);
+            });
+        }
+    }
+
+    private static AlertDialog timerDialog(final SleepTimerDialog controls) {
+        try {
+            final var field = SleepTimerDialog.class.getDeclaredField("currentDialog");
+            field.setAccessible(true);
+            return (AlertDialog) field.get(controls);
+        } catch (final ReflectiveOperationException error) {
+            throw new AssertionError(error);
+        }
     }
 
     private static void tapDetailTimer(final Supplier<MainActivity> activity) {

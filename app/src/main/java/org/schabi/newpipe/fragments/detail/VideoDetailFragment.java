@@ -125,6 +125,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -201,6 +202,7 @@ public final class VideoDetailFragment
     @State
     @Nullable
     protected String url = null;
+    private boolean savedDetailsRedirected;
     @Nullable
     protected PlayQueue playQueue = null;
     @State
@@ -335,6 +337,10 @@ public final class VideoDetailFragment
     // Fragment's Lifecycle
     //////////////////////////////////////////////////////////////////////////*/
 
+    static String readSelectedTab(final SharedPreferences preferences, final String key) {
+        return preferences.getString(key, RELATED_TAB_TAG);
+    }
+
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -343,8 +349,7 @@ public final class VideoDetailFragment
         showComments = prefs.getBoolean(getString(R.string.show_comments_key), true);
         showRelatedItems = prefs.getBoolean(getString(R.string.show_next_video_key), true);
         showDescription = prefs.getBoolean(getString(R.string.show_description_key), true);
-        selectedTabTag = prefs.getString(
-                getString(R.string.stream_info_selected_tab_key), COMMENTS_TAB_TAG);
+        selectedTabTag = readSelectedTab(prefs, getString(R.string.stream_info_selected_tab_key));
         prefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener);
 
         setupBroadcastReceiver();
@@ -865,6 +870,10 @@ public final class VideoDetailFragment
     }
 
     private void runWorker(final boolean forceLoad, final boolean addToBackStack) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+            redirectSavedDetails();
+            return;
+        }
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
         currentWorker = ExtractorHelper.getStreamInfo(serviceId, url, forceLoad)
                 .subscribeOn(Schedulers.io())
@@ -894,6 +903,16 @@ public final class VideoDetailFragment
                     }
                 }, throwable -> showError(new ErrorInfo(throwable, UserAction.REQUESTED_STREAM,
                         url == null ? "no url" : url, serviceId, url)));
+    }
+
+    private void redirectSavedDetails() {
+        isLoading.set(false);
+        hideLoading();
+        if (!savedDetailsRedirected && activity != null) {
+            savedDetailsRedirected = true;
+            NavigationHelper.openVideoDetail(activity, serviceId, url, title, playQueue,
+                    false, false);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -1094,7 +1113,9 @@ public final class VideoDetailFragment
             NavigationHelper.enqueueOnPlayer(activity, queue, PlayerType.POPUP);
         } else {
             replaceQueueIfUserConfirms(() -> NavigationHelper
-                    .playOnPopupPlayer(activity, queue, true));
+                    .playOnPopupPlayer(activity, queue, true, !playOnSelection
+                            && player != null && player.getPlayQueue() != null
+                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null));
         }
     }
 
@@ -1172,7 +1193,10 @@ public final class VideoDetailFragment
                 NavigationHelper.getPlayerIntent(context, PlayerService.class, queue,
                                 PlayerIntentType.AllOthers)
                         .putExtra(Player.PLAY_WHEN_READY, autoPlayEnabled)
-                        .putExtra(Player.RESUME_PLAYBACK, true);
+                        .putExtra(Player.RESUME_PLAYBACK, true)
+                        .putExtra(Player.FRESH_SELECTION, playOnSelection
+                                || player.getPlayQueue() == null
+                                || !player.getPlayQueue().equalStreamsAndIndex(queue));
         ContextCompat.startForegroundService(activity, playerIntent);
         playOnSelection = false;
     }
@@ -1370,6 +1394,9 @@ public final class VideoDetailFragment
                                   @Nullable final String newUrl,
                                   @NonNull final String newTitle,
                                   @Nullable final PlayQueue newPlayQueue) {
+        if (!Objects.equals(url, newUrl)) {
+            savedDetailsRedirected = false;
+        }
         this.serviceId = newServiceId;
         this.url = newUrl;
         this.title = newTitle;
@@ -1848,6 +1875,15 @@ public final class VideoDetailFragment
 
     @Override
     public void onMetadataUpdate(final StreamInfo info, final PlayQueue queue) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+            if (queue.equalStreams(playQueue)) {
+                updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
+            }
+            if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+                redirectSavedDetails();
+            }
+            return;
+        }
         final StackItem item = findQueueInStack(queue);
         if (item != null) {
             // When PlayQueue can have multiple streams (PlaylistPlayQueue or ChannelPlayQueue)
@@ -2123,16 +2159,8 @@ public final class VideoDetailFragment
     }
 
     private void checkLandscape() {
-        if ((!player.isPlaying() && player.getPlayQueue() != playQueue)
-                || player.getPlayQueue() == null) {
-            setAutoPlay(true);
-        }
-
+        // Reconnecting after rotation must preserve playback and autoplay state.
         player.UIs().get(MainPlayerUi.class).ifPresent(MainPlayerUi::checkLandscape);
-        // Let's give a user time to look at video information page if video is not playing
-        if (globalScreenOrientationLocked(activity) && !player.isPlaying()) {
-            player.play();
-        }
     }
 
     /*
@@ -2435,6 +2463,8 @@ public final class VideoDetailFragment
                 ? R.drawable.ic_pause
                 : R.drawable.ic_play_arrow;
         binding.overlayPlayPauseButton.setImageResource(drawable);
+        binding.overlayPlayPauseButton.setContentDescription(
+                getString(playerIsPlaying ? R.string.pause : R.string.play));
     }
 
     private void setOverlayLook(final AppBarLayout appBar,
