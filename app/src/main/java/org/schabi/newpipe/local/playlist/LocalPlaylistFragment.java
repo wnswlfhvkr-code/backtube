@@ -11,8 +11,8 @@ import static org.schabi.newpipe.local.playlist.PlayListShareMode.YOUTUBE_TEMP_P
 import static org.schabi.newpipe.util.ThemeHelper.shouldUseGridLayout;
 
 
-import android.annotation.SuppressLint;
 import android.content.Context;
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.text.InputType;
@@ -57,6 +57,8 @@ import org.schabi.newpipe.info_list.dialog.InfoItemDialog;
 import org.schabi.newpipe.info_list.dialog.StreamDialogDefaultEntry;
 import org.schabi.newpipe.local.BaseLocalListFragment;
 import org.schabi.newpipe.local.history.HistoryRecordManager;
+import org.schabi.newpipe.offline.OfflineLibrary;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
 import org.schabi.newpipe.util.DeviceUtils;
@@ -68,7 +70,9 @@ import org.schabi.newpipe.util.debounce.DebounceSavable;
 import org.schabi.newpipe.util.debounce.DebounceSaver;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -247,10 +251,33 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
 
         isLoadingComplete.set(false);
 
+        final Context context = activity.getApplicationContext();
         playlistManager.getPlaylistStreams(playlistId)
                 .onBackpressureLatest()
+                .observeOn(Schedulers.io())
+                .map(streams -> resolveSavedDurations(context, streams))
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(getPlaylistObserver());
+    }
+
+    private static List<PlaylistStreamEntry> resolveSavedDurations(
+            final Context context, final List<PlaylistStreamEntry> streams) {
+        for (final PlaylistStreamEntry entry : streams) {
+            final StreamEntity stream = entry.getStreamEntity();
+            if (stream.getDuration() <= 0
+                    && OfflineStore.isLocalUrl(stream.getUrl())) {
+                try {
+                    final long duration = OfflineLibrary.get(context)
+                            .durationSeconds(stream.getServiceId(), stream.getUrl());
+                    if (duration > 0) {
+                        stream.setDuration(duration);
+                    }
+                } catch (final IOException ignored) {
+                    // Keep this row and its unknown duration if the saved metadata is unavailable.
+                }
+            }
+        }
+        return streams;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -846,18 +873,21 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
     private void setStreamCountAndOverallDuration(final ArrayList<LocalItem> itemsList) {
         if (activity != null && headerBinding != null) {
             final long streamCount = itemsList.size();
-            final long playlistOverallDurationSeconds = itemsList.stream()
+            final long[] durations = itemsList.stream()
                     .filter(PlaylistStreamEntry.class::isInstance)
                     .map(PlaylistStreamEntry.class::cast)
                     .map(PlaylistStreamEntry::getStreamEntity)
                     .mapToLong(StreamEntity::getDuration)
-                    .sum();
-            headerBinding.playlistStreamCount.setText(
-                    Localization.concatenateStrings(
-                            Localization.localizeStreamCount(activity, streamCount),
-                            Localization.getDurationString(playlistOverallDurationSeconds,
-                                                            true, true))
-            );
+                    .toArray();
+            final boolean complete = durations.length == streamCount
+                    && Arrays.stream(durations).allMatch(duration -> duration > 0);
+            final long total = Arrays.stream(durations)
+                    .filter(duration -> duration > 0).sum();
+            final String duration = Localization.getDurationString(total, complete, true);
+            headerBinding.playlistStreamCount.setText(Localization.concatenateStrings(
+                    Localization.localizeStreamCount(activity, streamCount),
+                    complete ? duration : activity.getString(
+                            R.string.playlist_duration_unknown, duration)));
         }
     }
 

@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.WorkerThread;
 
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.ProgressiveMediaSource;
@@ -118,14 +119,36 @@ public final class OfflineLibrary {
         }
     }
 
+    @WorkerThread
     public OfflinePlayQueue queue(final OfflineStore.Entry entry) {
         final StreamInfoItem item = new StreamInfoItem(entry.serviceId, entry.localUrl(),
                 entry.title, entry.mime.startsWith("video/")
                 ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
         item.setUploaderName(context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+        item.setDuration(durationSeconds(entry.serviceId, entry.localUrl()));
         return new OfflinePlayQueue(List.of(item), 0);
     }
 
+    /**
+     * Best-effort local metadata, also usable for playlists saved before duration was supplied.
+     * @param serviceId stream service
+     * @param url internal saved identity
+     * @return duration in seconds, or -1 when metadata is unavailable
+     */
+    @WorkerThread
+    public long durationSeconds(final int serviceId, final String url) {
+        if (!OfflineStore.isLocalUrl(url)) {
+            return -1;
+        }
+        try {
+            final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
+            return OfflineMediaDuration.readSeconds(store.file(entry));
+        } catch (final IOException ignored) {
+            return -1;
+        }
+    }
+
+    @WorkerThread
     public OfflinePlayQueue queueAll() throws IOException {
         return new OfflinePlayQueue(store,
                 context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
@@ -137,11 +160,13 @@ public final class OfflineLibrary {
      * @param url saved internal identity
      * @return metadata from the owned copy
      */
+    @WorkerThread
     public StreamInfo streamInfo(final int serviceId, final String url) throws IOException {
         final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
         return new OfflineMediaTag(queue(entry).getItem()).getMaybeStreamInfo().orElseThrow();
     }
 
+    @WorkerThread
     public OfflinePlayQueue queueFor(final int serviceId, final String url) throws IOException {
         return queue(requireSavedEntry(serviceId, url));
     }

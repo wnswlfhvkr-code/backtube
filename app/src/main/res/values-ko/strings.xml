@@ -854,4 +854,6 @@
     <string name="api23_requirement_dialog_message">NewPipe는 Android 5.0 및 5.1 지원을 중단한 몇 라이브러리에 의존합니다. 따라서 유감스럽게도 다음NewPipe 버전은 Android 6 이상 기기에서만 작동할 예정입니다. 자세한 내용은 블로그 게시글을 참조하세요.</string>
     <string name="api23_requirement_dialog_blogpost">블로그 게시글</string>
     <string name="playback_recovery_failed">재생할 수 없습니다. 재생 버튼을 눌러 다시 시도하세요.</string>
+    <string name="playlist_duration_unknown">%1$s (일부 길이 미확인)</string>
+    <string name="youtube_trending_unavailable">YouTube의 일반 인기 급상승 페이지는 종료되었습니다. 검색을 이용하거나 메뉴에서 음악·게임 등 분야별 인기 차트를 선택하세요.</string>
 </resources>
