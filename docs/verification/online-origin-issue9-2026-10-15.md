@@ -2,9 +2,10 @@
 
 Issue: https://github.com/wnswlfhvkr-code/backtube/issues/9
 
-User-installed version and exact device entry point remain unconfirmed here.
-Do not attribute this report to APK1020. This is source-level reproduction and
-verification; actual rendered video, related tabs, and download UI still need device QA.
+Independent Windows QA subsequently confirmed the installed baseline as APK1020 and
+reproduced the reported entry sequence on a physical device (evidence below).
+This source task did not operate that device. Rendered video, related tabs, and
+download UI with the **new APK1021 candidate** still need device QA.
 The issue remains open pending equivalent device evidence or user confirmation.
 
 ## Baseline and ownership
@@ -16,6 +17,28 @@ identical to APK1020 source `81f219a0ce99e6e353cb3d29444c7d5f195a637d`
 The existing isolated source worktree is now on
 `fix/online-origin-separation-20261015`; the old issue8 branch and APK worktrees remain.
 This task owns source writes; Windows QA is a separate read-only reproduction task.
+
+## Independent physical-device baseline evidence
+
+After source/APK delivery, the source task read the independent QA comments:
+[installed-build/control observation](https://github.com/wnswlfhvkr-code/backtube/issues/9#issuecomment-6187019353)
+and [before/after-save reproduction](https://github.com/wnswlfhvkr-code/backtube/issues/9#issuecomment-6187141127).
+At 07:33–07:44 UTC on 2026-10-15, QA reported Samsung SM-S948N / Android17 API37.
+The already-installed code1020 APK was pulled read-only and matched the retained
+11,627,838-byte APK, package, public certificate, and SHA-256
+`9cd8a5d92c396ce1590824423ec2897bb03e6d53007177bb042a676ebefd933d`.
+
+An unsaved original displayed related entries and MPEG-4 download choices. After saving
+its audio and playing the saved entry, re-entering that same real original HTTPS link
+and expanding its paused controller yielded a black video area, no related videos,
+and a no-downloadable-streams toast. Existing saved entries were retained; QA left
+the additional reproduction entry in place. Private URLs/titles/screenshots remain
+in QA-local evidence and are not copied into this repository.
+
+The reported media-session metadata count change is session observation, not direct
+measurement of StreamInfo/InfoCache memory. This strengthens the matching source
+mechanism without asserting actual cache corruption. No candidate1021 install or
+device success is established by those baseline comments.
 
 ## Reproduced source mechanism
 
@@ -105,7 +128,8 @@ not confirmation of installation or compatibility with an unconfirmed device bui
 
 Actual Android tests/install/update in this environment: **0**. The earlier adb
 read-only-filesystem blocker was not retried or bypassed; Windows QA is separate.
-The installed user version remains unconfirmed by this source task. Issue #9 stays open.
+The installed baseline version is confirmed by the independent QA evidence above;
+candidate1021 installation and device behavior remain unconfirmed. Issue #9 stays open.
 No main merge, deployment, PR7 body edit, Claude execution, new auth/key/permission,
 or added paid service is part of this task.
 

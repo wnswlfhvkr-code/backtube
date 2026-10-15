@@ -11,7 +11,7 @@
   "baseline": "997f0ba2c8f7f3354d19925ddd0441d0b552fc27",
   "new_regressions": 7,
   "baseline_red_cases": 5,
-  "installed_user_version_confirmed": false,
+  "installed_user_version_confirmed": true,
   "independent_source_review_blockers": 0,
   "actual_rendered_ui_or_video_verified": false,
   "issue_closed": false,
@@ -44,5 +44,18 @@
   "mapping_id": "4d9691f474f7fa76cb4200a0f36d43d2c24e4095373574527cfa35e489b4a806",
   "new_key_generated": false,
   "key_contents_inspected_or_copied": false,
-  "runtime_note": "No Android execution here; prior adb read-only-filesystem blocker not retried or bypassed; Windows QA separate"
+  "runtime_note": "No Android execution here; prior adb read-only-filesystem blocker not retried or bypassed; Windows QA separate",
+  "actual_android_executions_scope": "this Linux source task only; independent Windows QA baseline is separate",
+  "independent_device_baseline": {
+    "version_code": 1020,
+    "version_name": "0.29.1-offline-uri-fix-20261015",
+    "apk_sha256": "9cd8a5d92c396ce1590824423ec2897bb03e6d53007177bb042a676ebefd933d",
+    "reproduced_before_after_audio_save": true,
+    "comment_ids": [
+      6187019353,
+      6187141127
+    ],
+    "candidate_1021_executed": false,
+    "cache_memory_corruption_directly_measured": false
+  }
 }
