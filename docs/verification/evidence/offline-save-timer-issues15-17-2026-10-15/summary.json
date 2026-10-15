@@ -1,0 +1,69 @@
+{
+  "issues": [
+    15,
+    16,
+    17
+  ],
+  "base": "304c98594c22f503d051f921b2684ee7c509ced0",
+  "product_source": "2aad3ccc10783a035bdfcfb6c04bff2771d64a88",
+  "jvm_suites": 80,
+  "jvm": {
+    "tests": 512,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 323
+  },
+  "checkstyle_issues": 0,
+  "required_checks": [
+    "--max-workers=2",
+    ":app:testDebugUnitTest",
+    ":app:compileDebugAndroidTestJavaWithJavac",
+    ":app:runCheckstyle",
+    ":app:runKtlint",
+    ":app:checkDependenciesOrder",
+    ":app:lintDebug",
+    ":app:compileDebugSources"
+  ],
+  "gradle_exit": 0,
+  "gradle_seconds": 99.372,
+  "apk_build_seconds": 390.591,
+  "independent_review": "GPT-6.1 Sol High whole-change review and scoped re-review; specification and quality accepted",
+  "identity_policy": "service + content identity + audio/video MIME family; pure YouTube/PeerTube/MediaCCC canonical URL, full supplied canonical origin for other providers, nonempty local-source fallback; preserve legacy duplicates",
+  "timer_range": {
+    "hours_blank": 0,
+    "minutes_blank": 0,
+    "minutes_min": 0,
+    "minutes_max": 59,
+    "total_min_minutes": 1,
+    "total_max_minutes": 1440
+  },
+  "apk": {
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1025,
+    "version_name": "0.29.1-offline-timer-fix-20261015",
+    "size_bytes": 11624130,
+    "sha256": "3c25699ac29d084659a569459eb5df4cefb71ceb6f9b4dfad36e8921c8e3c599",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "mapping_id": "e6beb8e5d93e319d7770787ff945ab72d4dd277b66666366a8bc30866202feea",
+    "mapping_file_sha256": "dce14e8c2e3c376362ae8710b3f81872535599376d95363903326f4736a065c6",
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    }
+  },
+  "android_tests": "compiled only",
+  "physical_acceptance": false,
+  "device_operations": 0,
+  "legacy_data_cleanup_or_reset": false,
+  "new_key_auth_permission_or_paid_setting": false,
+  "main_merge_or_deployment": false
+}
