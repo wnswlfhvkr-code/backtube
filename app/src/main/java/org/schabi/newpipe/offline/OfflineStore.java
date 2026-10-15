@@ -7,6 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.schabi.newpipe.extractor.NewPipe;
+import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -70,6 +76,7 @@ public final class OfflineStore {
     private final long limit;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final Map<String, Integer> readers = new LinkedHashMap<>();
+    private final Set<String> downloadClaims = new HashSet<>();
 
     public OfflineStore(final File directory, final long limit) throws IOException {
         this.directory = directory;
@@ -137,14 +144,69 @@ public final class OfflineStore {
     public synchronized Entry beginDownload(final String title, final String origin,
                                             final int serviceId, final String mime)
             throws IOException {
+        return beginDownload(title, origin, serviceId, mime, 0);
+    }
+
+    public synchronized Entry beginDownload(final String title, final String origin,
+                                            final int serviceId, final String mime,
+                                            final long estimatedBytes) throws IOException {
+        final Entry existing = existingSave(serviceId, origin, "giga", mime);
+        if (existing != null) {
+            if ("giga".equals(existing.source) && existing.state != State.READY) {
+                if (!file(existing).exists() && !file(existing).createNewFile()) {
+                    throw new IOException("Cannot reopen offline download");
+                }
+                if (existing.state != State.DOWNLOADING) {
+                    final Entry retry = existing.changed(State.DOWNLOADING,
+                            file(existing).length(), 0);
+                    save(retry);
+                    return retry;
+                }
+            }
+            return existing;
+        }
         requireCapacity();
+        if (estimatedBytes > limit - usedBytes()) {
+            throw new StorageFullException();
+        }
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 "giga", mime, State.DOWNLOADING, 0, 0);
-        save(entry);
         if (!file(entry).createNewFile()) {
             throw new IOException("Cannot create offline download");
         }
+        save(entry);
         return entry;
+    }
+
+    /**
+     * Reserve dispatch before any caller can truncate or enqueue the owned output.
+     * @param id owned saved entry
+     * @return whether this caller acquired dispatch ownership
+     */
+    public synchronized boolean claimDownload(final String id) throws IOException {
+        final Entry entry = require(id);
+        return entry.state == State.DOWNLOADING && "giga".equals(entry.source)
+                && downloadClaims.add(id);
+    }
+
+    public synchronized void releaseDownloadClaim(final String id) {
+        downloadClaims.remove(id);
+    }
+
+    // The library coordinates its queued/running copier before requesting this handoff.
+    public synchronized Entry handoffDownload(final String id, final String mime)
+            throws IOException {
+        final Entry entry = require(id);
+        if (entry.state != State.FAILED && entry.state != State.INTERRUPTED) {
+            return entry;
+        }
+        if (!file(entry).exists() && !file(entry).createNewFile()) {
+            throw new IOException("Cannot reopen offline download");
+        }
+        final Entry download = new Entry(entry.id, entry.title, entry.origin, entry.serviceId,
+                "giga", mime, State.DOWNLOADING, file(entry).length(), 0);
+        save(download);
+        return download;
     }
 
     public synchronized void checkGrowth(final String id, final long targetLength)
@@ -170,10 +232,21 @@ public final class OfflineStore {
             throw new IOException("Incomplete or oversized download");
         }
         save(entry.changed(State.READY, size, 0));
+        downloadClaims.remove(id);
     }
 
     public synchronized Entry create(final String title, final String origin, final int serviceId,
                                      final String source, final String mime) throws IOException {
+        final Entry existing = existingSave(serviceId, origin, source, mime);
+        if (existing != null) {
+            if (existing.state == State.FAILED || existing.state == State.INTERRUPTED) {
+                final Entry retry = new Entry(existing.id, existing.title, existing.origin,
+                        existing.serviceId, source, mime, existing.state, existing.bytes, 0);
+                save(retry);
+                return retry;
+            }
+            return existing;
+        }
         requireCapacity();
         final Entry entry = new Entry(UUID.randomUUID().toString(), title, origin, serviceId,
                 source, mime, State.IMPORTING, 0, 0);
@@ -237,10 +310,15 @@ public final class OfflineStore {
         }
     }
 
-    public synchronized void prepareRetry(final String id) throws IOException {
+    public synchronized boolean prepareRetry(final String id) throws IOException {
         final Entry entry = require(id);
+        if (entry.state == State.READY || entry.state == State.DOWNLOADING
+                || "giga".equals(entry.source)) {
+            return false;
+        }
         removeFile(part(id));
         save(entry.changed(State.IMPORTING, 0, 0));
+        return true;
     }
 
     public synchronized void interrupt(final String id) throws IOException {
@@ -256,6 +334,7 @@ public final class OfflineStore {
                 && entry.state != State.INTERRUPTED) {
             removeFile(part(id));
             save(entry.changed(State.FAILED, 0, 0));
+            downloadClaims.remove(id);
         }
     }
 
@@ -353,10 +432,90 @@ public final class OfflineStore {
         persistOrder(order);
         removeFile(new File(directory, id + ".properties"));
         entries.remove(id);
+        downloadClaims.remove(id);
         removeFile(part(id));
         if (!readers.containsKey(id)) {
             removeFile(file(entry));
         }
+    }
+
+    private Entry existingSave(final int serviceId, final String origin, final String source,
+                                final String mime) throws IOException {
+        refresh();
+        final String identity = saveIdentity(serviceId, origin, source, new HashSet<>());
+        if (identity.isEmpty()) {
+            return null;
+        }
+        Entry match = null;
+        for (final Entry entry : entries.values()) {
+            if (entry.serviceId != serviceId || !mediaKind(entry.mime).equals(mediaKind(mime))
+                    || !identity.equals(saveIdentity(entry.serviceId, entry.origin, entry.source,
+                    new HashSet<>()))) {
+                continue;
+            }
+            if (entry.state == State.READY) {
+                return entry;
+            }
+            if (match == null || entry.state == State.IMPORTING
+                    || entry.state == State.DOWNLOADING) {
+                match = entry;
+            }
+        }
+        return match;
+    }
+
+    private String saveIdentity(final int serviceId, final String origin, final String source,
+                                 final Set<String> visited) {
+        final String value = origin.isEmpty() ? source : origin;
+        if (value.isEmpty() || "giga".equals(value)) {
+            return "";
+        }
+        Entry owned = null;
+        if (isLocalUrl(value)) {
+            owned = entries.get(value.substring(LOCAL_PREFIX.length()));
+        } else if (value.startsWith("file:")) {
+            try {
+                final File local = new File(java.net.URI.create(value))
+                        .toPath().normalize().toFile();
+                for (final Entry entry : entries.values()) {
+                    if (file(entry).equals(local)) {
+                        owned = entry;
+                        break;
+                    }
+                }
+            } catch (final IllegalArgumentException ignored) {
+                // Unknown local forms retain their complete identity below.
+            }
+        }
+        if (owned != null && owned.serviceId == serviceId && visited.add(owned.id)) {
+            return saveIdentity(serviceId, owned.origin, owned.source, visited);
+        }
+        // SoundCloud and custom Bandcamp factory paths may resolve over the network. Only use
+        // audited local parsers here; other services retain the caller's full canonical origin.
+        if (serviceId != ServiceList.YouTube.getServiceId()
+                && serviceId != ServiceList.PeerTube.getServiceId()
+                && serviceId != ServiceList.MediaCCC.getServiceId()) {
+            return "literal:" + value;
+        }
+        try {
+            // Provider canonical URLs preserve instance hosts, unlike a bare federated stream id.
+            return "origin:" + NewPipe.getService(serviceId).getStreamLHFactory()
+                    .fromUrl(value).getUrl();
+        } catch (final ExtractionException | IllegalArgumentException
+                       | UnsupportedOperationException ignored) {
+            // Preserve meaningful queries on unrecognized origins; never strip queries globally.
+            return "literal:" + value;
+        }
+    }
+
+    private static String mediaKind(final String mime) {
+        if (mime.startsWith("audio/")) {
+            return "audio";
+        }
+        if (mime.startsWith("video/")) {
+            return "video";
+        }
+        return mime;
     }
 
     private void refresh() throws IOException {

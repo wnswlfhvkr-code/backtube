@@ -67,6 +67,29 @@ public class SleepTimerLayoutTest {
         }
     }
 
+    @Test
+    public void timerNamingAndDurationUnitsAreConciseInEnglishAndKorean() throws Exception {
+        for (final String folder : new String[]{"values", "values-ko"}) {
+            final Document document = read(folder + "/personal_playback_strings.xml");
+            final NodeList strings = document.getElementsByTagName("string");
+            final java.util.Map<String, String> values = new java.util.HashMap<>();
+            for (int i = 0; i < strings.getLength(); i++) {
+                final Element item = (Element) strings.item(i);
+                values.put(item.getAttribute("name"), item.getTextContent());
+            }
+            for (final String key : new String[]{"title", "off", "remaining", "custom"}) {
+                final String label = values.get("personal_sleep_timer_" + key);
+                org.junit.Assert.assertFalse(label.toLowerCase(java.util.Locale.ROOT)
+                        .contains("sleep"));
+                org.junit.Assert.assertFalse(label.contains("취침"));
+            }
+            assertEquals(folder.equals("values") ? "hours" : "시간",
+                    values.get("personal_timer_hours"));
+            assertEquals(folder.equals("values") ? "minutes" : "분",
+                    values.get("personal_timer_minutes"));
+        }
+    }
+
     private static Document read(final String path) throws Exception {
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);

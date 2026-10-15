@@ -191,8 +191,17 @@ public final class NavigationHelper {
     public static void playOnBackgroundPlayer(final Context context, final PlayQueue queue,
                                               final boolean resumePlayback,
                                               @Nullable final Player switchingPlayer) {
-        Toast.makeText(context, R.string.background_player_playing_toast, Toast.LENGTH_SHORT)
-                .show();
+        playOnBackgroundPlayer(context, queue, resumePlayback, switchingPlayer, true);
+    }
+
+    public static void playOnBackgroundPlayer(final Context context, final PlayQueue queue,
+                                              final boolean resumePlayback,
+                                              @Nullable final Player switchingPlayer,
+                                              final boolean showNotice) {
+        if (showNotice) {
+            Toast.makeText(context, R.string.background_player_playing_toast, Toast.LENGTH_SHORT)
+                    .show();
+        }
 
         final Intent intent = getPlayerIntent(context, PlayerService.class, queue,
                 PlayerIntentType.AllOthers)

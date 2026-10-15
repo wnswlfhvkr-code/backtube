@@ -5,18 +5,21 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.Handler;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.core.os.HandlerCompat;
 
 import com.google.android.material.snackbar.Snackbar;
 
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.offline.OfflineDownloads;
 
 import java.util.ArrayList;
 import java.util.Optional;
 
 import kotlin.Pair;
 import us.shandian.giga.get.FinishedMission;
+import us.shandian.giga.get.DownloadMission;
 import us.shandian.giga.get.Mission;
 import us.shandian.giga.service.DownloadManager;
 import us.shandian.giga.service.DownloadManager.MissionIterator;
@@ -120,6 +123,12 @@ public class Deleter {
 
             mIterator.unHide(mission);
             mDownloadManager.deleteMission(mission, alsoDeleteFile);
+            if (mission instanceof DownloadMission && OfflineDownloads.isManaged(mission)
+                    && mDownloadManager.getOfflineMission(OfflineDownloads.id(mission))
+                    == mission) {
+                mAdapter.applyChanges();
+                Toast.makeText(mContext, R.string.offline_removal_busy, Toast.LENGTH_SHORT).show();
+            }
 
             if (mission instanceof FinishedMission) {
                 mContext.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, mission.storage.getUri()));

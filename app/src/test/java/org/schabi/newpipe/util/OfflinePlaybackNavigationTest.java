@@ -13,6 +13,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.withSettings;
+import static org.mockito.Mockito.never;
 
 import android.content.Context;
 import android.content.Intent;
@@ -247,6 +248,36 @@ public class OfflinePlaybackNavigationTest {
         NavigationHelper.playOnBackgroundPlayer(context, queue, true, pausedPlayer);
         verify(intents.constructed().get(1)).putExtra(Player.FRESH_SELECTION, false);
         verify(intents.constructed().get(1)).putExtra(Player.PLAY_WHEN_READY, false);
+    }
+
+    @Test
+    public void selectingOneShelfItemStartsServiceWithoutBackgroundSuccessToast() throws Exception {
+        final OfflineLibraryActivity shelf = mock(OfflineLibraryActivity.class);
+        final var start = OfflineLibraryActivity.class.getDeclaredMethod("startSavedQueue",
+                org.schabi.newpipe.player.playqueue.OfflinePlayQueue.class, boolean.class);
+        start.setAccessible(true);
+        start.invoke(shelf, queue, true);
+        assertEquals(List.of(PlayerService.class, PlayQueueActivity.class), targets);
+        services.verify(() -> ContextCompat.startForegroundService(eq(shelf), any(Intent.class)));
+        verify(intents.constructed().get(0)).putExtra(Player.FRESH_SELECTION, true);
+        verify(intents.constructed().get(0)).putExtra(Player.PLAY_WHEN_READY, true);
+        verify(intents.constructed().get(0)).putExtra(Player.RESUME_PLAYBACK, true);
+        toasts.verify(() -> Toast.makeText(eq(shelf),
+                eq(R.string.background_player_playing_toast), anyInt()), never());
+    }
+
+    @Test
+    public void shelfPlayAllKeepsItsBackgroundNoticeAndFreshPlaybackIntent() throws Exception {
+        final OfflineLibraryActivity shelf = mock(OfflineLibraryActivity.class);
+        final var start = OfflineLibraryActivity.class.getDeclaredMethod("startSavedQueue",
+                org.schabi.newpipe.player.playqueue.OfflinePlayQueue.class, boolean.class);
+        start.setAccessible(true);
+        start.invoke(shelf, queue, false);
+        services.verify(() -> ContextCompat.startForegroundService(eq(shelf), any(Intent.class)));
+        toasts.verify(() -> Toast.makeText(eq(shelf),
+                eq(R.string.background_player_playing_toast), anyInt()));
+        verify(intents.constructed().get(0)).putExtra(Player.FRESH_SELECTION, true);
+        verify(intents.constructed().get(0)).putExtra(Player.PLAY_WHEN_READY, true);
     }
 
     private static void resetLibrary() throws Exception {

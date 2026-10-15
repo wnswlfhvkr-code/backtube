@@ -24,6 +24,7 @@ public class OfflineStoreTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     private File root;
     private OfflineStore store;
+    private int nextRecording;
 
     @Before public void setup() throws IOException {
         root = temporary.newFolder();
@@ -31,7 +32,7 @@ public class OfflineStoreTest {
     }
 
     private OfflineStore.Entry create() throws IOException {
-        return store.create("My recording", "https://example.invalid/owned", 0,
+        return store.create("My recording", "https://example.invalid/owned/" + nextRecording++, 0,
                 "content://test/recording", "audio/wav");
     }
 
@@ -165,9 +166,21 @@ public class OfflineStoreTest {
     @Test public void internalIdentityCannotBeReplacedByAnEarlierOriginAlias() throws Exception {
         final OfflineStore.Entry target = create();
         store.copy(target.id, new ByteArrayInputStream(new byte[20]));
-        final OfflineStore.Entry alias = store.create("Different recording", target.localUrl(),
+        final OfflineStore.Entry alias = store.create("Different recording",
+                "https://example.invalid/alias",
                 0, "content://test/other", "audio/wav");
         store.copy(alias.id, new ByteArrayInputStream(new byte[20]));
+        // A generated legacy alias must remain distinguishable from the owned target identity.
+        final File metadata = new File(root, alias.id + ".properties");
+        final Properties properties = new Properties();
+        try (InputStream input = new FileInputStream(metadata)) {
+            properties.load(input);
+        }
+        properties.setProperty("origin", target.localUrl());
+        try (FileOutputStream output = new FileOutputStream(metadata)) {
+            properties.store(output, "generated legacy alias");
+        }
+        store = new OfflineStore(root, 100);
         store.move(alias.id, -1);
         assertEquals(target.id, store.find(0, target.localUrl()).id);
         assertEquals(target.id, store.find(-1, target.localUrl()).id);

@@ -10,10 +10,14 @@ import androidx.annotation.Nullable;
 
 import org.schabi.newpipe.DownloaderImpl;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
@@ -442,6 +446,11 @@ public class DownloadMission extends Mission {
         // ensure that the previous state is completely paused.
         joinForThreads(10000);
 
+        if (init != null && !init.isAlive() && blockAcquired == null) {
+            // Incomplete initialization can be reset only after its owner has stopped.
+            resetState(false, false, ERROR_NOTHING);
+        }
+
         running = true;
         errCode = ERROR_NOTHING;
 
@@ -467,7 +476,8 @@ public class DownloadMission extends Mission {
             return;
         }
 
-        init = null;
+        // Keep a live initializer visible while it hands ownership to transfer threads.
+        // A paused initializer is safe to forget only after that thread has exited.
         finishCount = 0;
         blockAcquired = new boolean[blocks.length];
 
@@ -507,11 +517,9 @@ public class DownloadMission extends Mission {
         notify(DownloadManagerService.MESSAGE_PAUSED);
 
         if (init != null && init.isAlive()) {
-            // NOTE: if start() method is running ¡will no have effect!
             init.interrupt();
-            synchronized (LOCK) {
-                resetState(false, true, ERROR_NOTHING);
-            }
+            // The initializer may already have published transfer threads and progress.
+            pauseThreads();
             return;
         }
 
@@ -566,7 +574,8 @@ public class DownloadMission extends Mission {
     }
 
     private void initializer() {
-        init = runAsync(DownloadInitializer.mId, new DownloadInitializer(this));
+        init = new DownloadInitializer(this);
+        runAsync(DownloadInitializer.mId, init);
     }
 
     private void writeThisToFileAsync() {
@@ -580,7 +589,26 @@ public class DownloadMission extends Mission {
     void writeThisToFile() {
         synchronized (LOCK) {
             if (metadata == null) return;
-            Utility.writeToFile(metadata, this);
+            DownloadMission snapshot = this;
+            if (init != null && blockAcquired == null) {
+                // Reset only a detached copy: live initialization still owns its state.
+                try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                     ObjectOutputStream output = new ObjectOutputStream(bytes)) {
+                    output.writeObject(this);
+                    output.flush();
+                    try (ObjectInputStream input = new ObjectInputStream(
+                            new ByteArrayInputStream(bytes.toByteArray()))) {
+                        snapshot = (DownloadMission) input.readObject();
+                    }
+                    final Exception error = snapshot.errObject;
+                    snapshot.resetState(false, false, snapshot.errCode);
+                    snapshot.errObject = error;
+                } catch (IOException | ClassNotFoundException ignored) {
+                    writingToFile = false;
+                    return;
+                }
+            }
+            Utility.writeToFile(metadata, snapshot);
             writingToFile = false;
         }
     }
@@ -822,13 +850,13 @@ public class DownloadMission extends Mission {
         //      start() method called quickly after pause()
 
         for (Thread thread : threads) {
-            if (!thread.isAlive() || thread == Thread.currentThread()) continue;
+            if (thread == null || !thread.isAlive() || thread == Thread.currentThread()) continue;
             thread.interrupt();
         }
 
         try {
             for (Thread thread : threads) {
-                if (!thread.isAlive()) continue;
+                if (thread == null || !thread.isAlive()) continue;
                 if (DEBUG) {
                     Log.w(TAG, "thread alive: " + thread.getName());
                 }

@@ -41,4 +41,5 @@
     <string name="offline_current_item">Current track</string>
     <string name="offline_reorder_description">Reorder %1$s. Drag or activate for Up and Down.</string>
     <string name="offline_item_menu_description">Saved track options: %1$s</string>
+    <string name="offline_removal_busy">The file is still in use. Try removing the entry again when downloading or processing stops.</string>
 </resources>

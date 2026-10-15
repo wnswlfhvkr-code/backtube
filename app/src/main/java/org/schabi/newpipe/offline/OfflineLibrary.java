@@ -62,16 +62,33 @@ public final class OfflineLibrary {
         return capacityFailures.contains(id);
     }
 
-    public OfflineStore.Entry importUri(final Uri uri, final String title, final String origin,
+    public synchronized OfflineStore.Entry beginDownload(final String title, final String origin,
+                                                         final int serviceId, final String mime,
+                                                         final long estimatedBytes)
+            throws IOException {
+        final OfflineStore.Entry entry = store.beginDownload(title, origin, serviceId, mime,
+                estimatedBytes);
+        if (!"giga".equals(entry.source) && !jobs.contains(entry.id)
+                && (entry.state == OfflineStore.State.FAILED
+                || entry.state == OfflineStore.State.INTERRUPTED)) {
+            return store.handoffDownload(entry.id, mime);
+        }
+        return entry;
+    }
+
+    public synchronized OfflineStore.Entry importUri(final Uri uri, final String title,
+                                                      final String origin,
                                         final int serviceId, final String mime) throws IOException {
         requireLocal(uri);
         final OfflineStore.Entry entry = store.create(title, origin, serviceId,
                 uri.toString(), mime);
-        retry(entry.id);
+        if (!"giga".equals(entry.source)) {
+            retry(entry.id);
+        }
         return entry;
     }
 
-    public void retry(final String id) throws IOException {
+    public synchronized void retry(final String id) throws IOException {
         final OfflineStore.Entry entry = store.get(id);
         if (entry == null || entry.state == OfflineStore.State.READY || !jobs.add(id)) {
             return;
@@ -80,7 +97,10 @@ public final class OfflineLibrary {
         final Uri uri = Uri.parse(entry.source);
         try {
             requireLocal(uri);
-            store.prepareRetry(id);
+            if (!store.prepareRetry(id)) {
+                jobs.remove(id);
+                return;
+            }
         } catch (final IOException error) {
             jobs.remove(id);
             throw error;

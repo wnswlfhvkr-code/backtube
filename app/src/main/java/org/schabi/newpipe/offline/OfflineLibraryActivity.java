@@ -530,15 +530,15 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             }
             return library.queue(current);
         }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(this::startSavedQueue, this::showError));
+                .subscribe(queue -> startSavedQueue(queue, selected != null), this::showError));
     }
 
-    private void startSavedQueue(final OfflinePlayQueue queue) {
+    private void startSavedQueue(final OfflinePlayQueue queue, final boolean individual) {
         if (queue.isEmpty()) {
             Toast.makeText(this, R.string.offline_no_playable, Toast.LENGTH_SHORT).show();
             return;
         }
-        NavigationHelper.playOnBackgroundPlayer(this, queue, true);
+        NavigationHelper.playOnBackgroundPlayer(this, queue, true, null, !individual);
         NavigationHelper.openPlayQueue(this);
     }
 

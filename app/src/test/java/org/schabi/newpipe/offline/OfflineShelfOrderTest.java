@@ -144,7 +144,7 @@ public class OfflineShelfOrderTest {
 
     private OfflineStore.Entry save(final String title) throws IOException {
         final OfflineStore.Entry entry = store.create(title, "", 0,
-                "content://fixture/local", "audio/wav");
+                "content://fixture/" + title, "audio/wav");
         store.copy(entry.id, new ByteArrayInputStream(new byte[10]));
         return store.get(entry.id);
     }

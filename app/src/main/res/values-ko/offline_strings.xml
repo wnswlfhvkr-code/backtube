@@ -41,4 +41,5 @@
     <string name="offline_current_item">현재 곡</string>
     <string name="offline_reorder_description">%1$s 순서 변경. 손잡이를 끌거나 눌러 위·아래로 이동하세요.</string>
     <string name="offline_item_menu_description">저장본 메뉴: %1$s</string>
+    <string name="offline_removal_busy">파일 사용 중입니다. 다운로드나 미디어 처리가 멈춘 뒤 항목 삭제를 다시 시도하세요.</string>
 </resources>

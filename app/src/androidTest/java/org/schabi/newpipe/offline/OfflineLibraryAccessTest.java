@@ -65,6 +65,7 @@ public class OfflineLibraryAccessTest {
     private OfflineLibrary library;
     private OfflineStore.Entry saved;
     private File source;
+    private final List<File> additionalSources = new ArrayList<>();
 
     @Before
     public void setUp() throws Exception {
@@ -105,6 +106,9 @@ public class OfflineLibraryAccessTest {
             return null;
         });
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        for (final File extra : additionalSources) {
+            extra.delete();
+        }
         if (saved != null) {
             library.store().delete(saved.id);
         }
@@ -179,8 +183,7 @@ public class OfflineLibraryAccessTest {
 
     @Test
     public void savedOrderControlsAndWholePlayCountSurviveRotation() throws Exception {
-        final OfflineStore.Entry second = library.store().create("Generated second saved WAV",
-                "", 0, Uri.fromFile(source).toString(), "audio/wav");
+        final OfflineStore.Entry second = newGeneratedEntry("Generated second saved WAV");
         try {
             try (FileInputStream input = new FileInputStream(source)) {
                 library.store().copy(second.id, input);
@@ -286,8 +289,7 @@ public class OfflineLibraryAccessTest {
 
     @Test
     public void handleDragWritesOnlyOnDropAndCancelledDragRestoresOrder() throws Exception {
-        final OfflineStore.Entry second = library.store().create("Generated drag saved WAV",
-                "", 0, Uri.fromFile(source).toString(), "audio/wav");
+        final OfflineStore.Entry second = newGeneratedEntry("Generated drag saved WAV");
         try {
             try (FileInputStream input = new FileInputStream(source)) {
                 library.store().copy(second.id, input);
@@ -454,8 +456,7 @@ public class OfflineLibraryAccessTest {
 
     @Test
     public void currentRowHighlightUsesLocalIdentityInsteadOfDuplicateTitles() throws Exception {
-        final OfflineStore.Entry duplicate = library.store().create(saved.title, "", 0,
-                Uri.fromFile(source).toString(), "audio/wav");
+        final OfflineStore.Entry duplicate = newGeneratedEntry(saved.title);
         try {
             try (FileInputStream input = new FileInputStream(source)) {
                 library.store().copy(duplicate.id, input);
@@ -505,6 +506,20 @@ public class OfflineLibraryAccessTest {
         } finally {
             oversized.delete();
         }
+    }
+
+    private OfflineStore.Entry newGeneratedEntry(final String title) throws Exception {
+        final File extra = File.createTempFile("offline-distinct-", ".wav", context.getCacheDir());
+        additionalSources.add(extra);
+        try (FileInputStream input = new FileInputStream(source);
+             FileOutputStream output = new FileOutputStream(extra)) {
+            final byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        }
+        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
     }
 
     private boolean offlineSelectorVisible() {
