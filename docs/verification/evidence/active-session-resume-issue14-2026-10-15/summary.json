@@ -1,0 +1,57 @@
+{
+  "issue": 14,
+  "base": "01840aff2124eff0832146b567299bf8e2ac84e9",
+  "product_source": "52e23e539a6edd20ca157d3991e829dc8f2d16d4",
+  "jvm_suites": 72,
+  "jvm": {
+    "tests": 472,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 323
+  },
+  "checkstyle_issues": 0,
+  "required_checks": [
+    ":app:testDebugUnitTest",
+    ":app:compileDebugAndroidTestJavaWithJavac",
+    ":app:runCheckstyle",
+    ":app:runKtlint",
+    ":app:checkDependenciesOrder",
+    ":app:lintDebug",
+    ":app:compileDebugSources",
+    "--max-workers=2"
+  ],
+  "gradle_exit": 0,
+  "gradle_seconds": 95.393,
+  "apk_build_seconds": 479.317,
+  "signing_guard_confirmed": true,
+  "independent_review": "GPT-6.1 Sol High; whole-change review followed by scoped re-review of R1/R2 fixes and serialization compatibility",
+  "apk": {
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1024,
+    "version_name": "0.29.1-active-session-fix-20261015",
+    "size_bytes": 11621388,
+    "sha256": "4a809a2573920f32d66e3537907f9b6364a7751ad253973dbad997002561cb23",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "mapping_id": "7a0a4720b09d1d37c4238b42f9cb8a0ee704748bd9d21251e8fa7c6178e2d99d",
+    "mapping_file_sha256": "97e8a9258163f37861b7fdef5f3c3395fecac77f99bf6e5125caa29ecf5c7684",
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    }
+  },
+  "android_tests": "compiled only",
+  "device_operations": 0,
+  "physical_acceptance": false,
+  "history_or_user_data_reset": false,
+  "new_key_or_auth_or_permission_or_paid_settings": false,
+  "main_merge_or_deployment": false
+}
