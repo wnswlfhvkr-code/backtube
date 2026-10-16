@@ -42,4 +42,10 @@
     <string name="offline_reorder_description">%1$s 순서 변경. 손잡이를 끌거나 눌러 위·아래로 이동하세요.</string>
     <string name="offline_item_menu_description">저장본 메뉴: %1$s</string>
     <string name="offline_removal_busy">파일 사용 중입니다. 다운로드나 미디어 처리가 멈춘 뒤 항목 삭제를 다시 시도하세요.</string>
+    <string name="offline_select">곡 선택</string>
+    <string name="offline_selected_count">%1$d개 선택됨</string>
+    <string name="offline_play_selected">선택 재생</string>
+    <string name="offline_clear_selection">선택 해제</string>
+    <string name="offline_select_item">저장본 선택</string>
+    <string name="offline_deselect_item">저장본 선택 해제</string>
 </resources>

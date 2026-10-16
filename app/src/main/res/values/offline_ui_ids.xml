@@ -10,4 +10,9 @@
     <item name="offline_retry" type="id" />
     <item name="offline_pause" type="id" />
     <item name="offline_delete" type="id" />
+    <item name="offline_select" type="id" />
+    <item name="offline_selected_count" type="id" />
+    <item name="offline_play_selected" type="id" />
+    <item name="offline_clear_selection" type="id" />
+    <item name="offline_cancel_selection" type="id" />
 </resources>

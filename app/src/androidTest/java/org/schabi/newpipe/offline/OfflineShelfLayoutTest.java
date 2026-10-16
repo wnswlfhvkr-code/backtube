@@ -97,6 +97,20 @@ public class OfflineShelfLayoutTest {
         task.get();
     }
 
+    @Test
+    public void selectedRowsKeepCheckSemanticsAtNarrowWidthsAndLargeText() throws Exception {
+        final FutureTask<Void> task = new FutureTask<>(() -> {
+            for (final int width : new int[]{320, 360}) {
+                for (final float scale : new float[]{1.0f, 2.0f}) {
+                    measureAndCheck(entries.get(0), width, scale, true, true);
+                }
+            }
+            return null;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(task);
+        task.get();
+    }
+
     private void checkWidth(final int widthDp) throws Exception {
         final FutureTask<Void> task = new FutureTask<>(() -> {
             for (final OfflineStore.Entry entry : entries) {
@@ -114,6 +128,12 @@ public class OfflineShelfLayoutTest {
 
     private int measureAndCheck(final OfflineStore.Entry entry, final int widthDp,
                                final float fontScale, final boolean expectWrapping) {
+        return measureAndCheck(entry, widthDp, fontScale, expectWrapping, false);
+    }
+
+    private int measureAndCheck(final OfflineStore.Entry entry, final int widthDp,
+                               final float fontScale, final boolean expectWrapping,
+                               final boolean selecting) {
         final Context context = configuredContext(widthDp, fontScale);
         final String stage = entry.state + "/" + widthDp + "dp/font=" + fontScale;
         assertEquals(stage + " fixture font scale", fontScale,
@@ -127,6 +147,7 @@ public class OfflineShelfLayoutTest {
         parent.setLayoutManager(new LinearLayoutManager(context));
         final OfflineShelfAdapter adapter = new OfflineShelfAdapter(new LayoutListener(context));
         adapter.setEntries(List.of(entry));
+        adapter.setSelection(selecting, selecting ? List.of(entry.id) : List.of());
         final OfflineShelfAdapter.Holder holder = adapter.onCreateViewHolder(parent, 0);
         adapter.onBindViewHolder(holder, 0);
         final ViewGroup row = (ViewGroup) holder.itemView;
@@ -149,9 +170,12 @@ public class OfflineShelfLayoutTest {
         assertTrue(stage + " title remains at most two visible lines", holder.title.getLayout()
                 .getLineCount() <= 2);
 
-        final View[] content = {holder.thumbnail, holder.title, holder.details,
-                holder.handle, holder.menu};
-        final String[] names = {"thumbnail", "title", "details", "handle", "menu"};
+        final View[] content = selecting
+                ? new View[]{holder.thumbnail, holder.title, holder.details, holder.check}
+                : new View[]{holder.thumbnail, holder.title, holder.details,
+                        holder.handle, holder.menu};
+        final String[] names = selecting ? new String[]{"thumbnail", "title", "details", "check"}
+                : new String[]{"thumbnail", "title", "details", "handle", "menu"};
         for (int first = 0; first < content.length; first++) {
             final Rect bounds = boundsInRow(row, content[first]);
             assertInside(stage + " " + names[first], row, bounds);
@@ -164,8 +188,21 @@ public class OfflineShelfLayoutTest {
         assertFalse(stage + " playback and overflow targets overlap", Rect.intersects(
                 boundsInRow(row, holder.root), boundsInRow(row, holder.menu)));
         assertTarget(stage + " playback", holder.root);
-        assertTarget(stage + " reorder", holder.handle);
-        assertTarget(stage + " overflow", holder.menu);
+        if (selecting) {
+            assertTarget(stage + " selection indicator", holder.check);
+            assertTrue(stage, holder.check.isChecked());
+            assertEquals(View.VISIBLE, holder.check.getVisibility());
+            assertEquals(View.GONE, holder.menu.getVisibility());
+            assertEquals(View.GONE, holder.handle.getVisibility());
+            final android.view.accessibility.AccessibilityNodeInfo node = holder.root
+                    .createAccessibilityNodeInfo();
+            assertTrue(stage + " checkable selection row", node.isCheckable());
+            assertTrue(stage + " checked selection row", node.isChecked());
+        } else {
+            assertTarget(stage + " reorder", holder.handle);
+            assertTarget(stage + " overflow", holder.menu);
+            assertEquals(View.GONE, holder.check.getVisibility());
+        }
 
         final boolean active = entry.state == OfflineStore.State.IMPORTING
                 || entry.state == OfflineStore.State.DOWNLOADING;

@@ -20,9 +20,12 @@ import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -141,12 +144,16 @@ public final class OfflineLibrary {
 
     @WorkerThread
     public OfflinePlayQueue queue(final OfflineStore.Entry entry) {
+        return new OfflinePlayQueue(List.of(savedItem(entry)), 0);
+    }
+
+    private StreamInfoItem savedItem(final OfflineStore.Entry entry) {
         final StreamInfoItem item = new StreamInfoItem(entry.serviceId, entry.localUrl(),
                 entry.title, entry.mime.startsWith("video/")
                 ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
         item.setUploaderName(context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
         item.setDuration(durationSeconds(entry.serviceId, entry.localUrl()));
-        return new OfflinePlayQueue(List.of(item), 0);
+        return item;
     }
 
     /**
@@ -172,6 +179,33 @@ public final class OfflineLibrary {
     public OfflinePlayQueue queueAll() throws IOException {
         return new OfflinePlayQueue(store,
                 context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+    }
+
+    /** Build a fresh finite subset in current shelf order; an empty request stays empty.
+     * @param selectedIds saved entry identities, never remote URLs or row positions
+     * @return a local-only snapshot containing available requested saves
+     * @throws IOException when the shelf itself cannot be read
+     */
+    @WorkerThread
+    public OfflinePlayQueue queueSelected(final List<String> selectedIds) throws IOException {
+        final Set<String> requested = new HashSet<>(selectedIds);
+        final List<StreamInfoItem> items = new ArrayList<>();
+        synchronized (store) {
+            for (final OfflineStore.Entry entry : store.list()) {
+                if (!requested.remove(entry.id) || entry.state != OfflineStore.State.READY) {
+                    continue;
+                }
+                // Opening validates access as well as metadata; never substitute another save.
+                try (FileInputStream source = new FileInputStream(store.file(entry))) {
+                    if (source.getChannel().size() == entry.bytes) {
+                        items.add(savedItem(entry));
+                    }
+                } catch (final IOException ignored) {
+                    // A removed or unreadable selection is omitted from this finite request.
+                }
+            }
+        }
+        return new OfflinePlayQueue(items, 0);
     }
 
     /**

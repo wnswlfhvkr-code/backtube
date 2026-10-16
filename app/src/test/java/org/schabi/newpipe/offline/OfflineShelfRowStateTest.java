@@ -21,10 +21,12 @@ import android.content.res.Resources;
 import android.util.DisplayMetrics;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.CheckBox;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.core.view.ViewCompat;
+import androidx.core.view.AccessibilityDelegateCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 
@@ -66,6 +68,11 @@ public class OfflineShelfRowStateTest {
     private ViewState menu;
     private ViewState handle;
     private String savedId;
+    private CheckBox check;
+    private boolean checked;
+    private boolean checkEnabled;
+    private int checkVisibility;
+    private final Map<View, AccessibilityDelegateCompat> delegates = new IdentityHashMap<>();
 
     @Before public void setUp() throws Exception {
         viewCompat = mockStatic(ViewCompat.class, invocation -> {
@@ -80,6 +87,10 @@ public class OfflineShelfRowStateTest {
                         == AccessibilityActionCompat.ACTION_CLICK);
                 actions.computeIfAbsent(view, ignored -> new HashMap<>())
                         .put(AccessibilityNodeInfoCompat.ACTION_CLICK, label);
+                return null;
+            }
+            if (method.equals("setAccessibilityDelegate")) {
+                delegates.put(invocation.getArgument(0), invocation.getArgument(1));
                 return null;
             }
             if (method.equals("removeAccessibilityAction")) {
@@ -101,7 +112,16 @@ public class OfflineShelfRowStateTest {
         when(resources.getDisplayMetrics()).thenReturn(metrics);
         when(context.getString(anyInt())).thenAnswer(invocation -> {
             final int id = invocation.getArgument(0);
-            return id == R.string.offline_play ? "Play" : "Current item";
+            if (id == R.string.offline_play) {
+                return "Play";
+            }
+            if (id == R.string.offline_select_item) {
+                return "Select";
+            }
+            if (id == R.string.offline_deselect_item) {
+                return "Deselect";
+            }
+            return "Current item";
         });
         when(context.getString(anyInt(), any(Object[].class)))
                 .thenReturn("Management action for saved item");
@@ -118,6 +138,22 @@ public class OfflineShelfRowStateTest {
         final View duration = mock(View.class);
         when(title.getText()).thenReturn("Saved recording");
         when(itemView.findViewById(R.id.itemRoot)).thenReturn(row.view);
+        check = mock(CheckBox.class);
+        when(check.isChecked()).thenAnswer(ignored -> checked);
+        when(check.isEnabled()).thenAnswer(ignored -> checkEnabled);
+        doAnswer(invocation -> {
+            checkEnabled = invocation.getArgument(0);
+            return null;
+        }).when(check).setEnabled(anyBoolean());
+        doAnswer(invocation -> {
+            checked = invocation.getArgument(0);
+            return null;
+        }).when(check).setChecked(anyBoolean());
+        doAnswer(invocation -> {
+            checkVisibility = invocation.getArgument(0);
+            return null;
+        }).when(check).setVisibility(anyInt());
+        when(itemView.findViewById(R.id.offline_item_check)).thenReturn(check);
         when(itemView.findViewById(R.id.itemVideoTitleView)).thenReturn(title);
         when(itemView.findViewById(R.id.itemAdditionalDetails)).thenReturn(details);
         when(itemView.findViewById(R.id.itemThumbnailView)).thenReturn(thumbnail);
@@ -167,6 +203,84 @@ public class OfflineShelfRowStateTest {
         bindAndCheck(OfflineStore.State.READY, false);
         adapter.setInteractionEnabled(true);
         bindAndCheck(OfflineStore.State.READY, true);
+    }
+
+    @Test public void selectionBinderRecyclesCheckStateAndRestoresOrdinaryPlayback()
+            throws Exception {
+        adapter.setEntries(store.list());
+        adapter.setSelection(true, List.of(savedId));
+        adapter.onBindViewHolder(holder, 0);
+        assertEquals(View.VISIBLE, checkVisibility);
+        assertTrue(checked);
+        assertEquals("Deselect", actionMap().get(AccessibilityNodeInfoCompat.ACTION_CLICK));
+        assertFalse(row.view.isLongClickable());
+        assertFalse(adapter.beginDrag(holder));
+        assertEquals(null, adapter.moveBy(savedId, -1));
+        row.click.onClick(row.view);
+        assertEquals(List.of(savedId), listener.selected);
+        assertTrue(listener.played.isEmpty());
+        menu.click.onClick(menu.view);
+        handle.click.onClick(handle.view);
+        assertTrue(listener.menus.isEmpty());
+        assertCheckSemantics(true, true);
+
+        adapter.setSelection(true, List.of());
+        adapter.onBindViewHolder(holder, 0);
+        assertFalse(checked);
+        assertCheckSemantics(true, false);
+        assertEquals("Select", actionMap().get(AccessibilityNodeInfoCompat.ACTION_CLICK));
+        // Rebind the same holder after real bytes disappear; no toggle can select a failed save.
+        assertTrue(store.file(store.get(savedId)).delete());
+        adapter.setEntries(store.list());
+        adapter.onBindViewHolder(holder, 0);
+        row.click.onClick(row.view);
+        assertEquals(List.of(savedId), listener.selected);
+        assertFalse(row.view.isClickable());
+        assertCheckSemantics(false, false);
+
+        store.prepareRetry(savedId);
+        store.copy(savedId, new ByteArrayInputStream(new byte[32]));
+        adapter.setSelection(false, List.of());
+        bindAndCheck(OfflineStore.State.READY, true);
+        assertEquals(View.GONE, checkVisibility);
+        assertFalse(checked);
+        assertCheckSemantics(false, false);
+    }
+
+    @Test public void accessibilityNodeReadsCurrentCheckboxStateAtNodeCreation()
+            throws Exception {
+        adapter.setEntries(store.list());
+        adapter.setSelection(true, List.of());
+        adapter.onBindViewHolder(holder, 0);
+        assertCheckSemantics(true, false);
+        // Android's checkbox can update before the requested RecyclerView rebind occurs.
+        check.setChecked(true);
+        assertCheckSemantics(true, true);
+        check.setEnabled(false);
+        assertCheckSemantics(false, true);
+    }
+
+    private void assertCheckSemantics(final boolean checkable, final boolean selected)
+            throws Exception {
+        final AccessibilityNodeInfoCompat node = mock(AccessibilityNodeInfoCompat.class);
+        final boolean[] state = new boolean[2];
+        doAnswer(invocation -> {
+            state[0] = invocation.getArgument(0);
+            return null;
+        }).when(node).setCheckable(anyBoolean());
+        doAnswer(invocation -> {
+            state[1] = invocation.getArgument(0);
+            return null;
+        }).when(node).setChecked(anyBoolean());
+        final AccessibilityDelegateCompat delegate = delegates.get(row.view);
+        // Replace only Android's unmockable superclass delegate, keeping our real override.
+        final var original = AccessibilityDelegateCompat.class
+                .getDeclaredField("mOriginalDelegate");
+        original.setAccessible(true);
+        original.set(delegate, mock(View.AccessibilityDelegate.class));
+        delegate.onInitializeAccessibilityNodeInfo(row.view, node);
+        assertEquals(checkable, state[0]);
+        assertEquals(selected, state[1]);
     }
 
     private void bindAndCheck(final OfflineStore.State state, final boolean interactionEnabled)
@@ -264,10 +378,15 @@ public class OfflineShelfRowStateTest {
 
     private static final class RecordingListener implements OfflineShelfAdapter.Listener {
         private final List<String> played = new ArrayList<>();
+        private final List<String> selected = new ArrayList<>();
         private final List<MenuRequest> menus = new ArrayList<>();
 
         @Override public void play(final OfflineStore.Entry entry) {
             played.add(entry.id);
+        }
+
+        @Override public void select(final OfflineStore.Entry entry) {
+            selected.add(entry.id);
         }
 
         @Override public void menu(final OfflineStore.Entry entry, final View anchor,

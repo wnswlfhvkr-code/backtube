@@ -49,6 +49,8 @@ import org.schabi.newpipe.player.PlayerService;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Single;
@@ -83,6 +85,15 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private TextView summary;
     private TextView playableCount;
     private Button playAll;
+    private Button selectSaved;
+    private Button playSelected;
+    private Button clearSelection;
+    private Button manage;
+    private TextView selectedCount;
+    private LinearLayout selectionControls;
+    private ScrollView settings;
+    private final OfflineShelfSelection selection = new OfflineShelfSelection();
+    private long playbackRequest;
     private boolean moving;
     private OfflineLibrary library;
     private boolean resumed;
@@ -140,7 +151,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
-        toolbar.setNavigationOnClickListener(view -> finish());
+        toolbar.setNavigationOnClickListener(view -> leaveShelf());
         final LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
         header.setPadding(dp(16), 0, dp(8), 0);
@@ -152,13 +163,14 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         playAll.setLayoutParams(new LinearLayout.LayoutParams(-2, -2));
         playAll.setId(R.id.offline_play_all);
         playAll.setEnabled(false);
-        final ScrollView settings = new ScrollView(this);
+        addSelectionControls(content);
+        settings = new ScrollView(this);
         final LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(16), 0, dp(16), dp(8));
         settings.addView(actions);
         settings.setVisibility(View.GONE);
-        final Button manage = button(content, R.string.offline_manage, () ->
+        manage = button(content, R.string.offline_manage, () ->
                 settings.setVisibility(settings.getVisibility() == View.VISIBLE
                         ? View.GONE : View.VISIBLE));
         manage.setId(R.id.offline_manage);
@@ -205,13 +217,18 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 playSaved(entry);
             }
 
+            @Override public void select(final OfflineStore.Entry entry) {
+                toggleSelection(entry);
+            }
+
             @Override public void menu(final OfflineStore.Entry entry, final View anchor,
                                        final boolean movementOnly) {
                 showItemMenu(entry, anchor, movementOnly);
             }
 
             @Override public void startDrag(final OfflineShelfAdapter.Holder holder) {
-                if (resumed && !moving && dragHolder == null && adapter.beginDrag(holder)) {
+                if (resumed && !selection.isActive() && !moving && dragHolder == null
+                        && adapter.beginDrag(holder)) {
                     dragging = true;
                     dragHolder = holder;
                     revision++;
@@ -221,7 +238,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             }
 
             @Override public void move(final OfflineStore.Entry entry, final int offset) {
-                if (!moving && !dragging) {
+                if (!selection.isActive() && !moving && !dragging) {
                     commitMove(adapter.moveBy(entry.id, offset));
                 }
             }
@@ -234,6 +251,11 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         rows.setAdapter(adapter);
         content.addView(rows, new LinearLayout.LayoutParams(-1, 0, 1));
         touchHelper = createDragHelper();
+        if (savedInstanceState != null) {
+            selection.restore(savedInstanceState.getBoolean("offlineSelecting"),
+                    savedInstanceState.getStringArrayList("offlineSelectedIds"));
+        }
+        updateSelectionControls();
         try {
             library = OfflineLibrary.get(this);
             bound = bindService(new Intent(this, DownloadManagerService.class), connection,
@@ -251,11 +273,34 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         }
     }
 
+    private void addSelectionControls(final LinearLayout content) {
+        selectSaved = button(content, R.string.offline_select, this::enterSelection);
+        selectSaved.setId(R.id.offline_select);
+        selectionControls = new LinearLayout(this);
+        selectionControls.setOrientation(LinearLayout.VERTICAL);
+        selectionControls.setPadding(dp(16), 0, dp(16), 0);
+        selectedCount = new TextView(this);
+        selectedCount.setId(R.id.offline_selected_count);
+        selectionControls.addView(selectedCount);
+        playSelected = button(selectionControls, R.string.offline_play_selected,
+                () -> playSelected(selection.snapshot()));
+        playSelected.setId(R.id.offline_play_selected);
+        final LinearLayout selectionActions = new LinearLayout(this);
+        clearSelection = button(selectionActions, R.string.offline_clear_selection,
+                this::clearSelection);
+        clearSelection.setId(R.id.offline_clear_selection);
+        button(selectionActions, R.string.cancel, this::cancelSelection)
+                .setId(R.id.offline_cancel_selection);
+        selectionControls.addView(selectionActions);
+        content.addView(selectionControls);
+    }
+
     private ItemTouchHelper createDragHelper() {
         return touchDispatcher.createHelper(new ItemTouchHelper.Callback() {
             @Override public int getMovementFlags(@NonNull final RecyclerView recyclerView,
                                                   @NonNull final RecyclerView.ViewHolder holder) {
-                return makeMovementFlags(moving ? 0 : ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
+                return makeMovementFlags(moving || selection.isActive()
+                        ? 0 : ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
             }
 
             @Override public boolean isLongPressDragEnabled() {
@@ -302,6 +347,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
 
     @Override protected void onPause() {
         resumed = false;
+        playbackRequest++;
         revision++;
         // ItemTouchHelper detach alone leaves its selected holder and auto-scroll runnable alive.
         final long now = SystemClock.uptimeMillis();
@@ -408,6 +454,10 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         playableCount.setText(getString(R.string.offline_playable_count, ready));
         playAll.setText(getString(R.string.offline_play_all_count, ready));
         playAll.setEnabled(ready > 0 && !moving && !dragging);
+        if (selection.reconcile(entries)) {
+            playbackRequest++;
+        }
+        updateSelectionControls();
         summary.setText(getString(R.string.offline_summary,
                 library.store().usedBytes() / 1_000_000.0));
         empty.setVisibility(entries.isEmpty() ? View.VISIBLE : View.GONE);
@@ -451,7 +501,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
 
     private void showItemMenu(final OfflineStore.Entry entry, final View anchor,
                               final boolean movementOnly) {
-        if (moving || dragging || library == null) {
+        if (selection.isActive() || moving || dragging || library == null) {
             return;
         }
         final PopupMenu menu = new PopupMenu(this, anchor);
@@ -478,7 +528,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                     getString(R.string.offline_delete_description, entry.title));
         }
         menu.setOnMenuItemClickListener(item -> {
-            if (moving || dragging) {
+            if (selection.isActive() || moving || dragging) {
                 return false;
             }
             final int id = item.getItemId();
@@ -516,11 +566,76 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         }
     }
 
-    private void playSaved(@Nullable final OfflineStore.Entry selected) {
-        if (library == null || moving || dragging) {
+    private void enterSelection() {
+        if (!resumed || library == null || moving || dragging || dragHolder != null) {
             return;
         }
-        reads.add(Single.fromCallable(() -> {
+        playbackRequest++;
+        selection.enter();
+        settings.setVisibility(View.GONE);
+        updateSelectionControls();
+    }
+
+    private void toggleSelection(final OfflineStore.Entry entry) {
+        playbackRequest++;
+        selection.toggle(entry);
+        updateSelectionControls();
+    }
+
+    private void clearSelection() {
+        playbackRequest++;
+        selection.clear();
+        updateSelectionControls();
+    }
+
+    private boolean cancelSelection() {
+        playbackRequest++;
+        if (!selection.isActive()) {
+            return false;
+        }
+        selection.cancel();
+        updateSelectionControls();
+        return true;
+    }
+
+    private void updateSelectionControls() {
+        final boolean selecting = selection.isActive();
+        final int count = selection.snapshot().size();
+        selectionControls.setVisibility(selecting ? View.VISIBLE : View.GONE);
+        selectSaved.setVisibility(selecting ? View.GONE : View.VISIBLE);
+        selectSaved.setEnabled(!moving && !dragging && dragHolder == null);
+        playAll.setVisibility(selecting ? View.GONE : View.VISIBLE);
+        playableCount.setVisibility(selecting ? View.GONE : View.VISIBLE);
+        manage.setEnabled(!selecting);
+        selectedCount.setText(getString(R.string.offline_selected_count, count));
+        playSelected.setEnabled(selecting && count > 0 && !moving && !dragging);
+        clearSelection.setEnabled(count > 0);
+        adapter.setSelection(selecting, selection.snapshot());
+    }
+
+    private void leaveShelf() {
+        if (!cancelSelection()) {
+            finish();
+        }
+    }
+
+    @Override public void onBackPressed() {
+        if (!cancelSelection()) {
+            super.onBackPressed();
+        }
+    }
+
+    @Override protected void onSaveInstanceState(@NonNull final Bundle state) {
+        state.putBoolean("offlineSelecting", selection.isActive());
+        state.putStringArrayList("offlineSelectedIds", new ArrayList<>(selection.snapshot()));
+        super.onSaveInstanceState(state);
+    }
+
+    private void playSaved(@Nullable final OfflineStore.Entry selected) {
+        if (selection.isActive()) {
+            return;
+        }
+        requestSavedQueue(() -> {
             if (selected == null) {
                 return library.queueAll();
             }
@@ -529,8 +644,38 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 throw new IOException("Saved item unavailable");
             }
             return library.queue(current);
-        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(queue -> startSavedQueue(queue, selected != null), this::showError));
+        }, selected != null, false);
+    }
+
+    private void playSelected(final List<String> ids) {
+        // Own the request before scheduling; later row taps cannot mutate this snapshot.
+        final List<String> requested = new ArrayList<>(ids);
+        if (requested.isEmpty()) {
+            return;
+        }
+        requestSavedQueue(() -> library.queueSelected(requested), false, true);
+    }
+
+    private void requestSavedQueue(final Callable<OfflinePlayQueue> build,
+                                   final boolean individual, final boolean selected) {
+        if (!resumed || library == null || moving || dragging || dragHolder != null) {
+            return;
+        }
+        final long request = ++playbackRequest;
+        reads.add(Single.fromCallable(build)
+                .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+                .subscribe(queue -> {
+                    if (resumed && request == playbackRequest) {
+                        if (selected && !queue.isEmpty()) {
+                            cancelSelection();
+                        }
+                        startSavedQueue(queue, individual);
+                    }
+                }, error -> {
+                    if (resumed && request == playbackRequest) {
+                        showError(error);
+                    }
+                }));
     }
 
     private void startSavedQueue(final OfflinePlayQueue queue, final boolean individual) {

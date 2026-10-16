@@ -74,6 +74,17 @@ public class OfflineDurationMetadataTest {
         }
     }
 
+    @Test public void selectedPlaybackPreservesDurationAndOwnedIdentityThroughPlaylistEntity()
+            throws Exception {
+        try (MockedConstruction<MediaMetadataRetriever> codecs = metadata("287900")) {
+            final StreamEntity entity = new StreamEntity(library.queueSelected(
+                    List.of(entry.id, entry.id)).getItem());
+            assertEquals(287, entity.getDuration());
+            assertEquals(entry.localUrl(), entity.getUrl());
+            assertEquals(1, codecs.constructed().size());
+        }
+    }
+
     @Test public void unreadableDurationRemainsUnknownWithoutLosingPlayableEntry() {
         try (MockedConstruction<MediaMetadataRetriever> codecs = metadata(null)) {
             assertEquals(-1, library.queue(entry).getItem().getDuration());

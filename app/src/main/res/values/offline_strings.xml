@@ -42,4 +42,10 @@
     <string name="offline_reorder_description">Reorder %1$s. Drag or activate for Up and Down.</string>
     <string name="offline_item_menu_description">Saved track options: %1$s</string>
     <string name="offline_removal_busy">The file is still in use. Try removing the entry again when downloading or processing stops.</string>
+    <string name="offline_select">Select saves</string>
+    <string name="offline_selected_count">Selected: %1$d</string>
+    <string name="offline_play_selected">Play selected</string>
+    <string name="offline_clear_selection">Clear selection</string>
+    <string name="offline_select_item">Select saved copy</string>
+    <string name="offline_deselect_item">Deselect saved copy</string>
 </resources>

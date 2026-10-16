@@ -280,6 +280,253 @@ public class OfflinePlaybackNavigationTest {
         verify(intents.constructed().get(0)).putExtra(Player.PLAY_WHEN_READY, true);
     }
 
+    @Test
+    public void stoppedShelfCannotLaunchLateQueueConstruction() throws Exception {
+        final OfflineLibraryActivity shelf = shelfFixture();
+        final TestScheduler io = new TestScheduler();
+        RxJavaPlugins.setIoSchedulerHandler(scheduler -> io);
+        requestShelfPlayback(shelf, entry);
+        setShelfField(shelf, "resumed", false);
+        io.triggerActions();
+        assertTrue("a stopped shelf must not start the service or open the controller",
+                targets.isEmpty());
+        assertTrue(deliveredQueues.isEmpty());
+    }
+
+    @Test
+    public void obsoleteShelfRequestCannotReplaceNewerSavedPlayback() throws Exception {
+        final OfflineLibrary library = OfflineLibrary.get(context);
+        final OfflineStore.Entry newer = library.store().create("Newer", "", 0,
+                "file:///newer-generated-fixture", "audio/wav");
+        library.store().copy(newer.id, new ByteArrayInputStream(new byte[]{4, 5, 6}));
+        final OfflineLibraryActivity shelf = shelfFixture();
+        final TestScheduler firstIo = new TestScheduler();
+        final TestScheduler secondIo = new TestScheduler();
+        final AtomicInteger requests = new AtomicInteger();
+        RxJavaPlugins.setIoSchedulerHandler(scheduler ->
+                requests.getAndIncrement() == 0 ? firstIo : secondIo);
+        requestShelfPlayback(shelf, entry);
+        requestShelfPlayback(shelf, newer);
+        secondIo.triggerActions();
+        firstIo.triggerActions();
+        assertEquals("only the latest shelf request may replace the active queue",
+                1, deliveredQueues.size());
+        assertEquals(newer.localUrl(), deliveredQueues.get(0).getItem().getUrl());
+    }
+
+    @Test
+    public void selectedShelfRequestUsesImmutableIdsFreshOrderAndFreshServiceIntent()
+            throws Exception {
+        final OfflineLibrary library = OfflineLibrary.get(context);
+        final OfflineStore.Entry second = library.store().create("Second", "", 0,
+                "content://generated/second", "audio/wav");
+        library.store().copy(second.id, new ByteArrayInputStream(new byte[]{4, 5, 6}));
+        final OfflineLibraryActivity shelf = shelfFixture();
+        final TestScheduler io = new TestScheduler();
+        RxJavaPlugins.setIoSchedulerHandler(scheduler -> io);
+        final List<String> ids = new ArrayList<>(List.of(second.id, entry.id, second.id));
+        requestSelectedPlayback(shelf, ids);
+        ids.clear();
+        library.store().move(second.id, -1);
+        io.triggerActions();
+        assertEquals(1, deliveredQueues.size());
+        assertEquals(2, deliveredQueues.get(0).size());
+        assertEquals(second.localUrl(), deliveredQueues.get(0).getItem(0).getUrl());
+        assertEquals(entry.localUrl(), deliveredQueues.get(0).getItem(1).getUrl());
+        assertTrue(deliveredQueues.get(0).isOfflineOnly());
+        assertEquals(List.of(PlayerService.class, PlayQueueActivity.class), targets);
+        verify(intents.constructed().get(0)).putExtra(Player.FRESH_SELECTION, true);
+        verify(intents.constructed().get(0)).putExtra(Player.PLAY_WHEN_READY, true);
+    }
+
+    @Test
+    public void zeroOrUnavailableSelectedShelfRequestCannotReplaceCurrentPlayback()
+            throws Exception {
+        final OfflineLibraryActivity shelf = shelfFixture();
+        requestSelectedPlayback(shelf, List.of());
+        requestSelectedPlayback(shelf, List.of("deleted", "missing", "deleted"));
+        assertTrue(deliveredQueues.isEmpty());
+        assertTrue(targets.isEmpty());
+    }
+
+    @Test
+    public void cancelAndToolbarUpDiscardPendingSelectionWithoutClearingNewMode()
+            throws Exception {
+        for (final String cancel : List.of("cancelSelection", "leaveShelf", "onBackPressed")) {
+            final OfflineLibraryActivity shelf = shelfFixture();
+            setSelection(shelf, List.of(entry.id));
+            final TestScheduler io = new TestScheduler();
+            RxJavaPlugins.setIoSchedulerHandler(scheduler -> io);
+            requestSelectedPlayback(shelf, List.of(entry.id));
+            invokeShelf(shelf, cancel);
+            setSelection(shelf, List.of(entry.id));
+            io.triggerActions();
+            assertTrue(cancel + " must suppress queue replacement", deliveredQueues.isEmpty());
+            assertTrue(cancel + " must suppress controller", targets.isEmpty());
+            assertEquals(List.of(entry.id), selectionSnapshot(shelf));
+        }
+    }
+
+    @Test
+    public void stoppedOrCancelledErrorCallbackDoesNotShowAnErrorToast() throws Exception {
+        for (final boolean stopped : List.of(false, true)) {
+            final OfflineLibraryActivity shelf = shelfFixture();
+            final TestScheduler io = new TestScheduler();
+            RxJavaPlugins.setIoSchedulerHandler(scheduler -> io);
+            requestShelfPlayback(shelf, entry);
+            OfflineLibrary.get(context).store().delete(entry.id);
+            if (stopped) {
+                setShelfField(shelf, "resumed", false);
+            } else {
+                invokeShelf(shelf, "cancelSelection");
+            }
+            io.triggerActions();
+            toasts.verify(() -> Toast.makeText(eq(shelf),
+                    eq(R.string.offline_storage_error), anyInt()), never());
+            assertTrue(targets.isEmpty());
+        }
+    }
+
+    @Test
+    public void changingSelectedRowsInvalidatesPendingQueueAndUpdatesCountControls()
+            throws Exception {
+        final OfflineLibrary library = OfflineLibrary.get(context);
+        final OfflineStore.Entry second = library.store().create("Second", "", 0,
+                "content://generated/second", "audio/wav");
+        library.store().copy(second.id, new ByteArrayInputStream(new byte[]{4, 5, 6}));
+        final OfflineLibraryActivity shelf = shelfFixture();
+        invokeShelf(shelf, "enterSelection");
+        assertEquals("0 selected", ((android.widget.TextView) shelfField(shelf,
+                "selectedCount")).getText());
+        assertTrue(!((android.widget.Button) shelfField(shelf, "playSelected")).isEnabled());
+        toggleShelfSelection(shelf, entry);
+        final TestScheduler io = new TestScheduler();
+        RxJavaPlugins.setIoSchedulerHandler(scheduler -> io);
+        requestSelectedPlayback(shelf, List.of(entry.id));
+        toggleShelfSelection(shelf, entry);
+        toggleShelfSelection(shelf, second);
+        io.triggerActions();
+        assertTrue(deliveredQueues.isEmpty());
+        assertEquals(List.of(second.id), selectionSnapshot(shelf));
+        assertEquals("1 selected", ((android.widget.TextView) shelfField(shelf,
+                "selectedCount")).getText());
+        assertTrue(((android.widget.Button) shelfField(shelf, "playSelected")).isEnabled());
+        assertTrue(!((android.widget.Button) shelfField(shelf, "manage")).isEnabled());
+        invokeShelf(shelf, "clearSelection");
+        assertEquals(List.of(), selectionSnapshot(shelf));
+        assertTrue(!((android.widget.Button) shelfField(shelf, "playSelected")).isEnabled());
+        invokeShelf(shelf, "cancelSelection");
+        assertTrue(((android.widget.Button) shelfField(shelf, "manage")).isEnabled());
+    }
+
+    private static void toggleShelfSelection(final OfflineLibraryActivity shelf,
+                                              final OfflineStore.Entry entry) throws Exception {
+        final var toggle = OfflineLibraryActivity.class.getDeclaredMethod("toggleSelection",
+                OfflineStore.Entry.class);
+        toggle.setAccessible(true);
+        final OfflineLibrary library = (OfflineLibrary) shelfField(shelf, "library");
+        toggle.invoke(shelf, library.store().get(entry.id));
+    }
+
+    private static Object shelfField(final OfflineLibraryActivity shelf, final String name)
+            throws Exception {
+        final Field field = OfflineLibraryActivity.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(shelf);
+    }
+
+    private static void requestSelectedPlayback(final OfflineLibraryActivity shelf,
+                                                 final List<String> ids) throws Exception {
+        final var play = OfflineLibraryActivity.class.getDeclaredMethod("playSelected", List.class);
+        play.setAccessible(true);
+        play.invoke(shelf, ids);
+    }
+
+    private static Object invokeShelf(final OfflineLibraryActivity shelf, final String method)
+            throws Exception {
+        final var call = OfflineLibraryActivity.class.getDeclaredMethod(method);
+        call.setAccessible(true);
+        return call.invoke(shelf);
+    }
+
+    private static void setSelection(final OfflineLibraryActivity shelf, final List<String> ids)
+            throws Exception {
+        final Object selection = shelfSelection(shelf);
+        final var restore = selection.getClass().getDeclaredMethod("restore", boolean.class,
+                List.class);
+        restore.setAccessible(true);
+        restore.invoke(selection, true, ids);
+    }
+
+    private static Object shelfSelection(final OfflineLibraryActivity shelf) throws Exception {
+        final Field selection = OfflineLibraryActivity.class.getDeclaredField("selection");
+        selection.setAccessible(true);
+        return selection.get(shelf);
+    }
+
+    private static Object selectionSnapshot(final OfflineLibraryActivity shelf) throws Exception {
+        final Object selection = shelfSelection(shelf);
+        final var snapshot = selection.getClass().getDeclaredMethod("snapshot");
+        snapshot.setAccessible(true);
+        return snapshot.invoke(selection);
+    }
+
+    private OfflineLibraryActivity shelfFixture() throws Exception {
+        final OfflineLibraryActivity shelf = mock(OfflineLibraryActivity.class);
+        org.mockito.Mockito.doCallRealMethod().when(shelf).onBackPressed();
+        setShelfField(shelf, "library", OfflineLibrary.get(context));
+        setShelfField(shelf, "reads", new io.reactivex.rxjava3.disposables.CompositeDisposable());
+        setShelfField(shelf, "resumed", true);
+        final Class<?> selectionType = Class.forName(
+                "org.schabi.newpipe.offline.OfflineShelfSelection");
+        final var constructor = selectionType.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        setShelfField(shelf, "selection", constructor.newInstance());
+        final Class<?> adapterType = Class.forName(
+                "org.schabi.newpipe.offline.OfflineShelfAdapter");
+        setShelfField(shelf, "adapter", mock(adapterType));
+        setShelfField(shelf, "selectionControls", mock(android.widget.LinearLayout.class));
+        final android.widget.TextView selectedCount = mock(android.widget.TextView.class);
+        final var countText = new java.util.concurrent.atomic.AtomicReference<CharSequence>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            countText.set(invocation.getArgument(0));
+            return null;
+        }).when(selectedCount).setText(any(CharSequence.class));
+        when(selectedCount.getText()).thenAnswer(ignored -> countText.get());
+        when(shelf.getString(eq(R.string.offline_selected_count), any(Object[].class)))
+                .thenAnswer(invocation -> invocation.getArgument(1) + " selected");
+        setShelfField(shelf, "selectedCount", selectedCount);
+        setShelfField(shelf, "settings", mock(android.widget.ScrollView.class));
+        setShelfField(shelf, "playableCount", mock(android.widget.TextView.class));
+        for (final String button : List.of("selectSaved", "playSelected", "clearSelection",
+                "manage", "playAll")) {
+            final android.widget.Button control = mock(android.widget.Button.class);
+            final var enabled = new java.util.concurrent.atomic.AtomicBoolean();
+            org.mockito.Mockito.doAnswer(invocation -> {
+                enabled.set(invocation.getArgument(0));
+                return null;
+            }).when(control).setEnabled(org.mockito.ArgumentMatchers.anyBoolean());
+            when(control.isEnabled()).thenAnswer(ignored -> enabled.get());
+            setShelfField(shelf, button, control);
+        }
+        return shelf;
+    }
+
+    private static void setShelfField(final OfflineLibraryActivity shelf, final String name,
+                                      final Object value) throws Exception {
+        final Field field = OfflineLibraryActivity.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(shelf, value);
+    }
+
+    private static void requestShelfPlayback(final OfflineLibraryActivity shelf,
+                                              final OfflineStore.Entry selected) throws Exception {
+        final var play = OfflineLibraryActivity.class.getDeclaredMethod("playSaved",
+                OfflineStore.Entry.class);
+        play.setAccessible(true);
+        play.invoke(shelf, selected);
+    }
+
     private static void resetLibrary() throws Exception {
         final Field singleton = OfflineLibrary.class.getDeclaredField("instance");
         singleton.setAccessible(true);

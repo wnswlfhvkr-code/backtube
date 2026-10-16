@@ -5,6 +5,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.CheckBox;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -12,6 +13,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.AccessibilityDelegateCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,6 +24,8 @@ import org.schabi.newpipe.R;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.Set;
+import java.util.HashSet;
 
 /** Reuses play-queue rows without its online image loader or mutable player queue. */
 final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter.Holder> {
@@ -30,6 +34,8 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     private boolean interactionEnabled = true;
     private String draggedId;
     private String currentUrl;
+    private boolean selectionMode;
+    private Set<String> selectedIds = new HashSet<>();
 
     OfflineShelfAdapter(final Listener listener) {
         this.listener = listener;
@@ -63,6 +69,15 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         }
     }
 
+    void setSelection(final boolean selecting, final List<String> ids) {
+        final Set<String> next = new HashSet<>(ids);
+        if (selectionMode != selecting || !selectedIds.equals(next)) {
+            selectionMode = selecting;
+            selectedIds = next;
+            notifyItemRangeChanged(0, getItemCount());
+        }
+    }
+
     int positionOf(final String id) {
         for (int i = 0; i < getItemCount(); i++) {
             if (order.items().get(i).id.equals(id)) {
@@ -74,7 +89,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
 
     boolean beginDrag(final Holder holder) {
         final OfflineStore.Entry entry = boundEntry(holder);
-        if (entry == null || !interactionEnabled || !order.beginDrag(entry.id)) {
+        if (entry == null || selectionMode || !interactionEnabled || !order.beginDrag(entry.id)) {
             return false;
         }
         draggedId = entry.id;
@@ -126,7 +141,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     }
 
     OfflineShelfOrder.Move moveBy(final String id, final int offset) {
-        return order.moveBy(id, offset);
+        return selectionMode ? null : order.moveBy(id, offset);
     }
 
     @NonNull
@@ -159,6 +174,13 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
             holder.progress.setProgress(details.progress);
         }
         final boolean current = entry.localUrl().equals(currentUrl);
+        final boolean checked = selectionMode && selectedIds.contains(entry.id);
+        holder.check.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
+        holder.check.setChecked(checked);
+        holder.check.setEnabled(interactionEnabled && entry.state == OfflineStore.State.READY);
+        holder.handle.setVisibility(selectionMode ? View.GONE : View.VISIBLE);
+        holder.menu.setVisibility(selectionMode ? View.GONE : View.VISIBLE);
+        bindSelectionAccessibility(holder);
         holder.root.setSelected(current);
         holder.root.setContentDescription(entry.title + " · " + details.label
                 + (current ? " · " + holder.root.getContext()
@@ -179,17 +201,26 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
             final OfflineStore.Entry selected = boundEntry(holder);
             if (interactionEnabled && draggedId == null && selected != null
                     && selected.state == OfflineStore.State.READY) {
-                listener.play(selected);
+                if (selectionMode) {
+                    listener.select(selected);
+                } else {
+                    listener.play(selected);
+                }
             }
         });
+        holder.check.setOnClickListener(view -> holder.root.performClick());
         holder.root.setOnLongClickListener(view -> showMenu(holder, holder.menu, false));
+        holder.root.setLongClickable(!selectionMode);
         final boolean playable = interactionEnabled && entry.state == OfflineStore.State.READY;
         // Installing a listener sets clickable again; apply availability after listener setup.
         holder.root.setClickable(playable);
         if (playable) {
+            final int action = selectionMode
+                    ? checked ? R.string.offline_deselect_item : R.string.offline_select_item
+                    : R.string.offline_play;
             ViewCompat.replaceAccessibilityAction(holder.root,
                     AccessibilityActionCompat.ACTION_CLICK,
-                    holder.root.getContext().getString(R.string.offline_play), null);
+                    holder.root.getContext().getString(action), null);
         } else {
             ViewCompat.removeAccessibilityAction(holder.root,
                     AccessibilityNodeInfoCompat.ACTION_CLICK);
@@ -197,6 +228,17 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         holder.menu.setOnClickListener(view -> showMenu(holder, view, false));
         holder.handle.setOnClickListener(view -> showMenu(holder, view, true));
         addMoveActions(holder, position);
+    }
+
+    private void bindSelectionAccessibility(final Holder holder) {
+        ViewCompat.setAccessibilityDelegate(holder.root, new AccessibilityDelegateCompat() {
+            @Override public void onInitializeAccessibilityNodeInfo(final View host,
+                    final AccessibilityNodeInfoCompat info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setCheckable(selectionMode && holder.check.isEnabled());
+                info.setChecked(selectionMode && holder.check.isChecked());
+            }
+        });
     }
 
     private void installHandleTouch(final Holder holder) {
@@ -210,7 +252,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
                     case MotionEvent.ACTION_DOWN:
                         touching = true;
                         startedDrag = false;
-                        if (interactionEnabled && draggedId == null) {
+                        if (interactionEnabled && !selectionMode && draggedId == null) {
                             listener.startDrag(holder);
                             startedDrag = draggedId != null;
                         }
@@ -234,7 +276,8 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
 
     private boolean showMenu(final Holder holder, final View anchor, final boolean movementOnly) {
         final OfflineStore.Entry entry = boundEntry(holder);
-        if (!interactionEnabled || draggedId != null || entry == null) {
+        if (!interactionEnabled || selectionMode || draggedId != null
+                || entry == null) {
             return false;
         }
         listener.menu(entry, anchor, movementOnly);
@@ -244,7 +287,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     private void addMoveActions(final Holder holder, final int position) {
         ViewCompat.removeAccessibilityAction(holder.root, R.id.offline_move_up);
         ViewCompat.removeAccessibilityAction(holder.root, R.id.offline_move_down);
-        if (!interactionEnabled) {
+        if (!interactionEnabled || selectionMode) {
             return;
         }
         if (position > 0) {
@@ -265,7 +308,8 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         ViewCompat.replaceAccessibilityAction(holder.root,
                 new AccessibilityActionCompat(actionId, label), label, (view, arguments) -> {
                     final OfflineStore.Entry entry = boundEntry(holder);
-                    if (!interactionEnabled || draggedId != null || entry == null) {
+                    if (!interactionEnabled || selectionMode || draggedId != null
+                            || entry == null) {
                         return false;
                     }
                     listener.move(entry, offset);
@@ -294,6 +338,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
 
     interface Listener {
         void play(OfflineStore.Entry entry);
+        default void select(final OfflineStore.Entry entry) { }
         void menu(OfflineStore.Entry entry, View anchor, boolean movementOnly);
         void startDrag(Holder holder);
         void move(OfflineStore.Entry entry, int offset);
@@ -313,6 +358,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
 
     static final class Holder extends RecyclerView.ViewHolder {
         final View root;
+        final CheckBox check;
         final TextView title;
         final TextView details;
         final ImageView thumbnail;
@@ -324,6 +370,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         Holder(final View view) {
             super(view);
             root = view.findViewById(R.id.itemRoot);
+            check = view.findViewById(R.id.offline_item_check);
             title = view.findViewById(R.id.itemVideoTitleView);
             details = view.findViewById(R.id.itemAdditionalDetails);
             thumbnail = view.findViewById(R.id.itemThumbnailView);
