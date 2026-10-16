@@ -5,17 +5,13 @@
 
 package org.schabi.newpipe.error
 
-import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.IntentCompat
-import androidx.core.net.toUri
 import com.grack.nanojson.JsonWriter
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -28,7 +24,7 @@ import org.schabi.newpipe.util.external_communication.ShareUtils
 import org.schabi.newpipe.util.text.setTextWithLinks
 
 /**
- * This activity is used to show error details and allow reporting them in various ways.
+ * This activity shows local error details that the user can copy or share.
  * Use [ErrorUtil.openActivity] to correctly open this activity.
  */
 class ErrorActivity : AppCompatActivity() {
@@ -57,9 +53,6 @@ class ErrorActivity : AppCompatActivity() {
             return "$name $osBase ${Build.VERSION.RELEASE} - ${Build.VERSION.SDK_INT}"
         }
 
-    private val errorEmailSubject: String
-        get() = "$ERROR_EMAIL_SUBJECT ${getString(R.string.app_name)} ${BuildConfig.VERSION_NAME}"
-
     // /////////////////////////////////////////////////////////////////////
     // Activity lifecycle
     // /////////////////////////////////////////////////////////////////////
@@ -76,7 +69,7 @@ class ErrorActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbarLayout.toolbar)
         supportActionBar?.apply {
             setDisplayHomeAsUpEnabled(true)
-            setTitle(R.string.error_report_title)
+            setTitle(R.string.backtube_error_details_title)
             setDisplayShowTitleEnabled(true)
         }
 
@@ -87,17 +80,7 @@ class ErrorActivity : AppCompatActivity() {
         // print current time, as zoned ISO8601 timestamp
         currentTimeStamp = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
-        binding.errorReportEmailButton.setOnClickListener { _ ->
-            openPrivacyPolicyDialog(this, "EMAIL")
-        }
-
-        binding.errorReportCopyButton.setOnClickListener { _ ->
-            ShareUtils.copyToClipboard(this, buildMarkdown())
-        }
-
-        binding.errorReportGitHubButton.setOnClickListener { _ ->
-            openPrivacyPolicyDialog(this, "GITHUB")
-        }
+        setupErrorActions()
 
         // normal bugreport
         buildInfo(errorInfo)
@@ -123,7 +106,7 @@ class ErrorActivity : AppCompatActivity() {
             R.id.menu_item_share_error -> {
                 ShareUtils.shareText(
                     applicationContext,
-                    getString(R.string.error_report_title),
+                    getString(R.string.backtube_error_details_title),
                     buildJson()
                 )
                 true
@@ -133,29 +116,10 @@ class ErrorActivity : AppCompatActivity() {
         }
     }
 
-    private fun openPrivacyPolicyDialog(context: Context, action: String) {
-        AlertDialog.Builder(context)
-            .setIcon(android.R.drawable.ic_dialog_alert)
-            .setTitle(R.string.privacy_policy_title)
-            .setMessage(R.string.start_accept_privacy_policy)
-            .setCancelable(false)
-            .setNeutralButton(R.string.read_privacy_policy) { _, _ ->
-                ShareUtils.openUrlInApp(context, context.getString(R.string.privacy_policy_url))
-            }
-            .setPositiveButton(R.string.accept) { _, _ ->
-                if (action == "EMAIL") { // send on email
-                    val intent = Intent(Intent.ACTION_SENDTO)
-                        .setData("mailto:".toUri()) // only email apps should handle this
-                        .putExtra(Intent.EXTRA_EMAIL, arrayOf(ERROR_EMAIL_ADDRESS))
-                        .putExtra(Intent.EXTRA_SUBJECT, errorEmailSubject)
-                        .putExtra(Intent.EXTRA_TEXT, buildJson())
-                    ShareUtils.openIntentInApp(context, intent)
-                } else if (action == "GITHUB") { // open the NewPipe issue page on GitHub
-                    ShareUtils.openUrlInApp(this, ERROR_GITHUB_ISSUE_URL)
-                }
-            }
-            .setNegativeButton(R.string.decline, null)
-            .show()
+    private fun setupErrorActions() {
+        binding.errorReportCopyButton.setOnClickListener {
+            ShareUtils.copyToClipboard(this, buildMarkdown())
+        }
     }
 
     private fun formErrorText(stacktrace: Array<String>): String {
@@ -273,10 +237,5 @@ class ErrorActivity : AppCompatActivity() {
 
         // BUNDLE TAGS
         const val ERROR_INFO = "error_info"
-
-        private const val ERROR_EMAIL_ADDRESS = "crashreport@newpipe.schabi.org"
-        private const val ERROR_EMAIL_SUBJECT = "Exception in "
-
-        private const val ERROR_GITHUB_ISSUE_URL = "https://github.com/TeamNewPipe/NewPipe/issues"
     }
 }

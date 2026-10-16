@@ -121,7 +121,7 @@ class ErrorUtil {
                     context.getString(R.string.error_report_channel_id)
                 )
                     .setSmallIcon(R.drawable.ic_bug_report)
-                    .setContentTitle(context.getString(R.string.error_report_notification_title))
+                    .setContentTitle(context.getString(R.string.backtube_error_notification_title))
                     .setContentText(errorInfo.getMessage(context))
                     .setAutoCancel(true)
                     .setContentIntent(

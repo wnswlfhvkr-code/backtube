@@ -30,7 +30,7 @@ import net.newpipe.app.preview.ThemePreviewProvider
 import net.newpipe.app.screen.about.navigation.Page
 import net.newpipe.app.theme.currentServiceScheme
 import newpipe.shared.generated.resources.Res
-import newpipe.shared.generated.resources.title_activity_about
+import newpipe.shared.generated.resources.backtube_about_title
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -56,7 +56,7 @@ fun AboutScreenContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = stringResource(Res.string.title_activity_about),
+                title = stringResource(Res.string.backtube_about_title),
                 onNavigateUp = onNavigateUp
             )
         }
