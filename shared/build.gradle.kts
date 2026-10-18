@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.jetbrains.kotlin.multiplatform)
@@ -147,6 +149,17 @@ kotlin {
 
 dependencies {
     androidRuntimeClasspath(libs.jetbrains.compose.tooling)
+}
+
+tasks.named<Test>("jvmTest") {
+    // Keep native UI-test caches inside the build when the user's home is read-only.
+    systemProperty("skiko.data.path", layout.buildDirectory.dir("skiko-test-cache").get().asFile.absolutePath)
+}
+
+tasks.register("verifySharedUi") {
+    group = "verification"
+    description = "Runs common Compose UI regressions on the supported JVM runtime."
+    dependsOn("jvmTest")
 }
 
 aboutLibraries {
