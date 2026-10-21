@@ -715,9 +715,15 @@ public final class Player implements PlaybackListener, Listener {
 
     public void handleIntentPost(final PlayerType oldPlayerType) {
         if (oldPlayerType != playerType && playQueue != null) {
-            // If playerType changes from one to another we should reload the player
-            // (to disable/enable video stream or to set quality)
-            reloadPlayQueueManager();
+            if (playQueue.getStreams().stream().allMatch(item ->
+                    OfflineStore.isLocalUrl(item.getUrl()))) {
+                // Local sources already contain both tracks. The intent may have consumed a
+                // recovery snapshot by seeking; reloading now would restart that file at zero.
+                useVideoAndSubtitles(!audioPlayerSelected() && isScreenOn());
+            } else {
+                // Remote streams may need a different resolved source/quality for the new type.
+                reloadPlayQueueManager();
+            }
         }
 
         UIs.call(PlayerUi::setupAfterIntent);

@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,12 +18,36 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.offline.OfflineMediaTag;
 import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
+import org.schabi.newpipe.player.ui.PlayerUiList;
+import org.schabi.newpipe.util.NavigationHelper;
 
 import java.lang.reflect.Field;
 import java.util.List;
 
 /** Local renderer switches must preserve the queue/recovery and never invoke a remote resolver. */
 public class OfflineVideoRendererTest {
+    @Test
+    public void changingLocalPlayerTypeNeverReloadsAfterRecoveryWasConsumed() throws Exception {
+        final Player player = mock(Player.class, CALLS_REAL_METHODS);
+        final OfflinePlayQueue queue = new OfflinePlayQueue(List.of(new StreamInfoItem(0,
+                "backtube-offline:video", "Generated video", StreamType.VIDEO_STREAM)), 0);
+        set(player, "playQueue", queue);
+        set(player, "UIs", mock(PlayerUiList.class));
+        doNothing().when(player).reloadPlayQueueManager();
+        doNothing().when(player).useVideoAndSubtitles(true);
+        doNothing().when(player).useVideoAndSubtitles(false);
+        org.mockito.Mockito.doReturn(true).when(player).isScreenOn();
+        try (var navigation = mockStatic(NavigationHelper.class)) {
+            set(player, "playerType", PlayerType.MAIN);
+            player.handleIntentPost(PlayerType.AUDIO);
+            set(player, "playerType", PlayerType.AUDIO);
+            player.handleIntentPost(PlayerType.MAIN);
+            verify(player, never()).reloadPlayQueueManager();
+            verify(player).useVideoAndSubtitles(true);
+            verify(player).useVideoAndSubtitles(false);
+        }
+    }
+
     @Test
     public void videoAndListeningSwitchOnlyRenderersAndPreservePendingRecovery() throws Exception {
         final Player player = mock(Player.class, CALLS_REAL_METHODS);

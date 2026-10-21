@@ -20,3 +20,8 @@ on 2026-10-21 using FFmpeg lavfi `testsrc2` and `sine`, with no downloaded mater
 The authors dedicate these generated fixtures to the public domain (CC0-1.0).
 The MP4 contains 3 seconds of H.264 320x180 at 12 fps and AAC 48 kHz audio; the M4A
 contains 3 seconds of AAC 48 kHz audio only. `ffprobe` verified both stream layouts.
+
+`offline-generated-av.webm` uses the same generated sources and CC0 dedication,
+with VP8 320x180 at 12 fps and Vorbis 48 kHz audio for codec-independent routing
+checks. Pass instrumentation argument `offlineVideoFixture=webm` to select it;
+the default remains H.264/AAC MP4. Keep results for both codecs separate.

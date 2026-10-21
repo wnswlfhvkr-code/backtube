@@ -15,6 +15,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.view.View;
+import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.core.content.ContextCompat;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -29,6 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.schabi.newpipe.MainActivity;
+import org.schabi.newpipe.R;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.SavedPlaybackTestSupport.RejectNetwork;
@@ -42,7 +44,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-/** Owned generated H264/AAC files, real MAIN surface and decoder counters, no network allowed. */
+/** Owned generated media, real MAIN surface and decoder counters, no extractor network allowed. */
 @RunWith(AndroidJUnit4.class)
 public class OfflineVideoPlaybackTest {
     private final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -134,11 +136,20 @@ public class OfflineVideoPlaybackTest {
             runOnMain(() -> {
                 player.continueInBackgroundOnUiExit();
                 assertEquals(PlayerType.AUDIO, player.getPlayerType());
-                NavigationHelper.playOnMainPlayer(context, player.getPlayQueue(), true);
+                context.startActivity(new Intent(context, PlayQueueActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             });
+            assertTrue(waitFor(() -> callOnMain(() ->
+                    SavedPlaybackTestSupport.controllerReady(player)), 30));
+            runOnMain(() -> assertTrue(SavedPlaybackTestSupport.activeQueueActivity()
+                    .findViewById(R.id.metadata).performAccessibilityAction(
+                            AccessibilityNodeInfo.ACTION_EXPAND, null)));
             assertTrue("paused saved video did not reopen MAIN", waitFor(() -> callOnMain(() ->
                     player.getPlayerType() == PlayerType.MAIN
-                            && player.UIs().get(MainPlayerUi.class).isPresent()
+                            && player.UIs().get(MainPlayerUi.class).map(ui ->
+                                    ui.getBinding().surfaceView.isShown()
+                                            && ui.getBinding().surfaceView.getHolder()
+                                                    .getSurface().isValid()).orElse(false)
                             && player.getExoPlayer().getCurrentTracks()
                                     .isTypeSelected(C.TRACK_TYPE_VIDEO)), 30));
             runOnMain(() -> {
@@ -206,9 +217,13 @@ public class OfflineVideoPlaybackTest {
     }
 
     private OfflineStore.Entry save(final boolean video) throws Exception {
-        final String asset = video ? "offline-generated-av.mp4" : "offline-generated-audio.m4a";
+        final boolean webm = "webm".equals(InstrumentationRegistry.getArguments()
+                .getString("offlineVideoFixture", "mp4"));
+        final String asset = video ? webm ? "offline-generated-av.webm" : "offline-generated-av.mp4"
+                : "offline-generated-audio.m4a";
         final OfflineStore.Entry entry = library.store().create("Generated offline fixture", "", 0,
-                "file:///generated/" + asset, video ? "video/mp4" : "audio/mp4");
+                "file:///generated/" + asset,
+                video ? webm ? "video/webm" : "video/mp4" : "audio/mp4");
         created.add(entry.id);
         try (InputStream input = InstrumentationRegistry.getInstrumentation().getContext()
                 .getAssets().open(asset)) {
