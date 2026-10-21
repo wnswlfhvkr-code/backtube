@@ -18,6 +18,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
+import org.schabi.newpipe.player.playqueue.PlayQueue;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,6 +56,18 @@ public final class OfflineLibrary {
 
     public OfflineStore store() {
         return store;
+    }
+
+    /** A saved queue needs a surface even when an audio item comes before its video.
+     * @param queue the requested playback snapshot
+     * @return whether every item is local and at least one is video
+     */
+    public static boolean isVideoQueue(@Nullable final PlayQueue queue) {
+        return queue != null && !queue.isEmpty()
+                && queue.getStreams().stream().allMatch(item ->
+                        OfflineStore.isLocalUrl(item.getUrl()))
+                && queue.getStreams().stream().anyMatch(item ->
+                        item.getStreamType() == StreamType.VIDEO_STREAM);
     }
 
     public boolean isCopying(final String id) {

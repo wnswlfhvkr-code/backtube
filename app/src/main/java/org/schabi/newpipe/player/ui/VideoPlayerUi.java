@@ -1074,6 +1074,10 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
                 case VIDEO_STREAM:
                 case POST_LIVE_STREAM:
+                    if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+                        binding.playbackEndTime.setVisibility(View.VISIBLE);
+                        break;
+                    }
                     if (player.getCurrentMetadata() != null
                             && player.getCurrentMetadata().getMaybeQuality().isEmpty()
                             || (info.getVideoStreams().isEmpty()

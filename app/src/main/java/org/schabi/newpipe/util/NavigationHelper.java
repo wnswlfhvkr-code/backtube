@@ -470,7 +470,7 @@ public final class NavigationHelper {
                                                final boolean switchingPlayers,
                                                final boolean playImmediately) {
         SAVED_NAVIGATION_REQUESTS.remove(context);
-        if (OfflineStore.isLocalUrl(url)) {
+        if (OfflineStore.isLocalUrl(url) && !OfflineLibrary.isVideoQueue(playQueue)) {
             openSavedPlayback(context, serviceId, url, playQueue,
                     switchingPlayers, playImmediately);
             return;
@@ -695,7 +695,7 @@ public final class NavigationHelper {
                                        final boolean switchingPlayers,
                                        final boolean playImmediately) {
         SAVED_NAVIGATION_REQUESTS.remove(context);
-        if (OfflineStore.isLocalUrl(url)) {
+        if (OfflineStore.isLocalUrl(url) && !OfflineLibrary.isVideoQueue(playQueue)) {
             openSavedPlayback(context, serviceId, url, playQueue,
                     switchingPlayers, playImmediately);
             return;
@@ -736,8 +736,13 @@ public final class NavigationHelper {
                                     || !navigationContextAlive(context)) {
                                 return;
                             }
-                            playOnBackgroundPlayer(context, saved, true);
-                            openSavedController(context);
+                            if (OfflineLibrary.isVideoQueue(saved)) {
+                                openVideoDetail(context, serviceId, url,
+                                        saved.getItem().getTitle(), saved, false, true);
+                            } else {
+                                playOnBackgroundPlayer(context, saved, true);
+                                openSavedController(context);
+                            }
                         }
 
                         @Override

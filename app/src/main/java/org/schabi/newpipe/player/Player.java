@@ -3148,6 +3148,11 @@ public final class Player implements PlaybackListener, Listener {
 
 
         getCurrentStreamInfo().ifPresentOrElse(info -> {
+            if (OfflineStore.isLocalUrl(info.getUrl())) {
+                // Owned progressive files already contain their tracks. Switching the renderers
+                // must not reload the queue, replace its recovery position or resume a pause.
+                return;
+            }
             // In case we don't know the source type, fall back to either video-with-audio, or
             // audio-only source type
             final SourceType sourceType = videoResolver.getStreamSourceType()

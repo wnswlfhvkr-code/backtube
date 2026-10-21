@@ -13,3 +13,10 @@ ffmpeg -hide_banner -loglevel error \
   -c:v libx264 -profile:v baseline -pix_fmt yuv420p \
   -c:a aac -b:a 16k -movflags +faststart listening-mode-fixture.mp4
 ```
+# Offline video fixtures
+
+`offline-generated-av.mp4` and `offline-generated-audio.m4a` were generated locally
+on 2026-10-21 using FFmpeg lavfi `testsrc2` and `sine`, with no downloaded material.
+The authors dedicate these generated fixtures to the public domain (CC0-1.0).
+The MP4 contains 3 seconds of H.264 320x180 at 12 fps and AAC 48 kHz audio; the M4A
+contains 3 seconds of AAC 48 kHz audio only. `ffprobe` verified both stream layouts.

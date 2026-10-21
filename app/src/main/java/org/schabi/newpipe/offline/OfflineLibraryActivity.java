@@ -683,8 +683,12 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.offline_no_playable, Toast.LENGTH_SHORT).show();
             return;
         }
-        NavigationHelper.playOnBackgroundPlayer(this, queue, true, null, !individual);
-        NavigationHelper.openPlayQueue(this);
+        if (OfflineLibrary.isVideoQueue(queue)) {
+            NavigationHelper.playOnMainPlayer((android.content.Context) this, queue, false);
+        } else {
+            NavigationHelper.playOnBackgroundPlayer(this, queue, true, null, !individual);
+            NavigationHelper.openPlayQueue(this);
+        }
     }
 
     private void commitMove(@Nullable final OfflineShelfOrder.Move move) {

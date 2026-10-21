@@ -273,6 +273,10 @@ public final class VideoDetailFragment
 
         final Optional<MainPlayerUi> playerUi = player.UIs().get(MainPlayerUi.class);
         if (!player.videoPlayerSelected() && !playAfterConnect) {
+            if (currentInfo != null
+                    && org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(playQueue)) {
+                openMainPlayer();
+            }
             return;
         }
 
@@ -870,7 +874,9 @@ public final class VideoDetailFragment
     }
 
     private void runWorker(final boolean forceLoad, final boolean addToBackStack) {
-        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+        final boolean savedVideo =
+                org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(playQueue);
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url) && !savedVideo) {
             redirectSavedDetails();
             return;
         }
@@ -880,7 +886,9 @@ public final class VideoDetailFragment
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(result -> {
                     isLoading.set(false);
-                    hideMainPlayerOnLoadingNewStream();
+                    if (!savedVideo) {
+                        hideMainPlayerOnLoadingNewStream();
+                    }
                     if (result.getAgeLimit() != NO_AGE_LIMIT && !prefs.getBoolean(
                             getString(R.string.show_age_restricted_content), false)) {
                         hideAgeRestrictedContent();
@@ -897,7 +905,7 @@ public final class VideoDetailFragment
                             }
                         }
 
-                        if (isAutoplayEnabled() || forceFullscreen) {
+                        if (savedVideo || isAutoplayEnabled() || forceFullscreen) {
                             openVideoPlayerAutoFullscreen();
                         }
                     }
@@ -926,6 +934,16 @@ public final class VideoDetailFragment
         pageAdapter.clearAllItems();
         tabIcons.clear();
         tabContentDescriptions.clear();
+
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
+            binding.viewPager.setVisibility(View.GONE);
+            binding.tabLayout.setVisibility(View.GONE);
+            if (binding.relatedItemsLayout != null) {
+                binding.relatedItemsLayout.setVisibility(View.GONE);
+            }
+            pageAdapter.notifyDataSetUpdate();
+            return;
+        }
 
         if (shouldShowComments()) {
             pageAdapter.addFragment(
@@ -981,6 +999,9 @@ public final class VideoDetailFragment
     }
 
     private void updateTabs(@NonNull final StreamInfo info) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+            return;
+        }
         if (showRelatedItems) {
             final List<InfoItem> items = isPlayerAvailable()
                     ? player.getRelatedItemsForPlayback(info) : info.getRelatedItems();
@@ -1142,7 +1163,8 @@ public final class VideoDetailFragment
             onScreenRotationButtonClicked();
         }
 
-        if (PreferenceManager.getDefaultSharedPreferences(activity)
+        if (!org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)
+                && PreferenceManager.getDefaultSharedPreferences(activity)
                 .getBoolean(this.getString(R.string.use_external_video_player_key), false)) {
             showExternalVideoPlaybackDialog();
         } else {
@@ -1512,7 +1534,8 @@ public final class VideoDetailFragment
         binding.detailSecondaryControlPanel.setVisibility(View.GONE);
 
         if (binding.relatedItemsLayout != null) {
-            if (showRelatedItems) {
+            if (showRelatedItems
+                    && !org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
                 binding.relatedItemsLayout.setVisibility(
                         isFullscreen() ? View.GONE : View.INVISIBLE);
             } else {
@@ -1639,14 +1662,16 @@ public final class VideoDetailFragment
             }
         }
 
-        binding.detailControlsDownload.setVisibility(
-                StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
-        binding.detailControlsOfflineSave.setVisibility(
-                StreamTypeUtil.isLiveStream(info.getStreamType()) ? View.GONE : View.VISIBLE);
+        final boolean local = org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl());
+        final boolean canDownload = !local && !StreamTypeUtil.isLiveStream(info.getStreamType());
+        binding.detailControlsDownload.setVisibility(canDownload ? View.VISIBLE : View.GONE);
+        binding.detailControlsOfflineSave.setVisibility(canDownload ? View.VISIBLE : View.GONE);
 
         final boolean noVideoStreams =
-                info.getVideoStreams().isEmpty() && info.getVideoOnlyStreams().isEmpty();
-        binding.detailControlsPopup.setVisibility(noVideoStreams ? View.GONE : View.VISIBLE);
+                !(local && info.getStreamType() == StreamType.VIDEO_STREAM)
+                        && info.getVideoStreams().isEmpty() && info.getVideoOnlyStreams().isEmpty();
+        binding.detailControlsPopup.setVisibility(
+                local || noVideoStreams ? View.GONE : View.VISIBLE);
         binding.detailThumbnailPlayButton.setImageResource(
                 noVideoStreams ? R.drawable.ic_headset_shadow : R.drawable.ic_play_arrow_shadow);
     }
@@ -1875,7 +1900,8 @@ public final class VideoDetailFragment
 
     @Override
     public void onMetadataUpdate(final StreamInfo info, final PlayQueue queue) {
-        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())
+                && !org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(queue)) {
             if (queue.equalStreams(playQueue)) {
                 updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
             }
@@ -1916,7 +1942,8 @@ public final class VideoDetailFragment
     }
 
     private void refreshRelatedItems(final StreamInfo info) {
-        if (!showRelatedItems || !isPlayerAndPlayerServiceAvailable()) {
+        if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())
+                || !showRelatedItems || !isPlayerAndPlayerServiceAvailable()) {
             return;
         }
         final List<InfoItem> items = player.getRelatedItemsForPlayback(info);
@@ -1967,7 +1994,8 @@ public final class VideoDetailFragment
         }
 
         if (binding.relatedItemsLayout != null) {
-            if (showRelatedItems) {
+            if (showRelatedItems
+                    && !org.schabi.newpipe.offline.OfflineStore.isLocalUrl(url)) {
                 binding.relatedItemsLayout.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
             } else {
                 binding.relatedItemsLayout.setVisibility(View.GONE);

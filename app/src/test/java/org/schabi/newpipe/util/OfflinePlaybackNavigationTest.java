@@ -32,6 +32,8 @@ import org.junit.rules.TemporaryFolder;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.MainActivity;
+import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineLibraryActivity;
 import org.schabi.newpipe.offline.OfflineStore;
@@ -264,6 +266,55 @@ public class OfflinePlaybackNavigationTest {
         verify(intents.constructed().get(0)).putExtra(Player.RESUME_PLAYBACK, true);
         toasts.verify(() -> Toast.makeText(eq(shelf),
                 eq(R.string.background_player_playing_toast), anyInt()), never());
+    }
+
+    @Test
+    public void savedVideoSingleSelectionOpensMainVideoScreen() throws Exception {
+        final OfflineStore.Entry video = savedVideo();
+        requestShelfPlayback(shelfFixture(), video);
+        assertEquals(List.of(MainActivity.class), targets);
+        assertEquals(video.localUrl(), deliveredQueues.get(0).getItem().getUrl());
+        verify(intents.constructed().get(0)).putExtra(
+                VideoDetailFragment.KEY_PLAY_IMMEDIATELY, true);
+    }
+
+    @Test
+    public void selectedAudioThenVideoQueueOpensMainWithoutLosingOrder() throws Exception {
+        final OfflineStore.Entry video = savedVideo();
+        requestSelectedPlayback(shelfFixture(), List.of(entry.id, video.id));
+        assertEquals(List.of(MainActivity.class), targets);
+        assertEquals(List.of(entry.localUrl(), video.localUrl()), deliveredQueues.get(0)
+                .getStreams().stream().map(item -> item.getUrl()).toList());
+        assertTrue(deliveredQueues.get(0).isOfflineOnly());
+    }
+
+    @Test
+    public void savedVideoHistoryResolvesOwnedQueueAndOpensMain() throws Exception {
+        final OfflineStore.Entry video = savedVideo();
+        NavigationHelper.openVideoDetail(context, 0, video.localUrl(), video.title,
+                null, false, true);
+        assertEquals(List.of(MainActivity.class), targets);
+        assertEquals(video.localUrl(), deliveredQueues.get(0).getItem().getUrl());
+    }
+
+    @Test
+    public void expandingSavedVideoPreservesSwitchingPlaybackIntent() throws Exception {
+        final PlayQueue videoQueue = OfflineLibrary.get(context).queue(savedVideo());
+        NavigationHelper.playOnMainPlayer(context, videoQueue, true);
+        assertEquals(List.of(MainActivity.class), targets);
+        assertSame(videoQueue, deliveredQueues.get(0));
+        verify(intents.constructed().get(0)).putExtra(
+                VideoDetailFragment.KEY_SWITCHING_PLAYERS, true);
+        verify(intents.constructed().get(0)).putExtra(
+                VideoDetailFragment.KEY_PLAY_IMMEDIATELY, false);
+    }
+
+    private OfflineStore.Entry savedVideo() throws Exception {
+        final OfflineLibrary library = OfflineLibrary.get(context);
+        final OfflineStore.Entry video = library.store().create("Generated video", "", 0,
+                "file:///generated-av.mp4", "video/mp4");
+        library.store().copy(video.id, new ByteArrayInputStream(new byte[]{4, 5, 6}));
+        return video;
     }
 
     @Test
