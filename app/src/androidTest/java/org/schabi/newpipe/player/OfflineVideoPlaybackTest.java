@@ -41,6 +41,7 @@ import org.schabi.newpipe.util.NavigationHelper;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -222,7 +223,7 @@ public class OfflineVideoPlaybackTest {
         final String asset = video ? webm ? "offline-generated-av.webm" : "offline-generated-av.mp4"
                 : "offline-generated-audio.m4a";
         final OfflineStore.Entry entry = library.store().create("Generated offline fixture", "", 0,
-                "file:///generated/" + asset,
+                "file:///generated/" + UUID.randomUUID() + "/" + asset,
                 video ? webm ? "video/webm" : "video/mp4" : "audio/mp4");
         created.add(entry.id);
         try (InputStream input = InstrumentationRegistry.getInstrumentation().getContext()
