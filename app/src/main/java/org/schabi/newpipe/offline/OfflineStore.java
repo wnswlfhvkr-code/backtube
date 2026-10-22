@@ -440,6 +440,20 @@ public final class OfflineStore {
         }
     }
 
+    /**
+     * Uses registration identity and media-kind rules without allocating another save.
+     * @param serviceId provider identity
+     * @param origin original stream or owned local identity
+     * @param mime requested media kind
+     * @return whether a matching READY record has complete readable owned bytes
+     * @throws IOException when saved metadata cannot be refreshed
+     */
+    public synchronized boolean hasCompletedSave(final int serviceId, final String origin,
+                                                  final String mime) throws IOException {
+        final Entry entry = existingSave(serviceId, origin, "giga", mime);
+        return entry != null && entry.state == State.READY;
+    }
+
     private Entry existingSave(final int serviceId, final String origin, final String source,
                                 final String mime) throws IOException {
         refresh();
@@ -528,7 +542,8 @@ public final class OfflineStore {
             if (entry.state != State.READY) {
                 continue;
             }
-            if (!file(entry).isFile() || file(entry).length() != entry.bytes) {
+            if (entry.bytes <= 0 || !file(entry).isFile() || !file(entry).canRead()
+                    || file(entry).length() != entry.bytes) {
                 save(entry.changed(State.FAILED, entry.bytes, 0));
             }
         }

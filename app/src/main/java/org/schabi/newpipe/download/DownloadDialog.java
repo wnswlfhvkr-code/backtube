@@ -81,6 +81,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import us.shandian.giga.get.MissionRecoveryInfo;
 import us.shandian.giga.postprocessing.Postprocessing;
 import us.shandian.giga.service.DownloadManager;
@@ -114,6 +117,7 @@ public class DownloadDialog extends DialogFragment
     private StoredDirectoryHelper mainStorageVideo = null;
     private DownloadManager downloadManager = null;
     private MenuItem okButton = null;
+    @Nullable private Toast alreadySavedToast;
     private Context context = null;
     private boolean askForSavePath;
     @State
@@ -209,6 +213,63 @@ public class DownloadDialog extends DialogFragment
 
     private boolean isOfflineSave() {
         return getArguments() != null && getArguments().getBoolean("offline_save_only");
+    }
+
+    /**
+     * A generic entry may stop early only when no other downloadable kind remains to choose.
+     * @param context application storage context
+     * @param info already loaded stream metadata; never re-extracted here
+     * @return whether every available audio/video kind has readable completed owned bytes
+     * @throws IOException when saved metadata cannot be checked
+     */
+    public static boolean allOfflineKindsSaved(final Context context, final StreamInfo info)
+            throws IOException {
+        final boolean video = !getStreamsOfSpecifiedDelivery(info.getVideoStreams(),
+                PROGRESSIVE_HTTP).isEmpty() || !getStreamsOfSpecifiedDelivery(
+                info.getVideoOnlyStreams(), PROGRESSIVE_HTTP).isEmpty();
+        final boolean audio = !getStreamsOfSpecifiedDelivery(info.getAudioStreams(),
+                PROGRESSIVE_HTTP).isEmpty();
+        if (!video && !audio) {
+            return false;
+        }
+        final org.schabi.newpipe.offline.OfflineStore store =
+                org.schabi.newpipe.offline.OfflineLibrary.get(context).store();
+        synchronized (store) {
+            return (!video || store.hasCompletedSave(info.getServiceId(), info.getUrl(), "video/"))
+                    && (!audio || store.hasCompletedSave(
+                            info.getServiceId(), info.getUrl(), "audio/"));
+        }
+    }
+
+    public static Toast showAlreadySavedToast(final Context context,
+                                              @Nullable final Toast previous) {
+        if (previous != null) {
+            previous.cancel();
+        }
+        final Toast toast = Toast.makeText(context.getApplicationContext(),
+                R.string.offline_already_saved, Toast.LENGTH_SHORT);
+        toast.show();
+        return toast;
+    }
+
+    private boolean rejectCompletedOfflineSelection() {
+        final int selected = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+        final String mime = selected == R.id.video_button ? "video/"
+                : selected == R.id.audio_button ? "audio/" : null;
+        if (mime == null) {
+            return false;
+        }
+        try {
+            if (!org.schabi.newpipe.offline.OfflineLibrary.get(context).store()
+                    .hasCompletedSave(currentInfo.getServiceId(), currentInfo.getUrl(), mime)) {
+                return false;
+            }
+            alreadySavedToast = showAlreadySavedToast(context, alreadySavedToast);
+            dismiss();
+        } catch (final IOException error) {
+            showFailedDialog(R.string.offline_storage_error);
+        }
+        return true;
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -408,6 +469,15 @@ public class DownloadDialog extends DialogFragment
 
     private void fetchStreamsSize() {
         disposables.clear();
+        if (isOfflineSave()) {
+            final int selected = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+            if (selected == R.id.video_button) {
+                fetchOfflineSize(wrappedVideoStreams, selected, "video/");
+            } else if (selected == R.id.audio_button) {
+                fetchOfflineSize(getWrappedAudioStreams(), selected, "audio/");
+            }
+            return;
+        }
         disposables.add(StreamInfoWrapper.fetchMoreInfoForWrapper(wrappedVideoStreams)
                 .subscribe(result -> {
                     if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId()
@@ -435,6 +505,43 @@ public class DownloadDialog extends DialogFragment
                 }, throwable -> ErrorUtil.showSnackbar(context,
                         new ErrorInfo(throwable, UserAction.DOWNLOAD_OPEN_DIALOG,
                                 "Downloading subtitle stream size", currentInfo))));
+    }
+
+    private <T extends Stream> void fetchOfflineSize(final StreamInfoWrapper<T> wrapper,
+                                                    final int selected, final String mime) {
+        disposables.add(Single.fromCallable(() ->
+                org.schabi.newpipe.offline.OfflineLibrary.get(context).store().hasCompletedSave(
+                        currentInfo.getServiceId(), currentInfo.getUrl(), mime))
+                .subscribeOn(Schedulers.io())
+                .filter(complete -> !complete)
+                .flatMapSingle(ignored -> fetchOfflineSelectionSizes(wrapper, selected))
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(ignored -> {
+                    if (dialogBinding == null || dialogBinding.videoAudioGroup
+                            .getCheckedRadioButtonId() != selected) {
+                        return;
+                    }
+                    if (selected == R.id.video_button) {
+                        setupVideoSpinner();
+                    } else {
+                        setupAudioSpinner();
+                    }
+                }, error -> ErrorUtil.showSnackbar(context, new ErrorInfo(error,
+                        UserAction.DOWNLOAD_OPEN_DIALOG, "Checking saved stream metadata",
+                        currentInfo))));
+    }
+
+    private <T extends Stream> Single<Boolean> fetchOfflineSelectionSizes(
+            final StreamInfoWrapper<T> wrapper, final int selected) {
+        final Single<Boolean> primary = StreamInfoWrapper.fetchMoreInfoForWrapper(wrapper);
+        if (selected == R.id.video_button && videoStreamsAdapter.getAllSecondary() != null
+                && videoStreamsAdapter.getAllSecondary().size() > 0) {
+            // Video-only candidates need audio sizes too, even if an audio copy is already saved.
+            return primary.flatMap(changed -> StreamInfoWrapper
+                    .fetchMoreInfoForWrapper(getWrappedAudioStreams())
+                    .map(audioChanged -> changed || audioChanged));
+        }
+        return primary;
     }
 
     private void setupAudioTrackSpinner() {
@@ -595,6 +702,9 @@ public class DownloadDialog extends DialogFragment
         }
 
         dialogBinding.threads.setEnabled(flag);
+        if (isOfflineSave()) {
+            fetchStreamsSize();
+        }
     }
 
     @Override
@@ -778,14 +888,15 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void prepareSelectedDownload() {
+        if (saveOffline && rejectCompletedOfflineSelection()) {
+            return;
+        }
         final StoredDirectoryHelper mainStorage;
         final MediaFormat format;
         final String selectedMediaType;
         final long size;
-
         // first, build the filename and get the output folder (if possible)
         // later, run a very very very large file checking logic
-
         filenameTmp = getNameEditText().concat(".");
 
         final int checkedRadioButtonId =
@@ -841,6 +952,11 @@ public class DownloadDialog extends DialogFragment
                 final org.schabi.newpipe.offline.OfflineStore.Entry entry =
                         library.beginDownload(currentInfo.getName(), currentInfo.getUrl(),
                                 currentInfo.getServiceId(), mimeTmp, size);
+                if (entry.state == org.schabi.newpipe.offline.OfflineStore.State.READY) {
+                    alreadySavedToast = showAlreadySavedToast(context, alreadySavedToast);
+                    dismiss();
+                    return;
+                }
                 org.schabi.newpipe.offline.OfflineThumbnails.remember(context, library.store(),
                         entry, currentInfo.getThumbnails());
                 if ("giga".equals(entry.source)) {

@@ -218,6 +218,8 @@ public final class VideoDetailFragment
     @Nullable
     private StreamInfo currentInfo = null;
     private Disposable currentWorker;
+    @Nullable private Disposable offlineSaveCheck;
+    @Nullable private android.widget.Toast alreadySavedToast;
     @NonNull
     private final CompositeDisposable disposables = new CompositeDisposable();
     @Nullable
@@ -466,6 +468,10 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        if (offlineSaveCheck != null) {
+            offlineSaveCheck.dispose();
+            offlineSaveCheck = null;
+        }
         sleepTimerHandler.removeCallbacks(sleepTimerUpdater);
         dismissSleepTimerDialog();
         super.onDestroyView();
@@ -1730,16 +1736,34 @@ public final class VideoDetailFragment
     }
 
     private void openOfflineSaveDialog() {
-        if (currentInfo == null) {
+        if (currentInfo == null || (offlineSaveCheck != null && !offlineSaveCheck.isDisposed())) {
             return;
         }
-        try {
-            DownloadDialog.forOffline(activity, currentInfo)
-                    .show(getParentFragmentManager(), "offline_save");
-        } catch (final Exception e) {
-            ErrorUtil.showSnackbar(activity, new ErrorInfo(e, UserAction.DOWNLOAD_OPEN_DIALOG,
-                    "Showing offline save dialog", currentInfo));
-        }
+        final StreamInfo requested = currentInfo;
+        final android.content.Context storageContext = activity.getApplicationContext();
+        offlineSaveCheck = io.reactivex.rxjava3.core.Single.fromCallable(() ->
+                DownloadDialog.allOfflineKindsSaved(storageContext, requested))
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(complete -> {
+                    if (!isAdded() || getView() == null || currentInfo != requested) {
+                        return;
+                    }
+                    if (complete) {
+                        alreadySavedToast = DownloadDialog.showAlreadySavedToast(
+                                storageContext, alreadySavedToast);
+                    } else if (!getParentFragmentManager().isStateSaved()
+                            && getParentFragmentManager()
+                                    .findFragmentByTag("offline_save") == null) {
+                        DownloadDialog.forOffline(activity, requested)
+                                .showNow(getParentFragmentManager(), "offline_save");
+                    }
+                }, error -> {
+                    if (isAdded() && getView() != null && currentInfo == requested) {
+                        ErrorUtil.showSnackbar(activity, new ErrorInfo(error,
+                                UserAction.DOWNLOAD_OPEN_DIALOG, "Checking saved item", requested));
+                    }
+                });
     }
 
     public void openDownloadDialog() {
