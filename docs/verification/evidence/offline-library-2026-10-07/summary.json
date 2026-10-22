@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-07",
+  "base": "84b4e0e85f02f29a8523486345db5fc5df9e395d",
+  "branch": "feat/offline-library",
+  "command": "./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --console=plain",
+  "build": "passed",
+  "unit_tests": {
+    "tests": 201,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "offline_unit_tests": 23,
+  "changed_app_source_test_sha256": "b7b9ddb4f1ea896214721e6bb2db9d1a2ed68db4f5eeadcddd43877746784c46",
+  "changed_app_files": 28,
+  "android_runtime": {
+    "device": "API 35 x86_64 emulator, no KVM",
+    "result": "blocked before successful test execution",
+    "attempts": [
+      "instrumentation aborted: system crashed",
+      "process startup ANR; no successful test result"
+    ],
+    "final_test_apk": "compiled; final network-refresh assertion not run on-device"
+  },
+  "media": "generated only; no service media requested",
+  "review": "one independent review; material findings corrected; completion retry additionally regression-tested"
+}

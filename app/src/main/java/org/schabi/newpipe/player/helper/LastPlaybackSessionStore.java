@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.exoplayer2.Player;
+
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -17,6 +19,8 @@ import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
+import org.schabi.newpipe.offline.OfflineStore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -136,7 +140,10 @@ public final class LastPlaybackSessionStore {
             }
 
             // ponytail: restores only loaded entries; add pagination metadata if it becomes needed.
-            final PlayQueue queue = new SinglePlayQueue(restoredItems, index);
+            final boolean savedOnly = restoredItems.stream()
+                    .allMatch(item -> item.getUrl().startsWith(OfflineStore.LOCAL_PREFIX));
+            final PlayQueue queue = savedOnly ? new OfflinePlayQueue(restoredItems, index)
+                    : new SinglePlayQueue(restoredItems, index);
             for (int i = 0; i < autoQueued.size(); i++) {
                 queue.getItem(i).setAutoQueued(autoQueued.get(i));
             }
@@ -158,7 +165,8 @@ public final class LastPlaybackSessionStore {
     }
 
     private static boolean isValidRepeatMode(final int repeatMode) {
-        return repeatMode >= 0 && repeatMode <= 2;
+        return repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE
+                || repeatMode == Player.REPEAT_MODE_ALL;
     }
 
     private static boolean isValidQueue(@NonNull final PlayQueue queue,
@@ -183,9 +191,10 @@ public final class LastPlaybackSessionStore {
     public static final class Snapshot {
         @NonNull
         private final PlayQueue queue;
+        @Player.RepeatMode
         private final int repeatMode;
 
-        Snapshot(@NonNull final PlayQueue queue, final int repeatMode) {
+        Snapshot(@NonNull final PlayQueue queue, @Player.RepeatMode final int repeatMode) {
             this.queue = queue;
             this.repeatMode = repeatMode;
         }
@@ -195,6 +204,7 @@ public final class LastPlaybackSessionStore {
             return queue;
         }
 
+        @Player.RepeatMode
         public int getRepeatMode() {
             return repeatMode;
         }

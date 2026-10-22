@@ -1,0 +1,99 @@
+{
+  "product_source": "f77bc096bb551edeef84c1bc07b9db1f3c0dab7e",
+  "baseline": "eb3e92fe0f6bd2c8f5a95dc80d7516e23a081483",
+  "candidate": {
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1030,
+    "version_name": "0.29.1-backtube-offline-duplicate-20261022",
+    "size_bytes": 11548132,
+    "sha256": "3497a90217015429e88148e236ae1770eb9ad8f219ed954b8c985193d82d70d8",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "signature_valid": true,
+    "zipalign_valid": true,
+    "permissions_added": [],
+    "permissions_removed": []
+  },
+  "unit": {
+    "app": {
+      "suites": 90,
+      "tests": 560,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared_jvm": {
+      "suites": 9,
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 346
+    }
+  },
+  "android": {
+    "duplicate_ui": {
+      "tests": 2,
+      "failed": 0,
+      "api": 23,
+      "cloud_virtual_device": true,
+      "fixture": "generated-metadata-and-owned-bytes",
+      "cases": [
+        "savedAudioAllowsVideoSelectorButAudioConfirmationOnlyShowsToast",
+        "completedVideoRapidTapsShowShortToastWithoutSelectorOrNewSave"
+      ]
+    },
+    "thumbnails": {
+      "tests": 5,
+      "failed": 0,
+      "api": 23,
+      "cloud_virtual_device": true,
+      "fixture": "generated-images-and-webm-audio",
+      "cases": [
+        "cachedArtPersistsAndActualShelfShowsDistinctVideoAudioCoversAndLabels",
+        "saturatedArtworkWorkerNeverDelaysOwnedMediaSourceCreation",
+        "roomCachedCoverIsTriedAfterEightInfoCacheMisses",
+        "corruptMediaAndAudioWithoutCoverKeepPlaceholderWithoutLosingSave",
+        "legacyVideoWithoutImageExtractsLocalFrameAndKeepsMediaBytesAndOrder"
+      ]
+    },
+    "webm_playback": {
+      "tests": 3,
+      "failed": 0,
+      "api": 23,
+      "cloud_virtual_device": true,
+      "fixture": "webm-vp8-vorbis",
+      "cases": [
+        "audioOnlySaveRetainsAudioPlayerAndAudioDecoder",
+        "singleSavedVideoRendersFramesAndAudioWithoutNetwork",
+        "selectedAudioThenVideoRendersVideoOnAutomaticTransition"
+      ]
+    }
+  },
+  "update": {
+    "install_1029": true,
+    "install_1030_update": true,
+    "saved_metadata_unchanged": true,
+    "saved_media_sha_unchanged": true,
+    "actual_version_code": 1030,
+    "candidate_shelf_launch": true,
+    "passed": true,
+    "fixture": "Generated owned WebM and valid legacy-format READY metadata, seeded into private cloud baseline"
+  },
+  "review": {
+    "independent_read_only": true,
+    "remaining_findings": 0,
+    "secondary_audio_regression_fixed_and_tested": true
+  },
+  "limits": [
+    "Physical phone NOTRUN",
+    "H264 compatibility not revalidated; prior cloud decoder limitation remains",
+    "Real provider download/DASH mux and normal import flow NOTRUN in this scope",
+    "Complete task-removal/process-death matrix NOTRUN"
+  ],
+  "windows_validation": "Not required; not run",
+  "release_published": false,
+  "main_merged": false
+}

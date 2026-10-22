@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="offline_storage_summary" type="id" />
+    <item name="offline_saved_rows" type="id" />
+    <item name="offline_play_all" type="id" />
+    <item name="offline_playable_count" type="id" />
+    <item name="offline_manage" type="id" />
+    <item name="offline_move_up" type="id" />
+    <item name="offline_move_down" type="id" />
+    <item name="offline_retry" type="id" />
+    <item name="offline_pause" type="id" />
+    <item name="offline_delete" type="id" />
+    <item name="offline_select" type="id" />
+    <item name="offline_selected_count" type="id" />
+    <item name="offline_play_selected" type="id" />
+    <item name="offline_clear_selection" type="id" />
+    <item name="offline_cancel_selection" type="id" />
+</resources>

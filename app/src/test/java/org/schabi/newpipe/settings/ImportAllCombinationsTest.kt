@@ -41,7 +41,7 @@ class ImportAllCombinationsTest {
         filename: String,
         runTest: (test: () -> Unit) -> Unit
     ) {
-        val zipFile = File(classloader.getResource(filename)?.file!!)
+        val zipFile = File(classloader.getResource(filename)!!.toURI())
         val zip = Mockito.mock(StoredFileHelper::class.java, Mockito.withSettings().stubOnly())
         Mockito.`when`(zip.stream).then { FileStream(zipFile) }
 

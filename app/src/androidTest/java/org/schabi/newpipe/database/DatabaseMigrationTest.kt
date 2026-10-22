@@ -21,6 +21,7 @@ import org.schabi.newpipe.extractor.stream.StreamType
 @RunWith(AndroidJUnit4::class)
 class DatabaseMigrationTest {
     companion object {
+        private const val TEST_DATABASE_NAME = "migration-test.db"
         private const val DEFAULT_SERVICE_ID = 0
         private const val DEFAULT_URL = "https://www.youtube.com/watch?v=cDphUib5iG4"
         private const val DEFAULT_TITLE = "Test Title"
@@ -45,7 +46,7 @@ class DatabaseMigrationTest {
 
     @Test
     fun migrateDatabaseFrom2to3() {
-        val databaseInV2 = testHelper.createDatabase(AppDatabase.DATABASE_NAME, Migrations.DB_VER_2)
+        val databaseInV2 = testHelper.createDatabase(TEST_DATABASE_NAME, Migrations.DB_VER_2)
 
         databaseInV2.run {
             insert(
@@ -80,49 +81,49 @@ class DatabaseMigrationTest {
         }
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_3,
             true,
             Migrations.MIGRATION_2_3
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_4,
             true,
             Migrations.MIGRATION_3_4
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_5,
             true,
             Migrations.MIGRATION_4_5
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_6,
             true,
             Migrations.MIGRATION_5_6
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_7,
             true,
             Migrations.MIGRATION_6_7
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_8,
             true,
             Migrations.MIGRATION_7_8
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_9,
             true,
             Migrations.MIGRATION_8_9
@@ -164,7 +165,7 @@ class DatabaseMigrationTest {
 
     @Test
     fun migrateDatabaseFrom7to8() {
-        val databaseInV7 = testHelper.createDatabase(AppDatabase.DATABASE_NAME, Migrations.DB_VER_7)
+        val databaseInV7 = testHelper.createDatabase(TEST_DATABASE_NAME, Migrations.DB_VER_7)
 
         val defaultSearch1 = " abc "
         val defaultSearch2 = " abc"
@@ -211,14 +212,14 @@ class DatabaseMigrationTest {
         }
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_8,
             true,
             Migrations.MIGRATION_7_8
         )
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_9,
             true,
             Migrations.MIGRATION_8_9
@@ -235,7 +236,7 @@ class DatabaseMigrationTest {
 
     @Test
     fun migrateDatabaseFrom8to9() {
-        val databaseInV8 = testHelper.createDatabase(AppDatabase.DATABASE_NAME, Migrations.DB_VER_8)
+        val databaseInV8 = testHelper.createDatabase(TEST_DATABASE_NAME, Migrations.DB_VER_8)
 
         val localUid1: Long
         val localUid2: Long
@@ -290,7 +291,7 @@ class DatabaseMigrationTest {
         }
 
         testHelper.runMigrationsAndValidate(
-            AppDatabase.DATABASE_NAME,
+            TEST_DATABASE_NAME,
             Migrations.DB_VER_9,
             true,
             Migrations.MIGRATION_8_9
@@ -341,7 +342,7 @@ class DatabaseMigrationTest {
         val database: AppDatabase = Room.databaseBuilder(
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java,
-            AppDatabase.DATABASE_NAME
+            TEST_DATABASE_NAME
         )
             .build()
         testHelper.closeWhenFinished(database)

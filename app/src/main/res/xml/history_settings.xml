@@ -16,8 +16,8 @@
         android:defaultValue="true"
         android:dependency="@string/enable_watch_history_key"
         android:key="@string/enable_playback_resume_key"
-        android:summary="@string/enable_playback_resume_summary"
-        android:title="@string/enable_playback_resume_title"
+        android:summary="@string/playback_progress_details_summary"
+        android:title="@string/playback_progress_details_title"
         app:singleLineTitle="false"
         app:iconSpaceReserved="false" />
 

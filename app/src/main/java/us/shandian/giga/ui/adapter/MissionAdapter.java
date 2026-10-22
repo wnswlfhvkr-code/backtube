@@ -632,6 +632,20 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         if (h.item == null) return true;
 
         int id = option.getItemId();
+        if (id == R.id.offline_save && h.item.mission instanceof FinishedMission) {
+            Mission saved = h.item.mission;
+            if (checkInvalidFile(saved)) return true;
+            int serviceId = 0;
+            try {
+                serviceId = NewPipe.getServiceByUrl(saved.source).getServiceId();
+            } catch (Exception ignored) {
+                // Local files do not need an extractor service.
+            }
+            org.schabi.newpipe.offline.OfflineLibraryActivity.importDownload(mContext,
+                    saved.storage.getUri(), saved.storage.getName(), saved.source, serviceId,
+                    resolveMimeType(saved));
+            return true;
+        }
         DownloadMission mission = h.item.mission instanceof DownloadMission ? (DownloadMission) h.item.mission : null;
 
         if (mission != null) {
@@ -913,6 +927,9 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         }
 
         private void showPopupMenu() {
+            popupMenu.getMenu().findItem(R.id.offline_save).setVisible(
+                    item.mission instanceof FinishedMission
+                            && (item.mission.kind == 'a' || item.mission.kind == 'v'));
             retry.setVisible(false);
             cancel.setVisible(false);
             start.setVisible(false);

@@ -89,6 +89,7 @@ import com.google.android.exoplayer2.text.CueGroup;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
+import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.video.VideoSize;
 
 import org.schabi.newpipe.MainActivity;
@@ -114,9 +115,15 @@ import org.schabi.newpipe.player.helper.LoadController;
 import org.schabi.newpipe.player.helper.LastPlaybackSessionStore;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
+import org.schabi.newpipe.player.helper.PlaybackRecovery;
 import org.schabi.newpipe.player.helper.RecommendationExclusions;
 import org.schabi.newpipe.player.helper.SleepTimer;
+import org.schabi.newpipe.offline.OfflineLibrary;
+import org.schabi.newpipe.offline.OfflineMediaTag;
+import org.schabi.newpipe.player.playqueue.OfflinePlayQueue;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
+import org.schabi.newpipe.player.mediaitem.ExceptionTag;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationPlayerUi;
 import org.schabi.newpipe.player.playback.MediaSourceManager;
@@ -133,9 +140,9 @@ import org.schabi.newpipe.player.ui.PlayerUi;
 import org.schabi.newpipe.player.ui.PlayerUiList;
 import org.schabi.newpipe.player.ui.PopupPlayerUi;
 import org.schabi.newpipe.player.ui.VideoPlayerUi;
-import org.schabi.newpipe.util.DependentPreferenceHelper;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.ListHelper;
+import org.schabi.newpipe.util.InfoCache;
 import org.schabi.newpipe.util.DataSaver;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource;
 import org.schabi.newpipe.player.mediasource.FailedMediaSource.AudioOnlyUnavailableException;
@@ -184,6 +191,7 @@ public final class Player implements PlaybackListener, Listener {
     public static final String PLAYBACK_QUALITY = "playback_quality";
     public static final String PLAY_QUEUE_KEY = "play_queue_key";
     public static final String RESUME_PLAYBACK = "resume_playback";
+    public static final String FRESH_SELECTION = "fresh_selection";
     public static final String PLAY_WHEN_READY = "play_when_ready";
     public static final String PLAYER_TYPE = "player_type";
     public static final String PLAYER_INTENT_TYPE = "player_intent_type";
@@ -252,6 +260,7 @@ public final class Player implements PlaybackListener, Listener {
     // audio only mode does not mean that player type is background, but that the player was
     // minimized to background but will resume automatically to the original player type
     private boolean isAudioOnly = false;
+    private boolean listeningMode;
     private boolean isPrepared = false;
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -288,6 +297,12 @@ public final class Player implements PlaybackListener, Listener {
     private final Handler networkHandler = new Handler(Looper.getMainLooper());
     private String observedAudioQuality;
     private boolean destroyed;
+    private final PlaybackRecovery playbackRecovery = new PlaybackRecovery();
+    private final SerialDisposable recoveryRequest = new SerialDisposable();
+    private boolean recoveryFailed;
+    private boolean recoveryReloading;
+    private boolean recoveryRefreshingSource;
+    private boolean recoveryCanceled;
     private Network audioQualityNetwork;
     private final ConnectivityManager.NetworkCallback networkCallback =
             new ConnectivityManager.NetworkCallback() {
@@ -452,7 +467,8 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private void refreshNetworkAudioQuality() {
-        if (destroyed || !DataSaver.isEnabled(context)) {
+        if (destroyed || currentMetadata instanceof OfflineMediaTag
+                || !DataSaver.isEnabled(context)) {
             return;
         }
         final String quality = DataSaver.getAudioQuality(context);
@@ -517,7 +533,7 @@ public final class Player implements PlaybackListener, Listener {
             playerType = IntentCompat.getSerializableExtra(intent, PLAYER_TYPE, PlayerType.class);
         }
         initUIsForCurrentPlayerType();
-        isAudioOnly = audioPlayerSelected();
+        isAudioOnly = audioPlayerSelected() || listeningMode;
 
         if (intent.hasExtra(PLAYBACK_QUALITY)) {
             videoResolver.setPlaybackQuality(intent.getStringExtra(PLAYBACK_QUALITY));
@@ -558,13 +574,16 @@ public final class Player implements PlaybackListener, Listener {
             case TimestampChange -> {
                 final var data = Objects.requireNonNull(IntentCompat.getParcelableExtra(intent,
                         PLAYER_INTENT_DATA, TimestampChangeData.class));
+                if (playQueue != null && playQueue.isOfflineOnly()) {
+                    // Timestamp intents require remote StreamInfo; saved playback uses local media.
+                    return;
+                }
                 final Single<StreamInfo> single =
                         ExtractorHelper.getStreamInfo(data.getServiceId(), data.getUrl(), false);
                 streamItemDisposable.add(single.subscribeOn(Schedulers.io())
                         .observeOn(AndroidSchedulers.mainThread())
                         .subscribe(info -> {
                             final @Nullable PlayQueue oldPlayQueue = playQueue;
-                            info.setStartPosition(data.getSeconds());
                             final PlayQueueItem playQueueItem = new PlayQueueItem(info);
 
                             // If the stream is already playing,
@@ -591,10 +610,13 @@ public final class Player implements PlaybackListener, Listener {
                                 // else we add the timestamped stream behind the current video
                                 // and start playing it.
                                 } else {
-                                    oldPlayQueue.enqueueNext(playQueueItem, true);
-                                    oldPlayQueue.offsetIndex(1);
+                                    if (!oldPlayQueue.enqueueNextAndSelect(playQueueItem)) {
+                                        return;
+                                    }
                                     newPlayQueue = oldPlayQueue;
                                 }
+                                newPlayQueue.setRecovery(newPlayQueue.getIndex(),
+                                        data.getSeconds() * 1000L);
                                 initPlayback(newPlayQueue, playWhenReady);
                             }
 
@@ -626,15 +648,28 @@ public final class Player implements PlaybackListener, Listener {
         // branching parameters for below
         final boolean samePlayQueue = playQueue != null && playQueue.equalStreamsAndIndex(newQueue);
 
-        /*
-         * TODO As seen in #7427 this does not work:
-         * There are 3 situations when playback shouldn't be started from scratch (zero timestamp):
-         * 1. User pressed on a timestamp link and the same video should be rewound to the timestamp
-         * 2. User changed a player from, for example. main to popup, or from audio to main, etc
-         * 3. User chose to resume a video based on a saved timestamp from history of played videos
-         * In those cases time will be saved because re-init of the play queue is a not an instant
-         *  task and requires network calls
-         * */
+        final boolean freshSelection = intent.getBooleanExtra(FRESH_SELECTION, false);
+        if (freshSelection) {
+            cancelPlaybackRecovery();
+            playbackRecovery.reset();
+            recoveryFailed = false;
+            recoveryCanceled = false;
+            recoveryRefreshingSource = false;
+            recoveryReloading = false;
+            // Queue recovery also holds temporary state from a previous player/view. A new
+            // selection retains only its explicit timestamp, never per-item stop positions.
+            final long start = newQueue.getItem() == null ? PlayQueueItem.RECOVERY_UNSET
+                    : newQueue.getItem().getExplicitStartPositionMillis();
+            newQueue.clearRecovery();
+            if (samePlayQueue && playQueue != newQueue) {
+                playQueue.clearRecovery();
+            }
+            if (newQueue.getItem() != null) {
+                newQueue.setRecovery(newQueue.getIndex(),
+                        start == PlayQueueItem.RECOVERY_UNSET ? 0 : start);
+            }
+        }
+
         // seek to timestamp if stream is already playing
         if (!exoPlayerIsNull()
                 && newQueue.size() == 1 && newQueue.getItem() != null
@@ -648,6 +683,7 @@ public final class Player implements PlaybackListener, Listener {
                 simpleExoPlayer.prepare();
             }
             simpleExoPlayer.seekTo(playQueue.getIndex(), newQueue.getItem().getRecoveryPosition());
+            playQueue.unsetRecovery(playQueue.getIndex());
             simpleExoPlayer.setPlayWhenReady(playWhenReady);
 
         } else if (!exoPlayerIsNull()
@@ -661,45 +697,17 @@ public final class Player implements PlaybackListener, Listener {
                     == com.google.android.exoplayer2.Player.STATE_IDLE) {
                 simpleExoPlayer.prepare();
             }
+            if (freshSelection && newQueue.getItem() != null) {
+                simpleExoPlayer.seekTo(playQueue.getIndex(),
+                        newQueue.getItem().getRecoveryPosition());
+                playQueue.unsetRecovery(playQueue.getIndex());
+            }
             simpleExoPlayer.setPlayWhenReady(playWhenReady);
 
-        } else if (intent.getBooleanExtra(RESUME_PLAYBACK, false)
-                && DependentPreferenceHelper.getResumePlaybackEnabled(context)
-                // !samePlayQueue
-                && (playQueue == null || !playQueue.equalStreamsAndIndex(newQueue))
-                && !newQueue.isEmpty()
-                && newQueue.getItem() != null
-                && newQueue.getItem().getRecoveryPosition() == PlayQueueItem.RECOVERY_UNSET) {
-            databaseUpdateDisposable.add(recordManager.loadStreamState(newQueue.getItem())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    // Do not place initPlayback() in doFinally() because
-                    // it restarts playback after destroy()
-                    //.doFinally()
-                    .subscribe(
-                            state -> {
-                                if (!state.isFinished(newQueue.getItem().getDuration())) {
-                                    // resume playback only if the stream was not played to the end
-                                    newQueue.setRecovery(newQueue.getIndex(),
-                                            state.getProgressMillis());
-                                }
-                                initPlayback(newQueue, playWhenReady);
-                            },
-                            error -> {
-                                if (DEBUG) {
-                                    Log.w(TAG, "Failed to start playback", error);
-                                }
-                                // In case any error we can start playback without history
-                                initPlayback(newQueue, playWhenReady);
-                            },
-                            () -> {
-                                // Completed but not found in history
-                                initPlayback(newQueue, playWhenReady);
-                            }
-                    ));
         } else {
-            // Good to go...
-            // In a case of equal PlayQueues we can re-init old one but only when it is disposed
-            initPlayback(samePlayQueue ? playQueue : newQueue, playWhenReady);
+            // Fresh requests use the prepared incoming queue, including its explicit timestamp.
+            // Rebinds can reinitialize the equal old queue with its pending session recovery.
+            initPlayback(samePlayQueue && !freshSelection ? playQueue : newQueue, playWhenReady);
         }
 
     }
@@ -707,9 +715,15 @@ public final class Player implements PlaybackListener, Listener {
 
     public void handleIntentPost(final PlayerType oldPlayerType) {
         if (oldPlayerType != playerType && playQueue != null) {
-            // If playerType changes from one to another we should reload the player
-            // (to disable/enable video stream or to set quality)
-            reloadPlayQueueManager();
+            if (playQueue.getStreams().stream().allMatch(item ->
+                    OfflineStore.isLocalUrl(item.getUrl()))) {
+                // Local sources already contain both tracks. The intent may have consumed a
+                // recovery snapshot by seeking; reloading now would restart that file at zero.
+                useVideoAndSubtitles(!audioPlayerSelected() && isScreenOn());
+            } else {
+                // Remote streams may need a different resolved source/quality for the new type.
+                reloadPlayQueueManager();
+            }
         }
 
         UIs.call(PlayerUi::setupAfterIntent);
@@ -827,6 +841,12 @@ public final class Player implements PlaybackListener, Listener {
     //region Destroy and recovery
 
     private void destroyPlayer() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
+        recoveryReloading = false;
         sessionQueueChanges.set(null);
         recommendationRequest.set(null);
         if (DEBUG) {
@@ -1251,13 +1271,23 @@ public final class Player implements PlaybackListener, Listener {
             sleepTimer.onItemEnded();
         }
         if (!playWhenReady) {
+            // Audio focus can pause ExoPlayer directly. Keep its recovery source available
+            // for a valid focus gain; explicit pause/stop/timer actions cancel separately.
             recommendationRequest.set(null);
+        }
+        if (playWhenReady) {
+            recoveryCanceled = false;
         }
         if (playWhenReady && sleepTimer.expireIfDue()) {
             return;
         }
         if (playWhenReady && sleepTimerExpired) {
             simpleExoPlayer.pause();
+            return;
+        }
+        // Existing-queue and timestamp actions can set ExoPlayer's play intent directly.
+        if (playWhenReady && audioReactor != null && !isMuted() && !audioReactor.hasAudioFocus()
+                && !audioReactor.requestAudioFocus()) {
             return;
         }
         if (DEBUG) {
@@ -1304,11 +1334,19 @@ public final class Player implements PlaybackListener, Listener {
                 }
                 break;
             case com.google.android.exoplayer2.Player.STATE_READY: //3
+                if (currentMetadata != null && !(currentMetadata instanceof ExceptionTag)
+                        && !recoveryFailed) {
+                    recoveryReloading = false;
+                    recoveryRefreshingSource = false;
+                    recoveryRequest.set(null);
+                    playbackRecovery.recovered();
+                }
                 if (!isPrepared) {
                     isPrepared = true;
                     onPrepared(playWhenReady);
                 }
-                changeState(playWhenReady ? STATE_PLAYING : STATE_PAUSED);
+                // onPrepared may have paused playback after a denied focus request.
+                changeState(getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED);
                 break;
             case com.google.android.exoplayer2.Player.STATE_ENDED: // 4
                 sleepTimer.onItemEnded();
@@ -1398,7 +1436,7 @@ public final class Player implements PlaybackListener, Listener {
         // A restored paused player stops its progress loop as soon as it is ready.
         triggerProgressUpdate();
 
-        if (playWhenReady && !isMuted()) {
+        if (playWhenReady && !isMuted() && !audioReactor.hasAudioFocus()) {
             audioReactor.requestAudioFocus();
         }
     }
@@ -1468,9 +1506,31 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        if (playQueue instanceof OfflinePlayQueue queue) {
+            try {
+                final PlayQueueItem next = queue.completionSuccessor(
+                        OfflineLibrary.get(context).store(), getRepeatMode() == REPEAT_MODE_ALL);
+                if (next == null) {
+                    // Pause before removals: base queue removal can wrap its index to zero.
+                    pause();
+                } else {
+                    queue.setIndex(queue.indexOf(next));
+                }
+                pruneSavedQueue(true);
+            } catch (final java.io.IOException error) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            stopProgressLoop();
+            return;
+        }
+
         if (playQueue.getIndex() < playQueue.size() - 1) {
             playQueue.offsetIndex(+1);
-        } else if (getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
+        } else if (!playQueue.isOfflineOnly() && !(currentMetadata instanceof OfflineMediaTag)
+                && getPlayWhenReady() && !sleepTimerExpired && isAutoQueueEnabled()
                 && getRepeatMode() == REPEAT_MODE_OFF) {
             requestNextRecommendation(false);
         }
@@ -1616,16 +1676,15 @@ public final class Player implements PlaybackListener, Listener {
                     .anyMatch(AudioOnlyUnavailableException.class::isInstance)) {
                 Toast.makeText(context, R.string.data_saver_audio_unavailable,
                         Toast.LENGTH_LONG).show();
+            } else if (currentMetadata instanceof ExceptionTag
+                    && (recoveryRefreshingSource || currentMetadata.getErrors().stream().anyMatch(
+                            FailedMediaSource.FailedMediaSourceException.class::isInstance))) {
+                // Extractor/access failures are delivered as a short silence source, not as
+                // onPlayerError. Stop it before it can advance the queue or show a report UI.
+                finishPlaybackRecovery();
+                return;
             } else if (!currentMetadata.getErrors().isEmpty()) {
-                // new errors might have been added even if previousInfo == tag.getMaybeStreamInfo()
-                final ErrorInfo errorInfo = new ErrorInfo(
-                        currentMetadata.getErrors(),
-                        UserAction.PLAY_STREAM,
-                        "Loading failed for [" + currentMetadata.getTitle()
-                                + "]: " + currentMetadata.getStreamUrl(),
-                        currentMetadata.getServiceId(),
-                        currentMetadata.getStreamUrl());
-                ErrorUtil.createNotification(context, errorInfo);
+                Log.w(TAG, "Stream metadata contains reported errors");
             }
 
             currentMetadata.getMaybeStreamInfo().ifPresent(info -> {
@@ -1682,6 +1741,43 @@ public final class Player implements PlaybackListener, Listener {
 
         // Refresh the playback if there is a transition to the next video
         final int newIndex = newPosition.mediaItemIndex;
+        if (playQueue instanceof OfflinePlayQueue queue) {
+            final String target = MediaItemTag.from(newPosition.mediaItem)
+                    .map(MediaItemTag::getStreamUrl).orElse(null);
+            if (discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION
+                    && getRepeatMode() == REPEAT_MODE_ONE
+                    && queue.getItem() != null && queue.getItem().getUrl().equals(target)) {
+                registerStreamViewed();
+            } else if (discontinuityReason == DISCONTINUITY_REASON_SEEK && isPrepared) {
+                saveStreamProgressState();
+            } else if (queue.getItem() != null && !queue.getItem().getUrl().equals(target)) {
+                saveStreamProgressStateCompleted();
+            }
+            try {
+                final var store = OfflineLibrary.get(context).store();
+                final boolean automatic =
+                        discontinuityReason == DISCONTINUITY_REASON_AUTO_TRANSITION;
+                final boolean repeatAll = getRepeatMode() == REPEAT_MODE_ALL;
+                if (automatic && queue.transitionTarget(target, store, repeatAll) == null) {
+                    pause();
+                }
+                final int selected = queue.reconcileTransition(target,
+                        store, automatic, repeatAll);
+                if (selected < 0) {
+                    pause();
+                    if (!exoPlayerIsNull()) {
+                        simpleExoPlayer.stop();
+                    }
+                }
+            } catch (final java.io.IOException error) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            saveLastSession();
+            return;
+        }
         switch (discontinuityReason) {
             case DISCONTINUITY_REASON_AUTO_TRANSITION:
             case DISCONTINUITY_REASON_REMOVE:
@@ -1745,30 +1841,10 @@ public final class Player implements PlaybackListener, Listener {
 
     /**
      * Process exceptions produced by {@link com.google.android.exoplayer2.ExoPlayer ExoPlayer}.
-     * <p>There are multiple types of errors:</p>
-     * <ul>
-     * <li>{@link PlaybackException#ERROR_CODE_BEHIND_LIVE_WINDOW BEHIND_LIVE_WINDOW}:
-     * If the playback on livestreams are lagged too far behind the current playable
-     * window. Then we seek to the latest timestamp and restart the playback.
-     * This error is <b>catchable</b>.
-     * </li>
-     * <li>From {@link PlaybackException#ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE BAD_IO} to
-     * {@link PlaybackException#ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED UNSUPPORTED_FORMATS}:
-     * If the stream source is validated by the extractor but not recognized by the player,
-     * then we can try to recover playback by signalling an error on the {@link PlayQueue}.</li>
-     * <li>For {@link PlaybackException#ERROR_CODE_TIMEOUT PLAYER_TIMEOUT},
-     * {@link PlaybackException#ERROR_CODE_IO_UNSPECIFIED MEDIA_SOURCE_RESOLVER_TIMEOUT} and
-     * {@link PlaybackException#ERROR_CODE_IO_NETWORK_CONNECTION_FAILED NO_NETWORK}:
-     * We can keep set the recovery record and keep to player at the current state until
-     * it is ready to play by restarting the {@link MediaSourceManager}.</li>
-     * <li>On any ExoPlayer specific issue internal to its device interaction, such as
-     * {@link PlaybackException#ERROR_CODE_DECODER_INIT_FAILED DECODER_ERROR}:
-     * We terminate the playback.</li>
-     * <li>For any other unspecified issue internal: We set a recovery and try to restart
-     * the playback.</li>
-     * For any error above that is <b>not</b> explicitly <b>catchable</b>, the player will
-     * create a notification so users are aware.
-     * </ul>
+     * Recoverable transport failures receive bounded retries; ambiguous rejected media URLs
+     * receive at most one ordinary metadata refresh. Source failures retain the current queue
+     * item and finish paused with a manual retry notice. Device/renderer failures retain their
+     * existing shutdown and diagnostic handling. Behind-live-window errors seek to the live edge.
      *
      * @see com.google.android.exoplayer2.Player.Listener#onPlayerError(PlaybackException)
      */
@@ -1802,19 +1878,16 @@ public final class Player implements PlaybackListener, Listener {
             case ERROR_CODE_PARSING_MANIFEST_MALFORMED:
             case ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
             case ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED:
-                // Source errors, signal on playQueue and move on:
-                if (!exoPlayerIsNull() && playQueue != null) {
-                    playQueue.error();
-                }
+                recoverPlayback(error);
+                isCatchableException = true;
                 break;
             case ERROR_CODE_TIMEOUT:
             case ERROR_CODE_IO_UNSPECIFIED:
             case ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
             case ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
             case ERROR_CODE_UNSPECIFIED:
-                // Reload playback on unexpected errors:
-                setRecovery();
-                reloadPlayQueueManager();
+                recoverPlayback(error);
+                isCatchableException = true;
                 break;
             default:
                 // API, remote and renderer errors belong here:
@@ -1828,6 +1901,135 @@ public final class Player implements PlaybackListener, Listener {
 
         if (fragmentListener != null) {
             fragmentListener.onPlayerError(error, isCatchableException);
+        }
+    }
+
+    private void cancelPlaybackRecovery() {
+        recoveryRequest.set(null);
+        playbackRecovery.cancel();
+    }
+
+    private void retireRecoverySourceManager() {
+        if (recoveryReloading && !exoPlayerIsNull()) {
+            simpleExoPlayer.stop();
+        }
+        if (recoveryReloading && playQueueManager != null) {
+            // A canceled metadata request must not prepare or retry from a late result.
+            playQueueManager.dispose();
+            playQueueManager = null;
+        }
+        recoveryReloading = false;
+        recoveryRefreshingSource = false;
+    }
+
+    private void recoverPlayback(final PlaybackException error) {
+        if (destroyed || exoPlayerIsNull() || playQueue == null || playQueue.getItem() == null) {
+            return;
+        }
+        if (recoveryFailed || recoveryCanceled) {
+            return;
+        }
+        if (recoveryRefreshingSource
+                && (currentMetadata == null || currentMetadata instanceof ExceptionTag)) {
+            finishPlaybackRecovery();
+            return;
+        }
+        final PlayQueue queue = playQueue;
+        final PlayQueueItem item = queue.getItem();
+        final boolean localOnly = currentMetadata instanceof OfflineMediaTag
+                || item.getUrl().startsWith(OfflineStore.LOCAL_PREFIX);
+        final PlaybackRecovery.Attempt attempt = playbackRecovery.next(item,
+                simpleExoPlayer.getCurrentPosition(), getPlayWhenReady(),
+                recoveryFailure(error), localOnly);
+        if (attempt == null) {
+            finishPlaybackRecovery();
+            return;
+        }
+        // Do not call play() in an asynchronous callback: current intent, focus and timer
+        // state remain authoritative throughout a source replacement.
+        changeState(STATE_BUFFERING);
+        recoveryRequest.set(Observable.timer(attempt.delayMillis, MILLISECONDS,
+                        AndroidSchedulers.mainThread())
+                .subscribe(ignored -> {
+                    if (destroyed || exoPlayerIsNull() || playQueue != queue
+                            || !playbackRecovery.isCurrent(attempt, queue.getItem())
+                            || sleepTimer.expireIfDue() || sleepTimerExpired) {
+                        return;
+                    }
+                    queue.setRecovery(queue.getIndex(), attempt.positionMillis);
+                    if (attempt.refreshSource) {
+                        InfoCache.getInstance().removeInfo(item.getServiceId(), item.getUrl(),
+                                InfoCache.Type.STREAM);
+                    }
+                    recoveryReloading = true;
+                    recoveryRefreshingSource = attempt.refreshSource;
+                    reloadPlayQueueManager();
+                }, ignored -> finishPlaybackRecovery()));
+    }
+
+    private static PlaybackRecovery.Failure recoveryFailure(final PlaybackException error) {
+        // Known extraction failures include login, geo and bot challenges. They are not
+        // transient transport failures and must never be retried as such.
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof org.schabi.newpipe.extractor.exceptions.ExtractionException) {
+                return PlaybackRecovery.Failure.PERMANENT;
+            }
+        }
+        if (error.errorCode == ERROR_CODE_IO_BAD_HTTP_STATUS) {
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                    return PlaybackRecovery.classifyHttpStatus(
+                            ((HttpDataSource.InvalidResponseCodeException) cause).responseCode);
+                }
+            }
+            return PlaybackRecovery.Failure.PERMANENT;
+        }
+        switch (error.errorCode) {
+            case ERROR_CODE_TIMEOUT:
+            case ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
+            case ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
+                return PlaybackRecovery.Failure.TEMPORARY;
+            case ERROR_CODE_IO_UNSPECIFIED:
+                for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                    if (cause instanceof java.net.SocketException
+                            || cause instanceof java.net.SocketTimeoutException
+                            || cause instanceof java.net.UnknownHostException) {
+                        return PlaybackRecovery.Failure.TEMPORARY;
+                    }
+                }
+                return PlaybackRecovery.Failure.PERMANENT;
+            default:
+                return PlaybackRecovery.Failure.PERMANENT;
+        }
+    }
+
+    private void finishPlaybackRecovery() {
+        cancelPlaybackRecovery();
+        if (exoPlayerIsNull()) {
+            return;
+        }
+        if (playQueue instanceof OfflinePlayQueue queue && !queue.isEmpty()) {
+            try {
+                final var store = OfflineLibrary.get(context).store();
+                final boolean repeatAll = getRepeatMode() == REPEAT_MODE_ALL;
+                if (queue.failureSuccessor(store, repeatAll) == null) {
+                    pause();
+                }
+                if (queue.discardFailedCurrent(store, repeatAll)) {
+                    recoveryFailed = false;
+                    recoveryCanceled = false;
+                    return;
+                }
+            } catch (final java.io.IOException error) {
+                // Stop below; an unreadable store cannot select another saved file safely.
+            }
+        }
+        pause();
+        simpleExoPlayer.stop();
+        changeState(STATE_PAUSED);
+        if (!recoveryFailed) {
+            recoveryFailed = true;
+            Toast.makeText(context, R.string.playback_recovery_failed, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1906,8 +2108,12 @@ public final class Player implements PlaybackListener, Listener {
         final boolean removeThumbnailBeforeSync = currentItem == null
                 || currentItem.getServiceId() != item.getServiceId()
                 || !currentItem.getUrl().equals(item.getUrl());
+        final boolean switchingItem = currentItem != null && currentItem != item;
 
         currentItem = item;
+        if (switchingItem) {
+            recoveryFailed = false;
+        }
 
         if (playQueueIndex != playQueue.getIndex()) {
             // wrong window (this should be impossible, as this method is called with
@@ -1940,6 +2146,11 @@ public final class Player implements PlaybackListener, Listener {
                 playQueue.unsetRecovery(playQueueIndex);
             } else {
                 simpleExoPlayer.seekToDefaultPosition(playQueueIndex);
+            }
+            // Selecting another item after an error only seeks the already loaded playlist.
+            // A stopped ExoPlayer also needs prepare(), retaining its current play intent.
+            if (switchingItem && !recoveryFailed && !recoveryCanceled && isStopped()) {
+                simpleExoPlayer.prepare();
             }
         }
     }
@@ -1987,9 +2198,17 @@ public final class Player implements PlaybackListener, Listener {
         sleepTimer.expireIfDue();
         sleepTimerExpired = false;
 
-        if (!isMuted()) {
-            audioReactor.requestAudioFocus();
+        if (!isMuted() && !audioReactor.requestAudioFocus()) {
+            return;
         }
+
+        final long retryPosition = playbackRecovery.positionFor(playQueue.getItem(),
+                simpleExoPlayer.getCurrentPosition());
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
 
         if (currentState == STATE_COMPLETED) {
             if (playQueue.getIndex() == 0) {
@@ -2000,9 +2219,7 @@ public final class Player implements PlaybackListener, Listener {
         }
 
         if (isStopped()) {
-            // Some phones suspend a paused player after 10 minutes. This causes the player to
-            // enter STATE_IDLE, causing playback to fail. So we try to recover from that here.
-            setRecovery();
+            playQueue.setRecovery(playQueue.getIndex(), retryPosition);
             reloadPlayQueueManager();
         }
 
@@ -2089,6 +2306,9 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void pause() {
+        recoveryCanceled |= recoveryReloading || recoveryRequest.get() != null;
+        cancelPlaybackRecovery();
+        retireRecoverySourceManager();
         recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "pause() called");
@@ -2099,7 +2319,20 @@ public final class Player implements PlaybackListener, Listener {
 
         audioReactor.abandonAudioFocus();
         simpleExoPlayer.pause();
+        if (isStopped()) {
+            changeState(STATE_PAUSED);
+        }
         saveStreamProgressState();
+    }
+
+    /** Stop requested by the media session, preserving ExoPlayer's stop semantics. */
+    public void stop() {
+        recoveryCanceled = true;
+        cancelPlaybackRecovery();
+        retireRecoverySourceManager();
+        if (!exoPlayerIsNull()) {
+            simpleExoPlayer.stop();
+        }
     }
 
     public void playPause() {
@@ -2117,11 +2350,19 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void playPrevious() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         recommendationRequest.set(null);
         if (DEBUG) {
             Log.d(TAG, "onPlayPrevious() called");
         }
         if (exoPlayerIsNull() || playQueue == null) {
+            return;
+        }
+        if (pruneSavedQueue(false)) {
             return;
         }
 
@@ -2135,10 +2376,16 @@ public final class Player implements PlaybackListener, Listener {
             saveStreamProgressState();
             playQueue.offsetIndex(-1);
         }
+        pruneSavedQueue(true);
         triggerProgressUpdate();
     }
 
     public void playNext() {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         if (sleepTimer.isEndOfItem()) {
             cancelSleepTimer();
         }
@@ -2148,15 +2395,19 @@ public final class Player implements PlaybackListener, Listener {
         if (playQueue == null) {
             return;
         }
+        if (pruneSavedQueue(false)) {
+            return;
+        }
 
         saveStreamProgressState();
         if (playQueue.getIndex() < playQueue.size() - 1
                 || (playQueue.isComplete() && getRepeatMode() == REPEAT_MODE_ALL)) {
             recommendationRequest.set(null);
             playQueue.offsetIndex(+1);
-        } else {
+        } else if (!playQueue.isOfflineOnly()) {
             requestNextRecommendation(true);
         }
+        pruneSavedQueue(true);
         triggerProgressUpdate();
     }
 
@@ -2219,9 +2470,8 @@ public final class Player implements PlaybackListener, Listener {
             // playQueue index and currentMetadata still haven't updated)
             return;
         }
-        // Save current position. It will help to restore this position once a user
-        // wants to play prev or next stream from the queue
-        playQueue.setRecovery(playQueue.getIndex(), simpleExoPlayer.getContentPosition());
+        // History remains available for progress displays. Session recovery is saved separately;
+        // returning to another queue item must not resume its old stop position.
         saveStreamProgressState(simpleExoPlayer.getCurrentPosition());
     }
 
@@ -2247,7 +2497,9 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        maybeAutoQueueNextStream(info);
+        if (!(currentMetadata instanceof OfflineMediaTag)) {
+            maybeAutoQueueNextStream(info);
+        }
 
         loadCurrentThumbnail(info.getThumbnails());
         registerStreamViewed();
@@ -2310,8 +2562,7 @@ public final class Player implements PlaybackListener, Listener {
         }
         final PlayQueueItem item = playQueue.getItem();
         long position = item == null ? 0 : Math.max(0, item.getRecoveryPosition());
-        if (item != null && item.getRecoveryPosition() == PlayQueueItem.RECOVERY_UNSET
-                && !exoPlayerIsNull()
+        if (item != null && !exoPlayerIsNull()
                 && simpleExoPlayer.getCurrentMediaItemIndex() == playQueue.getIndex()
                 && MediaItemTag.from(simpleExoPlayer.getCurrentMediaItem())
                 .filter(tag -> tag.getServiceId() == item.getServiceId()
@@ -2483,6 +2734,12 @@ public final class Player implements PlaybackListener, Listener {
 
     @SuppressWarnings("MethodLength")
     private void requestRecommendation(final RecommendationAction action) {
+        if ((playQueue != null && playQueue.isOfflineOnly())
+                || currentMetadata instanceof OfflineMediaTag) {
+            recommendationStatus = RecommendationStatus.EMPTY;
+            triggerProgressUpdate();
+            return;
+        }
         syncRecommendationContext();
         final boolean advance = action == RecommendationAction.NEXT
                 || action == RecommendationAction.AUTO_NEXT;
@@ -2540,7 +2797,7 @@ public final class Player implements PlaybackListener, Listener {
         recommendationRequest.set(info.observeOn(AndroidSchedulers.mainThread())
                 .subscribe(current -> {
                     recommendationRequest.set(null);
-                    if (playQueue != queue || queue.getItem() != item
+                    if (playQueue != queue || queue.isOfflineOnly() || queue.getItem() != item
                             || (advance && sleepTimerExpired)
                             || (!explicit && (!isAutoQueueEnabled() || !getPlayWhenReady()
                             || getRepeatMode() != REPEAT_MODE_OFF))) {
@@ -2605,7 +2862,8 @@ public final class Player implements PlaybackListener, Listener {
 
     private void maybeAutoQueueNextStream(@NonNull final StreamInfo info) {
         syncRecommendationContext();
-        if (playQueue == null || playQueue.getIndex() != playQueue.size() - 1
+        if (playQueue == null || playQueue.isOfflineOnly()
+                || playQueue.getIndex() != playQueue.size() - 1
                 || !playQueue.isComplete() || playQueue.getItem() == null
                 || !playQueue.getItem().getUrl().equals(info.getUrl())
                 || getRepeatMode() != REPEAT_MODE_OFF
@@ -2628,6 +2886,11 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     public void selectQueueItem(final PlayQueueItem item) {
+        cancelPlaybackRecovery();
+        playbackRecovery.reset();
+        recoveryFailed = false;
+        recoveryCanceled = false;
+        recoveryRefreshingSource = false;
         if (sleepTimer.isEndOfItem()) {
             cancelSleepTimer();
         }
@@ -2636,6 +2899,9 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        if (pruneSavedQueue(false)) {
+            return;
+        }
         final int index = playQueue.indexOf(item);
         if (index == -1) {
             return;
@@ -2646,13 +2912,53 @@ public final class Player implements PlaybackListener, Listener {
         } else {
             saveStreamProgressState();
         }
+        playQueue.unsetRecovery(index);
         playQueue.setIndex(index);
+        pruneSavedQueue(true);
+    }
+
+    private boolean pruneSavedQueue(final boolean includeCurrent) {
+        if (!(playQueue instanceof OfflinePlayQueue queue)) {
+            return false;
+        }
+        try {
+            final boolean removedCurrent = queue.pruneUnavailable(
+                    OfflineLibrary.get(context).store(), includeCurrent);
+            if (queue.isEmpty()) {
+                pause();
+                if (!exoPlayerIsNull()) {
+                    simpleExoPlayer.stop();
+                }
+            }
+            return removedCurrent || queue.isEmpty();
+        } catch (final java.io.IOException error) {
+            pause();
+            if (!exoPlayerIsNull()) {
+                simpleExoPlayer.stop();
+            }
+            return true;
+        }
     }
 
     @Override
     public void onPlayQueueEdited() {
         notifyPlaybackUpdateToListeners();
         UIs.call(PlayerUi::onPlayQueueEdited);
+    }
+
+    @Override
+    @Nullable
+    public MediaSource localSourceOf(final PlayQueueItem item) throws java.io.IOException {
+        return OfflineLibrary.get(context).source(item, tag -> networkHandler.post(() -> {
+            if (!exoPlayerIsNull() && currentMetadata instanceof OfflineMediaTag
+                    && tag.sharesArtworkWith((OfflineMediaTag) currentMetadata)) {
+                // Artwork completion must not reload the source or change playback/recovery state.
+                tag.getMaybeStreamInfo().ifPresent(info -> {
+                    loadCurrentThumbnail(info.getThumbnails());
+                    notifyMetadataUpdateToListeners();
+                });
+            }
+        }));
     }
 
     @Override // own playback listener
@@ -2846,7 +3152,8 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
-        isAudioOnly = !videoAndSubtitlesEnabled;
+        final boolean enableVideo = videoAndSubtitlesEnabled && !listeningMode;
+        isAudioOnly = !enableVideo;
 
         final var item = playQueue.getItem();
         final boolean hasPendingRecovery =
@@ -2856,6 +3163,11 @@ public final class Player implements PlaybackListener, Listener {
 
 
         getCurrentStreamInfo().ifPresentOrElse(info -> {
+            if (OfflineStore.isLocalUrl(info.getUrl())) {
+                // Owned progressive files already contain their tracks. Switching the renderers
+                // must not reload the queue, replace its recovery position or resume a pause.
+                return;
+            }
             // In case we don't know the source type, fall back to either video-with-audio, or
             // audio-only source type
             final SourceType sourceType = videoResolver.getStreamSourceType()
@@ -2870,6 +3182,10 @@ public final class Player implements PlaybackListener, Listener {
                 reloadPlayQueueManager();
             }
         }, () -> {
+            // Direct local sources have no resolver/queue manager to reload.
+            if (playQueueManager == null) {
+                return;
+            }
             /*
             The current metadata may be null sometimes (for e.g. when using an unstable connection
             in livestreams) so we will be not able to execute the block above
@@ -2887,8 +3203,32 @@ public final class Player implements PlaybackListener, Listener {
         // Disable or enable video and subtitles renderers depending of the
         // videoAndSubtitlesEnabled value
         trackSelector.setParameters(trackSelector.buildUponParameters()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !videoAndSubtitlesEnabled)
-                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !videoAndSubtitlesEnabled));
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enableVideo)
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !enableVideo));
+    }
+
+    public boolean isListeningMode() {
+        return listeningMode;
+    }
+
+    public void setListeningMode(final boolean enabled) {
+        if (listeningMode == enabled) {
+            return;
+        }
+        listeningMode = enabled;
+        useVideoAndSubtitles(!enabled && !audioPlayerSelected() && isScreenOn());
+        UIs.call(PlayerUi::onListeningModeChanged);
+    }
+
+    /** Leave the activity without rebuilding playback or changing its play/pause intent. */
+    public void continueInBackgroundOnUiExit() {
+        if (!videoPlayerSelected() || exoPlayerIsNull()) {
+            return;
+        }
+        playerType = PlayerType.AUDIO;
+        isAudioOnly = true;
+        initUIsForCurrentPlayerType();
+        notifyPlaybackUpdateToListeners();
     }
 
     /**

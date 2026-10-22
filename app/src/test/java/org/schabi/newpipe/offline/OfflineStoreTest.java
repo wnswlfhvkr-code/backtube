@@ -1,0 +1,428 @@
+package org.schabi.newpipe.offline;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+
+public class OfflineStoreTest {
+    @Rule public TemporaryFolder temporary = new TemporaryFolder();
+    private File root;
+    private OfflineStore store;
+    private int nextRecording;
+
+    @Before public void setup() throws IOException {
+        root = temporary.newFolder();
+        store = new OfflineStore(root, 100);
+    }
+
+    private OfflineStore.Entry create() throws IOException {
+        return store.create("My recording", "https://example.invalid/owned/" + nextRecording++, 0,
+                "content://test/recording", "audio/wav");
+    }
+
+    @Test public void manualOrderSurvivesReopenAndNewSavesAppend() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final OfflineStore.Entry third = create();
+        store.move(third.id, -2);
+        assertEquals(third.id, store.list().get(0).id);
+        store = new OfflineStore(root, 100);
+        assertEquals(third.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+        assertEquals(second.id, store.list().get(2).id);
+        final OfflineStore.Entry added = create();
+        store = new OfflineStore(root, 100);
+        assertEquals(added.id, store.list().get(3).id);
+    }
+
+    @Test public void moveBoundsAndDeletionDoNotResurrectEntries() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.move(first.id, Integer.MIN_VALUE);
+        store.move(second.id, Integer.MAX_VALUE);
+        assertEquals(first.id, store.list().get(0).id);
+        store.delete(first.id);
+        store = new OfflineStore(root, 100);
+        assertEquals(1, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+    }
+
+    @Test public void failedOrderWritePreservesVisibleOrderAndMedia() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order.new").mkdir());
+        assertThrows(IOException.class, () -> store.move(second.id, -1));
+        assertEquals(first.id, store.list().get(0).id);
+        assertEquals(20, store.file(first).length());
+        assertTrue(new File(root, "shelf-order.new").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(first.id, store.list().get(0).id);
+    }
+
+    @Test public void normalizedOrderIgnoresDuplicateAndUnknownIds() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        final Properties order = new Properties();
+        order.setProperty("version", "1");
+        order.setProperty("ids", second.id + "," + second.id + ",unknown");
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            order.store(output, "test order");
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(2, store.list().size());
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(first.id, store.list().get(1).id);
+    }
+
+    @Test public void legacyAndCorruptOrderRecoveryPreserveCompleteFiles() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        assertTrue(new File(root, "shelf-order").delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        try (FileOutputStream output = new FileOutputStream(new File(root, "shelf-order"))) {
+            output.write("version=broken\nids=unknown"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertEquals(20, store.file(entry).length());
+    }
+
+    @Test public void validOrderReopensWithoutRequiringAnOrderWrite() throws Exception {
+        final OfflineStore.Entry first = create();
+        final OfflineStore.Entry second = create();
+        store.copy(first.id, new ByteArrayInputStream(new byte[20]));
+        store.move(second.id, -1);
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        // Hide the write-fault fixture from orphan cleanup, while all actual I/O remains real.
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(second.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(first.id).state);
+        assertEquals(20, store.retain(first.id).length());
+        store.release(first.id);
+        assertThrows(IOException.class, () -> store.move(first.id, -1));
+        assertTrue(pending.delete());
+    }
+
+    @Test public void corruptOrderRepairWriteFailureStillAllowsExistingMedia() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        try (FileOutputStream out = new FileOutputStream(new File(root, "shelf-order"))) {
+            out.write("version=broken".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        final File pending = new File(root, "shelf-order.new");
+        assertTrue(pending.mkdir());
+        final File readOnlyOrderDirectory = new File(root.getPath()) {
+            @Override public File[] listFiles() {
+                return java.util.Arrays.stream(super.listFiles())
+                        .filter(file -> !file.getName().equals("shelf-order.new"))
+                        .toArray(File[]::new);
+            }
+        };
+        store = new OfflineStore(readOnlyOrderDirectory, 100);
+        assertEquals(entry.id, store.list().get(0).id);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertTrue(pending.delete());
+    }
+
+    @Test public void completeCopySurvivesReopenAndPreservesOriginalIdentity() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.list().get(0).state);
+        assertEquals(0, store.get(entry.id).expiresAt);
+        assertEquals(32, store.usedBytes());
+        assertEquals(entry.id, store.find(0, entry.origin).id);
+        assertEquals(32, store.file(store.find(0, entry.origin)).length());
+    }
+
+    @Test public void internalIdentityCannotBeReplacedByAnEarlierOriginAlias() throws Exception {
+        final OfflineStore.Entry target = create();
+        store.copy(target.id, new ByteArrayInputStream(new byte[20]));
+        final OfflineStore.Entry alias = store.create("Different recording",
+                "https://example.invalid/alias",
+                0, "content://test/other", "audio/wav");
+        store.copy(alias.id, new ByteArrayInputStream(new byte[20]));
+        // A generated legacy alias must remain distinguishable from the owned target identity.
+        final File metadata = new File(root, alias.id + ".properties");
+        final Properties properties = new Properties();
+        try (InputStream input = new FileInputStream(metadata)) {
+            properties.load(input);
+        }
+        properties.setProperty("origin", target.localUrl());
+        try (FileOutputStream output = new FileOutputStream(metadata)) {
+            properties.store(output, "generated legacy alias");
+        }
+        store = new OfflineStore(root, 100);
+        store.move(alias.id, -1);
+        assertEquals(target.id, store.find(0, target.localUrl()).id);
+        assertEquals(target.id, store.find(-1, target.localUrl()).id);
+        assertNull(store.find(0, "backtube-offline:unknown"));
+    }
+
+    @Test public void unknownLengthCannotExceedQuotaAndFailureIsNotPlayable() throws Exception {
+        final OfflineStore.Entry entry = create();
+        assertThrows(IOException.class,
+                () -> store.copy(entry.id, new ByteArrayInputStream(new byte[101])));
+        assertEquals(OfflineStore.State.FAILED, store.list().get(0).state);
+        assertNull(store.find(0, entry.origin));
+        assertEquals(0, store.usedBytes());
+    }
+
+    @Test public void savedCopySurvivesMoreThanEightDaysAndReopen() throws Exception {
+        final File original = temporary.newFile();
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        writeLegacyMetadata(entry, OfflineStore.State.READY,
+                System.currentTimeMillis() - 9L * 24 * 60 * 60 * 1000);
+        assertNotNull(store.find(0, entry.origin));
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertEquals(0, store.get(entry.id).expiresAt);
+        assertTrue(store.file(entry).exists());
+        assertTrue(original.exists());
+    }
+
+    @Test public void interruptedImportIsRecoverableButNeverComplete() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.INTERRUPTED, store.list().get(0).state);
+        assertNull(store.find(0, entry.origin));
+        store.prepareRetry(entry.id);
+        store.copy(entry.id, new ByteArrayInputStream(new byte[20]));
+        assertNotNull(store.find(0, entry.origin));
+    }
+
+    @Test public void deleteDuringImportCannotResurrectItem() throws Exception {
+        final OfflineStore.Entry entry = create();
+        final InputStream input = new ByteArrayInputStream(new byte[32]) {
+            @Override public synchronized int read(final byte[] bytes, final int off,
+                                                   final int length) {
+                try {
+                    store.delete(entry.id);
+                } catch (final IOException error) {
+                    throw new AssertionError(error);
+                }
+                return super.read(bytes, off, length);
+            }
+        };
+        assertThrows(IOException.class, () -> store.copy(entry.id, input));
+        assertTrue(store.list().isEmpty());
+        assertFalse(store.file(entry).exists());
+    }
+
+    @Test public void missingOrTruncatedFileIsNotReady() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        assertTrue(store.file(entry).delete());
+        assertNull(store.find(0, entry.origin));
+        assertEquals(OfflineStore.State.FAILED, store.list().get(0).state);
+    }
+
+    @Test public void emptyInputIsNotPlayable() throws Exception {
+        final OfflineStore.Entry entry = create();
+        assertThrows(IOException.class,
+                () -> store.copy(entry.id, new ByteArrayInputStream(new byte[0])));
+        assertNull(store.find(0, entry.origin));
+    }
+
+    @Test public void gigaPartialSurvivesRestartButIsNotPlayableUntilFinished() throws Exception {
+        final OfflineStore.Entry entry = store.beginDownload("Owned audio", "owned:test", 0,
+                "audio/wav");
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(store.file(entry))) {
+            out.write(new byte[20]);
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(20, store.file(entry).length());
+        assertNull(store.find(0, entry.origin));
+        store.finishDownload(entry.id);
+        assertNotNull(store.find(0, entry.origin));
+        assertEquals(0, store.get(entry.id).expiresAt);
+    }
+
+    @Test public void gigaCannotFinalizeOverQuotaOrDeletedEntry() throws Exception {
+        final OfflineStore.Entry entry = store.beginDownload("Owned audio", "owned:test", 0,
+                "audio/wav");
+        assertThrows(IOException.class, () -> store.checkGrowth(entry.id, 101));
+        store.delete(entry.id);
+        assertThrows(IOException.class, () -> store.finishDownload(entry.id));
+    }
+
+    @Test public void explicitDeleteWaitsForCurrentReaderBeforeReclaimingSpace() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        store.retain(entry.id);
+        store.delete(entry.id);
+        assertNull(store.find(0, entry.origin));
+        assertTrue(store.file(entry).exists());
+        store.release(entry.id);
+        assertFalse(store.file(entry).exists());
+    }
+
+    @Test public void legacyExpiredIntactFileIsRestoredInsteadOfDeleted() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        writeLegacyMetadata(entry, OfflineStore.State.EXPIRED, 1);
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.READY, store.get(entry.id).state);
+        assertEquals(32, store.usedBytes());
+        assertEquals(0, store.get(entry.id).expiresAt);
+        assertNotNull(store.find(0, entry.localUrl()));
+    }
+
+    @Test public void legacyReadyDeadlineIsClearedDurablyBeforeCleanup() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        writeLegacyMetadata(entry, OfflineStore.State.READY, 1);
+        writeLegacyMetadata(entry, OfflineStore.State.READY,
+                System.currentTimeMillis() - 9L * 24 * 60 * 60 * 1000);
+        store = new OfflineStore(root, 100);
+        assertNotNull(store.find(0, entry.origin));
+        final Properties properties = new Properties();
+        try (InputStream input = new FileInputStream(new File(root, entry.id + ".properties"))) {
+            properties.load(input);
+        }
+        assertEquals("0", properties.getProperty("expires"));
+        store = new OfflineStore(root, 100);
+        assertEquals(32, store.retain(entry.id).length());
+        store.release(entry.id);
+        assertTrue(store.file(entry).exists());
+    }
+
+    @Test public void legacyExpiredMissingFileRemainsUnavailable() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        writeLegacyMetadata(entry, OfflineStore.State.EXPIRED, 1);
+        assertTrue(store.file(entry).delete());
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.FAILED, store.get(entry.id).state);
+        assertNull(store.find(0, entry.localUrl()));
+        assertThrows(IOException.class, () -> store.retain(entry.id));
+    }
+
+    @Test public void legacyExpiredTruncatedFileIsNotPlayedOrSilentlyDeleted() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[32]));
+        writeLegacyMetadata(entry, OfflineStore.State.EXPIRED, 1);
+        try (FileOutputStream output = new FileOutputStream(store.file(entry))) {
+            output.write(new byte[8]);
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(OfflineStore.State.FAILED, store.get(entry.id).state);
+        assertNull(store.find(0, entry.localUrl()));
+        assertEquals(8, store.usedBytes());
+        store.delete(entry.id);
+        assertEquals(0, store.usedBytes());
+    }
+
+    @Test public void fullLibraryRejectsNewSavesWithoutEvictingExistingItems() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.copy(entry.id, new ByteArrayInputStream(new byte[100]));
+        writeLegacyMetadata(entry, OfflineStore.State.READY,
+                System.currentTimeMillis() - 9L * 24 * 60 * 60 * 1000);
+        store = new OfflineStore(root, 100);
+        assertThrows(OfflineStore.StorageFullException.class, this::create);
+        assertThrows(OfflineStore.StorageFullException.class,
+                () -> store.beginDownload("New", "", 0, "audio/wav"));
+        assertEquals(1, store.list().size());
+        assertEquals(100, store.usedBytes());
+        assertNotNull(store.find(0, entry.origin));
+    }
+
+    @Test
+    public void failedNewCopyPreservesSavedBytesAndReclaimsOnlyItsOwnPartial() throws Exception {
+        final OfflineStore.Entry saved = create();
+        store.copy(saved.id, new ByteArrayInputStream(new byte[80]));
+        final OfflineStore.Entry extra = create();
+        assertThrows(IOException.class,
+                () -> store.copy(extra.id, new ByteArrayInputStream(new byte[21])));
+        assertEquals(OfflineStore.State.READY, store.get(saved.id).state);
+        assertEquals(OfflineStore.State.FAILED, store.get(extra.id).state);
+        assertEquals(80, store.usedBytes());
+        assertEquals(80, store.file(saved).length());
+    }
+
+    @Test public void preallocatedDownloadBytesStillCountAgainstCapacityAfterReopen()
+            throws Exception {
+        final OfflineStore.Entry saved = create();
+        store.copy(saved.id, new ByteArrayInputStream(new byte[80]));
+        final OfflineStore.Entry pending = store.beginDownload("Pending", "", 0, "audio/wav");
+        try (java.io.RandomAccessFile output =
+                     new java.io.RandomAccessFile(store.file(pending), "rw")) {
+            output.setLength(20);
+        }
+        store = new OfflineStore(root, 100);
+        assertEquals(100, store.usedBytes());
+        assertEquals(OfflineStore.State.DOWNLOADING, store.get(pending.id).state);
+        assertNull(store.find(0, pending.localUrl()));
+        assertThrows(OfflineStore.StorageFullException.class, this::create);
+        assertThrows(OfflineStore.StorageFullException.class,
+                () -> store.checkGrowth(pending.id, 21));
+        store.checkGrowth(pending.id, 20); // Overwriting reserved bytes needs no extra space.
+        store.delete(pending.id);
+        assertEquals(80, store.usedBytes());
+        assertNotNull(store.find(0, saved.localUrl()));
+    }
+
+    @Test public void closingReaderDoesNotSilentlyRemoveDamagedSavedFile() throws Exception {
+        final OfflineStore.Entry saved = create();
+        store.copy(saved.id, new ByteArrayInputStream(new byte[32]));
+        store.retain(saved.id);
+        try (FileOutputStream output = new FileOutputStream(store.file(saved))) {
+            output.write(new byte[8]);
+        }
+        assertEquals(OfflineStore.State.FAILED, store.get(saved.id).state);
+        store.release(saved.id);
+        assertEquals(8, store.usedBytes());
+        assertTrue(store.file(saved).isFile());
+    }
+
+    private void writeLegacyMetadata(final OfflineStore.Entry entry, final OfflineStore.State state,
+                                     final long expiry) throws IOException {
+        final File metadata = new File(root, entry.id + ".properties");
+        final Properties properties = new Properties();
+        try (InputStream input = new FileInputStream(metadata)) {
+            properties.load(input);
+        }
+        properties.setProperty("state", state.name());
+        properties.setProperty("expires", Long.toString(expiry));
+        try (FileOutputStream output = new FileOutputStream(metadata)) {
+            properties.store(output, "Legacy retention fixture");
+        }
+    }
+
+    @Test public void pauseWhileSourceOpensCannotBeUndoneByCopy() throws Exception {
+        final OfflineStore.Entry entry = create();
+        store.interrupt(entry.id);
+        assertThrows(IOException.class,
+                () -> store.copy(entry.id, new ByteArrayInputStream(new byte[32])));
+        assertEquals(OfflineStore.State.INTERRUPTED, store.get(entry.id).state);
+    }
+}

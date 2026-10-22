@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="timer_duration_hours" type="id" />
+    <item name="timer_duration_minutes" type="id" />
+</resources>

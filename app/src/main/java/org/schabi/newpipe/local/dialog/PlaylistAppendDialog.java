@@ -2,6 +2,8 @@ package org.schabi.newpipe.local.dialog;
 
 import static org.schabi.newpipe.database.playlist.model.PlaylistEntity.DEFAULT_THUMBNAIL_ID;
 
+import android.annotation.SuppressLint;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -25,6 +27,7 @@ import java.util.List;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.functions.Consumer;
 
 public final class PlaylistAppendDialog extends PlaylistDialog {
     private static final String TAG = PlaylistAppendDialog.class.getCanonicalName();
@@ -142,6 +145,7 @@ public final class PlaylistAppendDialog extends PlaylistDialog {
                 .anyMatch(playlist -> playlist.getTimesStreamIsContained() > 0);
     }
 
+    @SuppressLint("CheckResult") // Finite confirmed writes intentionally outlive the view.
     private void onPlaylistSelected(@NonNull final LocalPlaylistManager manager,
                                     @NonNull final PlaylistDuplicatesEntry playlist,
                                     @NonNull final List<StreamEntity> streams) {
@@ -154,9 +158,15 @@ public final class PlaylistAppendDialog extends PlaylistDialog {
             toastText = getString(R.string.playlist_add_stream_success);
         }
 
-        final Toast successToast = Toast.makeText(getContext(), toastText, Toast.LENGTH_SHORT);
+        final Context applicationContext = requireContext().getApplicationContext();
+        final Toast successToast = Toast.makeText(applicationContext, toastText,
+                Toast.LENGTH_SHORT);
+        final Consumer<Throwable> reportFailure = error -> Toast.makeText(applicationContext,
+                R.string.general_error, Toast.LENGTH_LONG).show();
 
-        playlistDisposables.add(manager.appendToPlaylist(playlist.getUid(), streams)
+        // Confirmed writes outlive this dialog's view.
+        // Only its list observer is view-owned.
+        manager.appendToPlaylist(playlist.getUid(), streams)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(ignored -> {
                     successToast.show();
@@ -164,13 +174,13 @@ public final class PlaylistAppendDialog extends PlaylistDialog {
                     if (playlist.getThumbnailStreamId() != null
                             && playlist.getThumbnailStreamId() == DEFAULT_THUMBNAIL_ID
                     ) {
-                        playlistDisposables.add(manager
+                        manager
                                 .changePlaylistThumbnail(playlist.getUid(), streams.get(0).getUid(),
                                         false)
                                 .observeOn(AndroidSchedulers.mainThread())
-                                .subscribe(ignore -> successToast.show()));
+                                .subscribe(ignore -> successToast.show(), reportFailure);
                     }
-                }));
+                }, reportFailure);
 
         requireDialog().dismiss();
     }

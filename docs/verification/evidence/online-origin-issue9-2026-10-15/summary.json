@@ -1,0 +1,61 @@
+{
+  "tests": 419,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "actual_android_executions": 0,
+  "instrumentation_compiled": true,
+  "lint_errors": 0,
+  "lint_warnings": 321,
+  "issue": 9,
+  "baseline": "997f0ba2c8f7f3354d19925ddd0441d0b552fc27",
+  "new_regressions": 7,
+  "baseline_red_cases": 5,
+  "installed_user_version_confirmed": true,
+  "independent_source_review_blockers": 0,
+  "actual_rendered_ui_or_video_verified": false,
+  "issue_closed": false,
+  "code_source_commit": "f37097120ed2b695ed957279395542d408d25352",
+  "actual_install_or_update_executed": false,
+  "apk": {
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1021,
+    "version_name": "0.29.1-online-origin-fix-20261015",
+    "size_bytes": 11627840,
+    "sha256": "575567121b878fe9bb10e7d962676d75332475bf89418ebfb4d9fb1df4bcaecd",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "signature_valid": true,
+    "zipalign_valid": true,
+    "zipalign_page_size_kib": 16,
+    "previous_version_code": 1020,
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    },
+    "permissions_added": [],
+    "permissions_removed": []
+  },
+  "mapping_id": "4d9691f474f7fa76cb4200a0f36d43d2c24e4095373574527cfa35e489b4a806",
+  "new_key_generated": false,
+  "key_contents_inspected_or_copied": false,
+  "runtime_note": "No Android execution here; prior adb read-only-filesystem blocker not retried or bypassed; Windows QA separate",
+  "actual_android_executions_scope": "this Linux source task only; independent Windows QA baseline is separate",
+  "independent_device_baseline": {
+    "version_code": 1020,
+    "version_name": "0.29.1-offline-uri-fix-20261015",
+    "apk_sha256": "9cd8a5d92c396ce1590824423ec2897bb03e6d53007177bb042a676ebefd933d",
+    "reproduced_before_after_audio_save": true,
+    "comment_ids": [
+      6187019353,
+      6187141127
+    ],
+    "candidate_1021_executed": false,
+    "cache_memory_corruption_directly_measured": false
+  }
+}

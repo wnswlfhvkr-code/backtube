@@ -20,17 +20,16 @@
 
 package org.schabi.newpipe;
 
-import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -59,6 +58,7 @@ import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.snackbar.Snackbar;
 
 import org.schabi.newpipe.databinding.ActivityMainBinding;
 import org.schabi.newpipe.databinding.DrawerHeaderBinding;
@@ -77,6 +77,7 @@ import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
 import org.schabi.newpipe.fragments.list.comments.CommentRepliesFragment;
 import org.schabi.newpipe.fragments.list.search.SearchFragment;
 import org.schabi.newpipe.local.feed.notifications.NotificationWorker;
+import org.schabi.newpipe.offline.OfflineLibraryActivity;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.event.OnKeyDownListener;
 import org.schabi.newpipe.player.helper.PlayerHolder;
@@ -91,15 +92,13 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.PeertubeHelper;
 import org.schabi.newpipe.util.PermissionHelper;
 import org.schabi.newpipe.util.ReleaseVersionUtil;
+import org.schabi.newpipe.util.RootBackExit;
 import org.schabi.newpipe.util.SerializedCache;
 import org.schabi.newpipe.util.ServiceHelper;
 import org.schabi.newpipe.util.StateSaver;
 import org.schabi.newpipe.util.ThemeHelper;
-import org.schabi.newpipe.util.external_communication.ShareUtils;
 import org.schabi.newpipe.views.FocusOverlayView;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -125,8 +124,12 @@ public class MainActivity extends AppCompatActivity {
     private static final int ITEM_ID_BOOKMARKS = -3;
     private static final int ITEM_ID_DOWNLOADS = -4;
     private static final int ITEM_ID_HISTORY = -5;
+    private static final int ITEM_ID_OFFLINE_LIBRARY = -6;
+
+    private final RootBackExit rootBackExit = new RootBackExit();
+    private final Handler exitHandler = new Handler(Looper.getMainLooper());
+    private Snackbar exitNotice;
     private static final int ITEM_ID_SETTINGS = 0;
-    private static final int ITEM_ID_DONATION = 1;
     private static final int ITEM_ID_ABOUT = 2;
 
     private static final int ORDER = 0;
@@ -172,6 +175,7 @@ public class MainActivity extends AppCompatActivity {
                 .getHeaderView(0));
         toolbarLayoutBinding = mainBinding.toolbarLayout;
         setContentView(mainBinding.getRoot());
+        getSupportFragmentManager().addOnBackStackChangedListener(this::resetRootBackExit);
 
         if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
             initFragments();
@@ -198,13 +202,6 @@ public class MainActivity extends AppCompatActivity {
                 && !App.getInstance().isFirstRun()
                 && ReleaseVersionUtil.INSTANCE.isReleaseApk()) {
             UpdateSettingsFragment.askForConsentToUpdateChecks(this);
-        }
-
-        // ReleaseVersionUtil.INSTANCE.isReleaseApk() will be true only for main official build
-        // We want every release build (nightly, nightly-refactor) to show the popup
-        if (!DEBUG) {
-            showKeepAndroidDialog();
-            showApi23RequirementDialog();
         }
 
         MigrationManager.showUserInfoIfPresent(this);
@@ -234,6 +231,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onStop() {
+        resetRootBackExit();
         super.onStop();
         sharedPrefEditor.putBoolean(KEY_IS_IN_BACKGROUND, true).apply();
         Log.d(TAG, "App moved to background");
@@ -289,6 +287,9 @@ public class MainActivity extends AppCompatActivity {
                 .add(R.id.menu_tabs_group, ITEM_ID_DOWNLOADS, ORDER, R.string.downloads)
                 .setIcon(R.drawable.ic_file_download);
         drawerLayoutBinding.navigation.getMenu()
+                .add(R.id.menu_tabs_group, ITEM_ID_OFFLINE_LIBRARY, ORDER, R.string.offline_library)
+                .setIcon(R.drawable.ic_file_download);
+        drawerLayoutBinding.navigation.getMenu()
                 .add(R.id.menu_tabs_group, ITEM_ID_HISTORY, ORDER, R.string.action_history)
                 .setIcon(R.drawable.ic_history);
 
@@ -311,11 +312,8 @@ public class MainActivity extends AppCompatActivity {
                 .add(R.id.menu_options_about_group, ITEM_ID_SETTINGS, ORDER, R.string.settings)
                 .setIcon(R.drawable.ic_settings);
         drawerLayoutBinding.navigation.getMenu()
-                .add(R.id.menu_options_about_group, ITEM_ID_DONATION, ORDER,
-                        R.string.donation_title)
-                .setIcon(R.drawable.volunteer_activism_ic);
-        drawerLayoutBinding.navigation.getMenu()
-                .add(R.id.menu_options_about_group, ITEM_ID_ABOUT, ORDER, R.string.tab_about)
+                .add(R.id.menu_options_about_group, ITEM_ID_ABOUT, ORDER,
+                        R.string.backtube_about_title)
                 .setIcon(R.drawable.ic_info_outline);
     }
 
@@ -352,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void tabSelected(final MenuItem item) {
+        resetRootBackExit();
         switch (item.getItemId()) {
             case ITEM_ID_SUBSCRIPTIONS:
                 NavigationHelper.openSubscriptionFragment(getSupportFragmentManager());
@@ -361,6 +360,9 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case ITEM_ID_BOOKMARKS:
                 NavigationHelper.openBookmarksFragment(getSupportFragmentManager());
+                break;
+            case ITEM_ID_OFFLINE_LIBRARY:
+                OfflineLibraryActivity.open(this);
                 break;
             case ITEM_ID_DOWNLOADS:
                 NavigationHelper.openDownloads(this);
@@ -388,9 +390,6 @@ public class MainActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             case ITEM_ID_SETTINGS:
                 NavigationHelper.openSettings(this);
-                break;
-            case ITEM_ID_DONATION:
-                ShareUtils.openUrlInBrowser(this, getString(R.string.donation_url));
                 break;
             case ITEM_ID_ABOUT:
                 NavigationHelper.openAbout(this);
@@ -562,6 +561,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onNewIntent(final Intent intent) {
+        resetRootBackExit();
         if (DEBUG) {
             Log.d(TAG, "onNewIntent() called with: intent = [" + intent + "]");
         }
@@ -600,11 +600,10 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "onBackPressed() called");
         }
 
-        if (DeviceUtils.isTv(this)) {
-            if (mainBinding.getRoot().isDrawerOpen(drawerLayoutBinding.navigation)) {
-                mainBinding.getRoot().closeDrawers();
-                return;
-            }
+        if (mainBinding.getRoot().isDrawerOpen(drawerLayoutBinding.navigation)) {
+            resetRootBackExit();
+            mainBinding.getRoot().closeDrawers();
+            return;
         }
 
         // In case bottomSheet is not visible on the screen or collapsed we can assume that the user
@@ -617,6 +616,7 @@ public class MainActivity extends AppCompatActivity {
             // delegate the back press to it
             if (fragment instanceof BackPressable) {
                 if (((BackPressable) fragment).onBackPressed()) {
+                    resetRootBackExit();
                     return;
                 }
             } else if (fragment instanceof CommentRepliesFragment) {
@@ -629,6 +629,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
         } else {
+            resetRootBackExit();
             final Fragment fragmentPlayer = getSupportFragmentManager()
                     .findFragmentById(R.id.fragment_player_holder);
             // If current fragment implements BackPressable (i.e. can/wanna handle back press)
@@ -642,10 +643,48 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        if (getSupportFragmentManager().getBackStackEntryCount() == 1) {
-            finish();
+        if (getSupportFragmentManager().getBackStackEntryCount() <= 1) {
+            if (rootBackExit.press(SystemClock.uptimeMillis())) {
+                final Fragment detail = getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder);
+                if (detail instanceof VideoDetailFragment) {
+                    ((VideoDetailFragment) detail).prepareForUiExit();
+                }
+                resetRootBackExit();
+                finishAndRemoveTask();
+            } else {
+                showRootExitNotice();
+            }
         } else {
+            resetRootBackExit();
             super.onBackPressed();
+        }
+    }
+
+    private void showRootExitNotice() {
+        if (exitNotice != null) {
+            exitNotice.dismiss();
+        }
+        final long generation = rootBackExit.generation();
+        final Snackbar notice = Snackbar.make(mainBinding.getRoot(),
+                R.string.back_again_to_exit, (int) RootBackExit.WINDOW_MILLIS);
+        exitNotice = notice;
+        notice.show();
+        exitHandler.postDelayed(() -> {
+            rootBackExit.dismiss(generation);
+            notice.dismiss();
+            if (exitNotice == notice) {
+                exitNotice = null;
+            }
+        }, RootBackExit.WINDOW_MILLIS);
+    }
+
+    private void resetRootBackExit() {
+        rootBackExit.reset();
+        exitHandler.removeCallbacksAndMessages(null);
+        if (exitNotice != null) {
+            exitNotice.dismiss();
+            exitNotice = null;
         }
     }
 
@@ -986,78 +1025,4 @@ public class MainActivity extends AppCompatActivity {
                 || sheetState == BottomSheetBehavior.STATE_COLLAPSED;
     }
 
-    private void showKeepAndroidDialog() {
-        final var prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        final var lastCheckKey = getString(R.string.kao_last_checked_key);
-        final var lastCheck = Instant.ofEpochMilli(prefs.getLong(lastCheckKey, 0));
-        final var now = Instant.now();
-
-        if (lastCheck.plus(30, ChronoUnit.DAYS).isBefore(now)) {
-            final String detailsUrl = getKeepAndroidOpenDetailsUrl();
-            final var solutionUrl = "https://github.com/woheller69/FreeDroidWarn#solutions";
-
-            final var dialog = new AlertDialog.Builder(this)
-                    .setTitle("Keep Android Open")
-                    .setCancelable(false)
-                    .setMessage(R.string.kao_dialog_warning)
-                    .setPositiveButton(android.R.string.ok, (d, w) -> prefs.edit()
-                            .putLong(lastCheckKey, now.toEpochMilli())
-                            .apply())
-                    .setNeutralButton(R.string.kao_solution, null)
-                    .setNegativeButton(R.string.kao_dialog_more_info, null)
-                    .show();
-
-            // If we use setNeutralButton/setNegativeButton, dialog will close after pressing the
-            // buttons, but we want it to close only when positive button is pressed
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-                    .setOnClickListener(v -> ShareUtils.openUrlInBrowser(this, detailsUrl));
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-                    .setOnClickListener(v -> ShareUtils.openUrlInBrowser(this, solutionUrl));
-        }
-    }
-
-    @NonNull
-    private static String getKeepAndroidOpenDetailsUrl() {
-        final var supportedLanguages = List.of("fr", "de", "ca", "es", "id", "it", "pl",
-                "pt", "cs", "sk", "fa", "ar", "tr", "el", "th", "ru", "uk", "ko", "zh", "ja");
-        final String kaoBaseUrl = "https://keepandroidopen.org/";
-        final var locale = Localization.getAppLocale();
-        if (supportedLanguages.contains(locale.getLanguage())) {
-            if ("zh".equals(locale.getLanguage())) {
-                return kaoBaseUrl + ("TW".equals(locale.getCountry()) ? "zh-TW" : "zh-CN");
-            } else {
-                return kaoBaseUrl + locale.getLanguage();
-            }
-        } else {
-            return kaoBaseUrl;
-        }
-    }
-
-    private void showApi23RequirementDialog() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return; // only show dialog on the devices that will stop being supported
-        }
-
-        final var prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        final var shownKey = getString(R.string.api23_requirement_dialog_shown_key);
-        if (prefs.getBoolean(shownKey, false)) {
-            return; // dialog was already shown in the past, no need to show it again
-        }
-
-        final var dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.api23_requirement_dialog_title)
-                .setCancelable(false)
-                .setMessage(R.string.api23_requirement_dialog_message)
-                .setPositiveButton(android.R.string.ok, (d, w) -> prefs.edit()
-                        .putBoolean(shownKey, true)
-                        .apply())
-                .setNegativeButton(R.string.api23_requirement_dialog_blogpost, null)
-                .show();
-
-        // If we use setNegativeButton, dialog will close after pressing the button,
-        // but we want it to close only when positive button is pressed
-        final var blogpostUrl = "https://newpipe.net/blog/pinned/announcement/drop-android-5/";
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setOnClickListener(v -> ShareUtils.openUrlInBrowser(this, blogpostUrl));
-    }
 }

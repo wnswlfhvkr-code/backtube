@@ -83,7 +83,7 @@ public class ManagedMediaSourcePlaylist {
      * @param index of {@link ManagedMediaSource} to be removed
      */
     public synchronized void remove(final int index) {
-        if (index < 0 || index > internalSource.getSize()) {
+        if (index < 0 || index >= internalSource.getSize()) {
             return;
         }
 

@@ -1,0 +1,34 @@
+// Backtube fault relay: Cloudflare Workers Free + one SQLite-backed Durable Object.
+// Secret-free. No account_id, routes, cron triggers, paid limits or deploy automation.
+// Reporting is disabled by default. GH_APP_PRIVATE_KEY is never stored here; it is a future
+// runtime secret configured only after separate explicit operator approval.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "backtube-fault-relay",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-08",
+  "durable_objects": {
+    "bindings": [
+      { "name": "RELAY", "class_name": "ReportRelay" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ReportRelay"] }
+  ],
+  "vars": {
+    "REPORTING_ENABLED": "false",
+    "GH_APP_ID": "",
+    "GH_INSTALLATION_ID": "",
+    "GH_BOT_LOGIN": ""
+  },
+  "observability": {
+    "enabled": false,
+    "logs": {
+      "enabled": false,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    }
+  }
+}

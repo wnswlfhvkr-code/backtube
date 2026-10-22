@@ -1,0 +1,689 @@
+package org.schabi.newpipe.offline;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import android.Manifest;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.Activity;
+import android.app.Notification;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Rect;
+import android.net.Uri;
+import android.os.Build;
+import android.os.SystemClock;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.TextView;
+
+import androidx.appcompat.widget.Toolbar;
+import androidx.annotation.StringRes;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
+import androidx.test.runner.lifecycle.Stage;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.schabi.newpipe.App;
+import org.schabi.newpipe.MainActivity;
+import org.schabi.newpipe.R;
+import org.schabi.newpipe.download.DownloadDialog;
+import org.schabi.newpipe.extractor.MediaFormat;
+import org.schabi.newpipe.extractor.stream.AudioStream;
+import org.schabi.newpipe.extractor.stream.StreamInfo;
+import org.schabi.newpipe.extractor.stream.StreamType;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.FutureTask;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+/** Access paths use a generated WAV only; no remote media is downloaded. */
+@RunWith(AndroidJUnit4.class)
+public class OfflineLibraryAccessTest {
+    private final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+    private OfflineLibrary library;
+    private OfflineStore.Entry saved;
+    private File source;
+    private final List<File> additionalSources = new ArrayList<>();
+
+    @Before
+    public void setUp() throws Exception {
+        library = OfflineLibrary.get(context);
+        source = File.createTempFile("offline-access-", ".wav", context.getCacheDir());
+        final int length = 16000;
+        final ByteBuffer wav = ByteBuffer.allocate(44 + length).order(ByteOrder.LITTLE_ENDIAN);
+        wav.put("RIFF".getBytes(StandardCharsets.US_ASCII)).putInt(36 + length)
+                .put("WAVEfmt ".getBytes(StandardCharsets.US_ASCII)).putInt(16)
+                .putShort((short) 1).putShort((short) 1).putInt(8000).putInt(16000)
+                .putShort((short) 2).putShort((short) 16)
+                .put("data".getBytes(StandardCharsets.US_ASCII)).putInt(length);
+        try (FileOutputStream out = new FileOutputStream(source)) {
+            out.write(wav.array());
+        }
+        saved = library.store().create("Generated offline access WAV", "", 0,
+                Uri.fromFile(source).toString(), "audio/wav");
+        try (FileInputStream input = new FileInputStream(source)) {
+            library.store().copy(saved.id, input);
+        }
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        main(() -> {
+            for (final Stage stage : Stage.values()) {
+                if (stage == Stage.DESTROYED || stage == Stage.PRE_ON_CREATE) {
+                    continue;
+                }
+                for (final Activity activity : new ArrayList<>(ActivityLifecycleMonitorRegistry
+                        .getInstance().getActivitiesInStage(stage))) {
+                    if (!activity.isFinishing() && (activity instanceof MainActivity
+                            || activity instanceof OfflineLibraryActivity)) {
+                        activity.finish();
+                    }
+                }
+            }
+            return null;
+        });
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        for (final File extra : additionalSources) {
+            extra.delete();
+        }
+        if (saved != null) {
+            library.store().delete(saved.id);
+        }
+        if (source != null) {
+            source.delete();
+        }
+    }
+
+    @Test
+    public void mainDrawerOpensSavedListWithoutADownloadDialog() throws Exception {
+        launchMain();
+        await(() -> {
+            final MainActivity activity = active(MainActivity.class);
+            final View drawer = activity == null ? null
+                    : activity.findViewById(R.id.drawer_layout);
+            return drawer != null && drawer.isAttachedToWindow()
+                    && drawer.getWidth() > 0 && drawer.getParent() instanceof DrawerLayout;
+        });
+        main(() -> {
+            // The include in activity_main overrides the NavigationView root's navigation ID.
+            final View drawer = active(MainActivity.class).findViewById(R.id.drawer_layout);
+            ((DrawerLayout) drawer.getParent()).openDrawer(drawer, false);
+            return null;
+        });
+        tapText(R.string.offline_library, R.id.drawer_layout);
+        awaitShelf();
+        assertTrue(source.isFile());
+        assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+    }
+
+    @Test
+    public void savedNotificationActionAndContentOpenThePersistentList() throws Exception {
+        launchMain();
+        final Notification notification = OfflineSaveNotifications.build(context, saved.title);
+        assertEquals(context.getString(R.string.offline_open_list), notification.actions[0].title);
+        notification.actions[0].actionIntent.send();
+        awaitShelf();
+        main(() -> {
+            active(OfflineLibraryActivity.class).finish();
+            return null;
+        });
+        await(() -> active(MainActivity.class) != null);
+        notification.contentIntent.send();
+        awaitShelf();
+        assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+    }
+
+    @Test
+    public void offlineSelectorKeepsItsModeAfterRotation() throws Exception {
+        launchMain();
+        final StreamInfo info = new StreamInfo(1, "offline-selector-fixture", "fixture",
+                StreamType.AUDIO_STREAM, "Generated selection WAV", "fixture", 0);
+        info.setAudioStreams(List.of(new AudioStream.Builder().setId("local-audio")
+                .setContent(Uri.fromFile(source).toString(), true).setMediaFormat(MediaFormat.WAV)
+                .setAverageBitrate(128).build()));
+        main(() -> {
+            final MainActivity activity = active(MainActivity.class);
+            DownloadDialog.forOffline(activity, info).show(activity.getSupportFragmentManager(),
+                    "offline_access_selector");
+            return null;
+        });
+        await(this::offlineSelectorVisible);
+        main(() -> {
+            active(MainActivity.class).setRequestedOrientation(
+                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            return null;
+        });
+        await(() -> active(MainActivity.class) != null && active(MainActivity.class).getResources()
+                .getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
+                && offlineSelectorVisible());
+    }
+
+    @Test
+    public void savedOrderControlsAndWholePlayCountSurviveRotation() throws Exception {
+        final OfflineStore.Entry second = newGeneratedEntry("Generated second saved WAV");
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(second.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            await(() -> active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(second.id) != null);
+            main(() -> {
+                final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+                final View row = shelf.findViewById(R.id.offline_saved_rows)
+                        .findViewWithTag(second.id);
+                final View handle = row.findViewById(R.id.itemHandle);
+                final View menu = row.findViewById(R.id.offline_item_menu);
+                final View playableRow = row.findViewById(R.id.itemRoot);
+                final float density = shelf.getResources().getDisplayMetrics().density;
+                assertTrue(handle.getWidth() >= 48 * density);
+                assertTrue(handle.getHeight() >= 48 * density);
+                assertTrue(menu.getHeight() >= 48 * density);
+                assertTrue(handle.getContentDescription().toString().contains(second.title));
+                assertTrue(shelf.findViewById(R.id.offline_play_all).isEnabled());
+                assertTrue(playableRow.performAccessibilityAction(R.id.offline_move_up, null));
+                return null;
+            });
+            await(() -> {
+                try {
+                    final List<OfflineStore.Entry> order = library.store().list();
+                    int firstIndex = -1;
+                    int secondIndex = -1;
+                    for (int i = 0; i < order.size(); i++) {
+                        if (order.get(i).id.equals(saved.id)) {
+                            firstIndex = i;
+                        } else if (order.get(i).id.equals(second.id)) {
+                            secondIndex = i;
+                        }
+                    }
+                    return secondIndex >= 0 && secondIndex + 1 == firstIndex;
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            final OfflineStore reopened = new OfflineStore(new File(context.getFilesDir(),
+                    "offline"), OfflineStore.DEFAULT_LIMIT);
+            assertEquals(library.store().list().get(0).id, reopened.list().get(0).id);
+            assertEquals(reopened.list().stream()
+                    .filter(entry -> entry.state == OfflineStore.State.READY).count(),
+                    library.queueAll().size());
+            main(() -> {
+                active(OfflineLibraryActivity.class)
+                        .setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                return null;
+            });
+            await(() -> active(OfflineLibraryActivity.class) != null
+                    && active(OfflineLibraryActivity.class).getResources().getConfiguration()
+                    .orientation == Configuration.ORIENTATION_LANDSCAPE);
+            awaitShelf();
+            final int playable = library.queueAll().size();
+            main(() -> {
+                final TextView count = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_playable_count);
+                assertTrue(count.getText().toString().contains(
+                        Integer.toString(playable)));
+                return null;
+            });
+        } finally {
+            library.store().delete(second.id);
+        }
+    }
+
+    @Test
+    public void savedRowsHaveCompactPlaybackAndSeparateManagementTargets() throws Exception {
+        InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitShelf();
+        main(() -> {
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final View row = shelf.findViewById(R.id.offline_saved_rows)
+                    .findViewWithTag(saved.id);
+            assertTrue(row.findViewById(R.id.itemRoot).hasOnClickListeners());
+            final AccessibilityNodeInfo node = row.findViewById(R.id.itemRoot)
+                    .createAccessibilityNodeInfo();
+            assertTrue(node.getActionList().stream().anyMatch(action -> action.getId()
+                    == AccessibilityNodeInfo.ACTION_CLICK && action.getLabel() != null
+                    && context.getString(R.string.offline_play).contentEquals(action.getLabel())));
+            assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
+            assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
+            assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());
+            final float density = shelf.getResources().getDisplayMetrics().density;
+            assertTrue("saved row must stay compact", row.getHeight() <= 80 * density);
+            final Rect handle = new Rect();
+            final Rect menu = new Rect();
+            row.findViewById(R.id.itemHandle).getGlobalVisibleRect(handle);
+            row.findViewById(R.id.offline_item_menu).getGlobalVisibleRect(menu);
+            assertFalse("handle and menu targets overlap", Rect.intersects(handle, menu));
+            assertTrue(!shelf.findViewById(R.id.offline_storage_summary).isShown());
+            assertTrue(shelf.findViewById(R.id.offline_play_all).isShown());
+            shelf.findViewById(R.id.offline_manage).performClick();
+            assertTrue(shelf.findViewById(R.id.offline_storage_summary).isShown());
+            return null;
+        });
+    }
+
+    @Test
+    public void handleDragWritesOnlyOnDropAndCancelledDragRestoresOrder() throws Exception {
+        final OfflineStore.Entry second = newGeneratedEntry("Generated drag saved WAV");
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(second.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            final List<String> before = savedIds();
+            final var activeSnapshot = library.queueAll();
+            final String activeFirst = activeSnapshot.getItem(0).getUrl();
+            movePointerBetweenRows(second.id, saved.id, before, MotionEvent.ACTION_CANCEL);
+            assertEquals(before, savedIds());
+            await(() -> {
+                final RecyclerView list = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_saved_rows);
+                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                for (int i = 0; i < before.size(); i++) {
+                    if (adapter.positionOf(before.get(i)) != i) {
+                        return false;
+                    }
+                }
+                final View row = list.findViewWithTag(second.id);
+                return row != null && row.getTranslationY() == 0;
+            });
+            movePointerBetweenRows(second.id, saved.id, before, MotionEvent.ACTION_UP);
+            await(() -> {
+                try {
+                    final List<String> ids = savedIds();
+                    return ids.indexOf(second.id) + 1 == ids.indexOf(saved.id);
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            final OfflineStore reopened = new OfflineStore(new File(context.getFilesDir(),
+                    "offline"), OfflineStore.DEFAULT_LIMIT);
+            assertEquals(savedIds(), reopened.list().stream().map(entry -> entry.id)
+                    .collect(Collectors.toList()));
+            assertEquals(activeFirst, activeSnapshot.getItem(0).getUrl());
+            assertTrue(library.queueAll().isOfflineOnly());
+        } finally {
+            library.store().delete(second.id);
+        }
+    }
+
+    @Test
+    public void savedPlaybackAccessibilityFollowsMissingFileRetryAndReady() throws Exception {
+        InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitShelf();
+        awaitPlaybackAvailability(true, R.string.offline_ready);
+        assertTrue("only this generated fixture's saved bytes are removed",
+                library.store().file(library.store().get(saved.id)).delete());
+        assertEquals(OfflineStore.State.FAILED, library.store().get(saved.id).state);
+        awaitPlaybackAvailability(false, R.string.offline_failed);
+        library.store().prepareRetry(saved.id);
+        awaitPlaybackAvailability(false, R.string.offline_copying);
+        try (FileInputStream input = new FileInputStream(source)) {
+            library.store().copy(saved.id, input);
+        }
+        awaitPlaybackAvailability(true, R.string.offline_ready);
+        assertTrue("the original generated source is retained", source.isFile());
+    }
+
+    private void awaitPlaybackAvailability(final boolean playable,
+                                           @StringRes final int stateLabel) throws Exception {
+        await(() -> {
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final View row = shelf == null ? null : shelf.findViewById(R.id.offline_saved_rows)
+                    .findViewWithTag(saved.id);
+            if (row == null) {
+                return false;
+            }
+            final TextView details = row.findViewById(R.id.itemAdditionalDetails);
+            if (!details.getText().toString().startsWith(shelf.getString(stateLabel))) {
+                return false;
+            }
+            final View root = row.findViewById(R.id.itemRoot);
+            final AccessibilityNodeInfo node = root.createAccessibilityNodeInfo();
+            try {
+                final boolean offersPlay = node.getActionList().stream().anyMatch(action ->
+                        action.getId() == AccessibilityNodeInfo.ACTION_CLICK);
+                return root.isClickable() == playable && offersPlay == playable;
+            } finally {
+                node.recycle();
+            }
+        });
+        main(() -> {
+            final View row = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(saved.id);
+            final View root = row.findViewById(R.id.itemRoot);
+            assertTrue("unavailable rows remain readable", root.isFocusable());
+            assertTrue("long-click management remains available", root.isLongClickable());
+            assertTrue(root.isEnabled());
+            assertTrue(row.findViewById(R.id.itemHandle).isEnabled());
+            assertTrue(row.findViewById(R.id.offline_item_menu).isEnabled());
+            return null;
+        });
+    }
+
+    private List<String> savedIds() throws java.io.IOException {
+        return library.store().list().stream().map(entry -> entry.id).collect(Collectors.toList());
+    }
+
+    private void movePointerBetweenRows(final String fromId, final String toId,
+                                        final List<String> before, final int terminal)
+            throws Exception {
+        main(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+            assertTrue("each gesture starts with the source below its destination",
+                    adapter.positionOf(fromId) > adapter.positionOf(toId));
+            list.scrollToPosition(adapter.positionOf(fromId));
+            return null;
+        });
+        await(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            return list.findViewWithTag(fromId) != null && list.findViewWithTag(toId) != null
+                    && !list.isLayoutRequested();
+        });
+        final Rect from = trackRect(fromId, R.id.itemHandle);
+        final Rect to = trackRect(toId, R.id.itemRoot);
+        // ItemTouchHelper requires the dragged top to cross the target top, not just align.
+        final float destinationY = to.centerY()
+                - 16 * context.getResources().getDisplayMetrics().density;
+        final long start = SystemClock.uptimeMillis();
+        sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        assertFalse("touching the handle must start drag and disable Play all", main(() ->
+                active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
+                        .isEnabled()));
+        for (int step = 1; step <= 12; step++) {
+            SystemClock.sleep(20);
+            sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
+                    from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
+        }
+        await(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+            return adapter.positionOf(fromId) < adapter.positionOf(toId);
+        });
+        assertEquals("drag preview must not persist", before, savedIds());
+        sendPointer(start, terminal, from.centerX(), destinationY);
+    }
+
+    private Rect trackRect(final String entryId, final int viewId) throws Exception {
+        return main(() -> {
+            final View row = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows).findViewWithTag(entryId);
+            final Rect rect = new Rect();
+            assertTrue(row.findViewById(viewId).getGlobalVisibleRect(rect));
+            return rect;
+        });
+    }
+
+    private void sendPointer(final long start, final int action, final float x, final float y) {
+        final MotionEvent event = MotionEvent.obtain(start, SystemClock.uptimeMillis(),
+                action, x, y, 0);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(event);
+        event.recycle();
+    }
+
+    @Test
+    public void currentRowHighlightUsesLocalIdentityInsteadOfDuplicateTitles() throws Exception {
+        final OfflineStore.Entry duplicate = newGeneratedEntry(saved.title);
+        try {
+            try (FileInputStream input = new FileInputStream(source)) {
+                library.store().copy(duplicate.id, input);
+            }
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            main(() -> {
+                final RecyclerView list = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_saved_rows);
+                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                final OfflineShelfAdapter.Holder holder = adapter.onCreateViewHolder(list, 0);
+                adapter.setCurrentUrl(saved.localUrl());
+                adapter.onBindViewHolder(holder, adapter.positionOf(saved.id));
+                assertTrue(holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                adapter.onBindViewHolder(holder, adapter.positionOf(duplicate.id));
+                assertTrue(!holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                adapter.setCurrentUrl("https://example.invalid/online");
+                adapter.onBindViewHolder(holder, adapter.positionOf(saved.id));
+                assertTrue(!holder.itemView.findViewById(R.id.itemRoot).isSelected());
+                return null;
+            });
+        } finally {
+            library.store().delete(duplicate.id);
+        }
+    }
+
+    @Test
+    public void oversizedLocalImportShowsCapacityFeedbackAndKeepsExistingSave() throws Exception {
+        final File oversized = File.createTempFile("offline-capacity-", ".wav",
+                context.getCacheDir());
+        try {
+            try (RandomAccessFile file = new RandomAccessFile(oversized, "rw")) {
+                file.setLength(OfflineStore.DEFAULT_LIMIT + 1);
+            }
+            final int entriesBefore = library.store().list().size();
+            InstrumentationRegistry.getInstrumentation().startActivitySync(
+                    new Intent(context, OfflineLibraryActivity.class)
+                            .setData(Uri.fromFile(oversized))
+                            .putExtra("title", "Generated oversized WAV")
+                            .putExtra("mime", "audio/wav")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitAccessibilityText(context.getString(R.string.offline_storage_full));
+            assertEquals(entriesBefore, library.store().list().size());
+            assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+            assertTrue(library.store().file(saved).isFile());
+        } finally {
+            oversized.delete();
+        }
+    }
+
+    private OfflineStore.Entry newGeneratedEntry(final String title) throws Exception {
+        final File extra = File.createTempFile("offline-distinct-", ".wav", context.getCacheDir());
+        additionalSources.add(extra);
+        try (FileInputStream input = new FileInputStream(source);
+             FileOutputStream output = new FileOutputStream(extra)) {
+            final byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        }
+        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
+    }
+
+    private boolean offlineSelectorVisible() {
+        final MainActivity activity = active(MainActivity.class);
+        if (activity == null) {
+            return false;
+        }
+        final androidx.fragment.app.Fragment fragment = activity.getSupportFragmentManager()
+                .findFragmentByTag("offline_access_selector");
+        if (fragment == null || fragment.getView() == null) {
+            return false;
+        }
+        final View view = fragment.getView();
+        final Toolbar toolbar = view.findViewById(R.id.toolbar);
+        return toolbar.isShown() && context.getString(R.string.offline_save)
+                .contentEquals(toolbar.getTitle())
+                && context.getString(R.string.offline_save)
+                .contentEquals(toolbar.getMenu().findItem(R.id.okay).getTitle())
+                && !view.findViewById(R.id.subtitle_button).isShown();
+    }
+
+    private void launchMain() throws Exception {
+        final boolean permissionPrompt = Build.VERSION.SDK_INT >= 33
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+                && !App.getInstance().getNotificationsRequested();
+        final android.app.UiAutomation automation = InstrumentationRegistry.getInstrumentation()
+                .getUiAutomation();
+        final AccessibilityServiceInfo info = automation.getServiceInfo();
+        info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+        automation.setServiceInfo(info);
+        InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        if (permissionPrompt) {
+            final long deadline = SystemClock.uptimeMillis() + 10000;
+            boolean denied = false;
+            while (!denied && SystemClock.uptimeMillis() < deadline) {
+                final AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+                if (root != null) {
+                    final List<AccessibilityNodeInfo> nodes = root
+                            .findAccessibilityNodeInfosByViewId(root.getPackageName()
+                                    + ":id/permission_deny_button");
+                    for (final AccessibilityNodeInfo node : nodes) {
+                        if (node.isVisibleToUser()) {
+                            denied |= node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                        }
+                        node.recycle();
+                    }
+                    root.recycle();
+                }
+                SystemClock.sleep(50);
+            }
+            assertTrue("notification prompt was not dismissed", denied);
+        }
+        await(() -> active(MainActivity.class) != null
+                && active(MainActivity.class).hasWindowFocus());
+    }
+
+    private void awaitShelf() throws Exception {
+        await(() -> {
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            if (shelf == null || !shelf.hasWindowFocus()) {
+                return false;
+            }
+            final TextView summary = shelf.findViewById(R.id.offline_storage_summary);
+            final ArrayList<View> matches = new ArrayList<>();
+            shelf.findViewById(R.id.offline_saved_rows).findViewsWithText(matches, saved.title,
+                    View.FIND_VIEWS_WITH_TEXT);
+            if (matches.isEmpty()) {
+                return false;
+            }
+            final View title = matches.get(0);
+            title.requestRectangleOnScreen(new Rect(0, 0, title.getWidth(),
+                    title.getHeight()), true);
+            final Rect visible = new Rect();
+            return !summary.isShown() && summary.getText().toString().contains("500")
+                    && title.isShown() && title.getHeight() > 0
+                    && title.getGlobalVisibleRect(visible)
+                    && visible.height() == title.getHeight();
+        });
+    }
+
+    private void tapText(final int stringId, final int rootId) throws Exception {
+        final Rect[] screen = new Rect[1];
+        await(() -> {
+            final MainActivity activity = active(MainActivity.class);
+            final View root = activity == null ? null : activity.findViewById(rootId);
+            if (root == null || !root.isShown() || root.isLayoutRequested()
+                    || !((DrawerLayout) root.getParent()).isDrawerOpen(root)) {
+                return false;
+            }
+            final ArrayList<View> matches = new ArrayList<>();
+            root.findViewsWithText(matches, context.getString(stringId), View.FIND_VIEWS_WITH_TEXT);
+            for (final View view : matches) {
+                view.requestRectangleOnScreen(new Rect(0, 0, view.getWidth(),
+                        view.getHeight()), true);
+                final Rect visible = new Rect();
+                if (view.isShown() && view.getGlobalVisibleRect(visible)
+                        && visible.height() == view.getHeight() && view.getWidth() > 0
+                        && visible.width() == view.getWidth()) {
+                    final int[] location = new int[2];
+                    view.getLocationOnScreen(location);
+                    screen[0] = new Rect(location[0], location[1], location[0] + view.getWidth(),
+                            location[1] + view.getHeight());
+                    return true;
+                }
+            }
+            return false;
+        });
+        final long start = SystemClock.uptimeMillis();
+        for (final int action : new int[]{MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP}) {
+            final MotionEvent event = MotionEvent.obtain(start, SystemClock.uptimeMillis(), action,
+                    screen[0].centerX(), screen[0].centerY(), 0);
+            InstrumentationRegistry.getInstrumentation().sendPointerSync(event);
+            event.recycle();
+        }
+    }
+
+    private void awaitAccessibilityText(final String text) {
+        final long deadline = SystemClock.uptimeMillis() + 10000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                    .getUiAutomation().getRootInActiveWindow();
+            boolean found = false;
+            if (root != null) {
+                for (final AccessibilityNodeInfo node
+                        : root.findAccessibilityNodeInfosByText(text)) {
+                    found |= node.isVisibleToUser();
+                    node.recycle();
+                }
+                root.recycle();
+            }
+            if (found) {
+                return;
+            }
+            SystemClock.sleep(50);
+        }
+        assertTrue("capacity feedback did not appear", false);
+    }
+
+    private static <T extends Activity> T active(final Class<T> type) {
+        for (final Activity activity : ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)) {
+            if (type.isInstance(activity)) {
+                return type.cast(activity);
+            }
+        }
+        return null;
+    }
+
+    private static void await(final BooleanSupplier condition) throws Exception {
+        final long deadline = SystemClock.uptimeMillis() + 10000;
+        do {
+            if (main(condition::getAsBoolean)) {
+                return;
+            }
+            SystemClock.sleep(50);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertTrue("offline UI condition timed out", main(condition::getAsBoolean));
+    }
+
+    private static <T> T main(final Supplier<T> action) throws Exception {
+        final FutureTask<T> task = new FutureTask<>(action::get);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(task);
+        return task.get();
+    }
+}

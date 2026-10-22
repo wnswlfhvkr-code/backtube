@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backtube_error_details_title">Error details</string>
+    <string name="backtube_error_notification_title">backtube encountered an error. Tap for details.</string>
+    <string name="backtube_copy_error_details">Copy error details</string>
+    <string name="backtube_sign_in_confirm_not_bot_error">%1$s refused to provide data, asking for a login to confirm the requester is not a bot.\n\nYour IP might have been temporarily blocked by %1$s. Wait and retry, or try a different network.</string>
+    <string name="backtube_about_title">About backtube</string>
+</resources>

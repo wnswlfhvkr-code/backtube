@@ -121,6 +121,7 @@ public class StoredFileHelper implements Serializable {
     public StoredFileHelper(final Context context, @Nullable final Uri parent,
                             @NonNull final Uri path, final String tag) throws IOException {
         this.tag = tag;
+        this.context = context.getApplicationContext();
         this.source = path.toString();
 
         if (path.getScheme() == null
@@ -179,10 +180,23 @@ public class StoredFileHelper implements Serializable {
         return instance;
     }
 
+    // Commit managed completion before Giga discards its resumable mission metadata.
+    public void commitOfflineDownload() throws IOException {
+        if (tag != null && tag.startsWith("offline:")) {
+            org.schabi.newpipe.offline.OfflineLibrary.get(context).store()
+                    .finishDownload(tag.substring("offline:".length()));
+        }
+    }
+
     public SharpStream getStream() throws IOException {
         assertValid();
 
         if (docFile == null) {
+            if (tag != null && tag.startsWith("offline:")) {
+                return new org.schabi.newpipe.offline.OfflineFileStream(ioPath.toFile(),
+                        org.schabi.newpipe.offline.OfflineLibrary.get(context).store(),
+                        tag.substring("offline:".length()));
+            }
             return new FileStream(ioPath.toFile());
         } else {
             return new FileStreamSAF(context.getContentResolver(), docFile.getUri());

@@ -21,6 +21,7 @@ import com.evernote.android.state.State;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.error.ErrorInfo;
 import org.schabi.newpipe.error.UserAction;
+import org.schabi.newpipe.error.YoutubeTrendingUnavailableException;
 import org.schabi.newpipe.extractor.ListExtractor;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
@@ -125,6 +126,9 @@ public class KioskFragment extends BaseListInfoFragment<StreamInfoItem, KioskInf
 
     @Override
     public Single<KioskInfo> loadResult(final boolean forceReload) {
+        if (serviceId == ServiceList.YouTube.getServiceId() && "Trending".equals(kioskId)) {
+            return Single.error(new YoutubeTrendingUnavailableException());
+        }
         contentCountry = Localization.getPreferredContentCountry(requireContext());
         return ExtractorHelper.getKioskInfo(serviceId, url, forceReload);
     }

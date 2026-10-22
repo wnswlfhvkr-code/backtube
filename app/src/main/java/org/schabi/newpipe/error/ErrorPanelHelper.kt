@@ -76,7 +76,7 @@ class ErrorPanelHelper(
                 errorActionButton.setOnClickListener(null)
             }
         } else if (errorInfo.isReportable) {
-            showAndSetErrorButtonAction(R.string.error_snackbar_action) {
+            showAndSetErrorButtonAction(R.string.backtube_error_details_title) {
                 ErrorUtil.openActivity(context, errorInfo)
             }
         }

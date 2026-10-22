@@ -163,8 +163,11 @@ public final class Localization {
     }
 
     public static String localizeStreamCountMini(@NonNull final Context context,
-                                                 final long streamCount) {
-        switch ((int) streamCount) {
+                                                 @Nullable final Long streamCount) {
+        if (streamCount == null) {
+            return "";
+        }
+        switch (streamCount.intValue()) {
             case (int) ListExtractor.ITEM_COUNT_UNKNOWN:
                 return "";
             case (int) ListExtractor.ITEM_COUNT_INFINITE:

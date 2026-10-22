@@ -15,11 +15,11 @@ import org.schabi.newpipe.R
  */
 object DependentPreferenceHelper {
     /**
-     * Option `Resume playback` depends on `Watch history`, this method can be used to retrieve if
-     * `Resume playback` and its dependencies are all enabled.
+     * Option `Playback progress on details` depends on `Watch history`, this method can be used to retrieve if
+     * `Playback progress on details` and its dependencies are all enabled.
      *
      * @param context the Android context
-     * @return returns true if `Resume playback` and `Watch history` are both enabled
+     * @return returns true if `Playback progress on details` and `Watch history` are both enabled
      */
     @JvmStatic
     fun getResumePlaybackEnabled(context: Context): Boolean {

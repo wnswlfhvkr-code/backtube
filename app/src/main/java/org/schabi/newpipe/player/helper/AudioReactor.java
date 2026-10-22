@@ -1,8 +1,5 @@
 package org.schabi.newpipe.player.helper;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
@@ -10,7 +7,6 @@ import android.media.audiofx.AudioEffect;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.media.AudioFocusRequestCompat;
 import androidx.media.AudioManagerCompat;
@@ -22,7 +18,6 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private static final String TAG = "AudioFocusReactor";
 
-    private static final int DUCK_DURATION = 1500;
     private static final float DUCK_AUDIO_TO = .2f;
 
     private static final int FOCUS_GAIN_TYPE = AudioManagerCompat.AUDIOFOCUS_GAIN;
@@ -35,8 +30,9 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     private final AudioFocusRequestCompat request;
     private float focusGain = 1.0f;
     private float playbackGain = 1.0f;
-    @Nullable
-    private ValueAnimator focusAnimator;
+    private boolean resumeOnFocusGain;
+    private boolean hasAudioFocus;
+    private boolean focusRequestActive;
 
     public AudioReactor(@NonNull final Context context,
                         @NonNull final ExoPlayer player) {
@@ -53,7 +49,6 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     }
 
     public void dispose() {
-        cancelFocusAnimation();
         abandonAudioFocus();
         player.removeAnalyticsListener(this);
         notifyAudioSessionUpdate(false, player.getAudioSessionId());
@@ -63,11 +58,36 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
     // Audio Manager
     //////////////////////////////////////////////////////////////////////////*/
 
-    public void requestAudioFocus() {
-        AudioManagerCompat.requestAudioFocus(audioManager, request);
+    public boolean requestAudioFocus() {
+        if (requestAudioFocusFromSystem() == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            // A synchronous grant need not dispatch AUDIOFOCUS_GAIN. This is also the
+            // notification/media-button resume path after an interruption.
+            resumeOnFocusGain = false;
+            hasAudioFocus = true;
+            focusRequestActive = true;
+            restoreFocusGain();
+            return true;
+        }
+        // A denied request is not permission to play quietly. Keep any earlier transient
+        // interruption's resume intent: its existing listener may still receive a valid GAIN.
+        hasAudioFocus = false;
+        player.pause();
+        return false;
+    }
+
+    protected int requestAudioFocusFromSystem() {
+        return AudioManagerCompat.requestAudioFocus(audioManager, request);
+    }
+
+    public boolean hasAudioFocus() {
+        return hasAudioFocus;
     }
 
     public void abandonAudioFocus() {
+        // Explicit pause (including the sleep timer) must win over a late focus callback.
+        resumeOnFocusGain = false;
+        hasAudioFocus = false;
+        focusRequestActive = false;
         AudioManagerCompat.abandonAudioFocusRequest(audioManager, request);
     }
 
@@ -103,7 +123,13 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
                 onAudioFocusLossCanDuck();
                 break;
             case AudioManager.AUDIOFOCUS_LOSS:
+                resumeOnFocusGain = false;
+                focusRequestActive = false;
+                onAudioFocusLoss();
+                break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                // Preserve the interrupted intent across repeated transient-loss callbacks.
+                resumeOnFocusGain |= player.getPlayWhenReady();
                 onAudioFocusLoss();
                 break;
         }
@@ -111,60 +137,35 @@ public class AudioReactor implements AudioManager.OnAudioFocusChangeListener, An
 
     private void onAudioFocusGain() {
         Log.d(TAG, "onAudioFocusGain() called");
-        animateFocusGain(DUCK_AUDIO_TO, 1.0f);
+        // A callback queued before an explicit abandon cannot grant cached ownership.
+        hasAudioFocus = focusRequestActive;
+        restoreFocusGain();
 
-        if (PlayerHelper.isResumeAfterAudioFocusGain(context)) {
+        final boolean shouldResume = resumeOnFocusGain;
+        resumeOnFocusGain = false;
+        if (shouldResume && PlayerHelper.isResumeAfterAudioFocusGain(context)) {
             player.play();
         }
     }
 
     private void onAudioFocusLoss() {
         Log.d(TAG, "onAudioFocusLoss() called");
-        cancelFocusAnimation();
+        hasAudioFocus = false;
         player.pause();
     }
 
     private void onAudioFocusLossCanDuck() {
         Log.d(TAG, "onAudioFocusLossCanDuck() called");
-        // Set the volume to 1/10 on ducking
-        cancelFocusAnimation();
+        hasAudioFocus = false;
         focusGain = DUCK_AUDIO_TO;
         applyVolume();
     }
 
-    private void animateFocusGain(final float from, final float to) {
-        cancelFocusAnimation();
-        focusGain = from;
+    private void restoreFocusGain() {
+        // Audio recovery must not depend on UI animation frames in a background service.
+        // Only remove our ducking; playbackGain still owns mute and sleep-timer fading.
+        focusGain = 1.0f;
         applyVolume();
-
-        final ValueAnimator animator = ValueAnimator.ofFloat(from, to);
-        focusAnimator = animator;
-        animator.setDuration(AudioReactor.DUCK_DURATION);
-        animator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(final Animator animation) {
-                if (focusAnimator == animator) {
-                    focusGain = to;
-                    focusAnimator = null;
-                    applyVolume();
-                }
-            }
-        });
-        animator.addUpdateListener(animation -> {
-            if (focusAnimator == animator) {
-                focusGain = (float) animation.getAnimatedValue();
-                applyVolume();
-            }
-        });
-        animator.start();
-    }
-
-    private void cancelFocusAnimation() {
-        final ValueAnimator animator = focusAnimator;
-        focusAnimator = null;
-        if (animator != null) {
-            animator.cancel();
-        }
     }
 
     private void applyVolume() {

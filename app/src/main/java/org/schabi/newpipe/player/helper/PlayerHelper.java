@@ -203,7 +203,7 @@ public final class PlayerHelper {
 
     public static boolean isResumeAfterAudioFocusGain(@NonNull final Context context) {
         return getPreferences(context)
-                .getBoolean(context.getString(R.string.resume_on_audio_focus_gain_key), false);
+                .getBoolean(context.getString(R.string.resume_on_audio_focus_gain_key), true);
     }
 
     public static String getActionForRightGestureSide(@NonNull final Context context) {
