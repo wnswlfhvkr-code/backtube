@@ -841,6 +841,8 @@ public class DownloadDialog extends DialogFragment
                 final org.schabi.newpipe.offline.OfflineStore.Entry entry =
                         library.beginDownload(currentInfo.getName(), currentInfo.getUrl(),
                                 currentInfo.getServiceId(), mimeTmp, size);
+                org.schabi.newpipe.offline.OfflineThumbnails.remember(context, library.store(),
+                        entry, currentInfo.getThumbnails());
                 if ("giga".equals(entry.source)) {
                     final StoredFileHelper storage = new StoredFileHelper(context, null,
                             Uri.fromFile(library.store().file(entry)), "offline:" + entry.id);

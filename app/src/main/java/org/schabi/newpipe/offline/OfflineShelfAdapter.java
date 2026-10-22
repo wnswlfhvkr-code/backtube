@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.function.BooleanSupplier;
 
 /** Reuses play-queue rows without its online image loader or mutable player queue. */
 final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter.Holder> {
@@ -158,12 +159,16 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     @Override
     public void onBindViewHolder(@NonNull final Holder holder, final int position) {
         final OfflineStore.Entry entry = order.items().get(position);
+        holder.cancelThumbnail.run();
+        final long binding = ++holder.thumbnailBinding;
         holder.boundId = entry.id;
         holder.itemView.setTag(entry.id);
         holder.title.setText(entry.title);
         holder.title.setSingleLine(false);
         holder.title.setMaxLines(2);
         holder.thumbnail.setImageResource(R.drawable.placeholder_thumbnail_video);
+        holder.cancelThumbnail = listener.thumbnail(entry, holder.thumbnail,
+                () -> binding == holder.thumbnailBinding && entry.id.equals(holder.boundId));
         holder.thumbnail.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         holder.itemView.findViewById(R.id.itemDurationView).setVisibility(View.GONE);
         final RowDetails details = listener.details(entry);
@@ -217,7 +222,7 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         if (playable) {
             final int action = selectionMode
                     ? checked ? R.string.offline_deselect_item : R.string.offline_select_item
-                    : R.string.offline_play;
+                    : OfflineThumbnailFiles.playLabel(entry);
             ViewCompat.replaceAccessibilityAction(holder.root,
                     AccessibilityActionCompat.ACTION_CLICK,
                     holder.root.getContext().getString(action), null);
@@ -228,6 +233,15 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         holder.menu.setOnClickListener(view -> showMenu(holder, view, false));
         holder.handle.setOnClickListener(view -> showMenu(holder, view, true));
         addMoveActions(holder, position);
+    }
+
+    @Override public void onViewRecycled(@NonNull final Holder holder) {
+        holder.cancelThumbnail.run();
+        holder.cancelThumbnail = () -> { };
+        holder.thumbnailBinding++;
+        holder.boundId = null;
+        holder.thumbnail.setImageResource(R.drawable.placeholder_thumbnail_video);
+        super.onViewRecycled(holder);
     }
 
     private void bindSelectionAccessibility(final Holder holder) {
@@ -337,6 +351,10 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
     }
 
     interface Listener {
+        default Runnable thumbnail(final OfflineStore.Entry entry, final ImageView target,
+                                   final BooleanSupplier current) {
+            return () -> { };
+        }
         void play(OfflineStore.Entry entry);
         default void select(final OfflineStore.Entry entry) { }
         void menu(OfflineStore.Entry entry, View anchor, boolean movementOnly);
@@ -366,6 +384,8 @@ final class OfflineShelfAdapter extends RecyclerView.Adapter<OfflineShelfAdapter
         final View menu;
         final ProgressBar progress;
         String boundId;
+        long thumbnailBinding;
+        Runnable cancelThumbnail = () -> { };
 
         Holder(final View view) {
             super(view);

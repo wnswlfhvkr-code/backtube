@@ -7,6 +7,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.offline.OfflineMediaDuration;
+import org.schabi.newpipe.offline.OfflineThumbnailFiles;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ public final class OfflinePlayQueue extends PlayQueue {
                     entry.title, entry.mime.startsWith("video/")
                     ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
             item.setUploaderName(uploader);
+            item.setThumbnails(OfflineThumbnailFiles.images(store, entry));
             item.setDuration(OfflineMediaDuration.readSeconds(store.file(entry)));
             items.add(item);
         }

@@ -112,7 +112,7 @@ public class OfflineShelfRowStateTest {
         when(resources.getDisplayMetrics()).thenReturn(metrics);
         when(context.getString(anyInt())).thenAnswer(invocation -> {
             final int id = invocation.getArgument(0);
-            if (id == R.string.offline_play) {
+            if (id == R.string.offline_play || id == R.string.offline_audio_play) {
                 return "Play";
             }
             if (id == R.string.offline_select_item) {
@@ -194,6 +194,26 @@ public class OfflineShelfRowStateTest {
         store.copy(savedId, new ByteArrayInputStream(new byte[40]));
         bindAndCheck(OfflineStore.State.READY, true);
         assertEquals(40, store.file(store.get(savedId)).length());
+    }
+
+    @Test public void delayedArtworkCannotUpdateReboundOrRecycledRow() throws Exception {
+        final OfflineStore.Entry first = store.get(savedId);
+        final OfflineStore.Entry other = store.create("Different video", "", 0,
+                "file:///generated/other", "video/webm");
+        store.copy(other.id, new ByteArrayInputStream(new byte[20]));
+        adapter.setEntries(List.of(first));
+        adapter.onBindViewHolder(holder, 0);
+        final int initial = listener.thumbnailOwners.size() - 1;
+        assertTrue(listener.thumbnailOwners.get(initial).getAsBoolean());
+        adapter.setEntries(List.of(store.get(other.id)));
+        adapter.onBindViewHolder(holder, 0);
+        final int next = listener.thumbnailOwners.size() - 1;
+        assertTrue(listener.thumbnailCancelled.get(initial));
+        assertFalse(listener.thumbnailOwners.get(initial).getAsBoolean());
+        assertTrue(listener.thumbnailOwners.get(next).getAsBoolean());
+        adapter.onViewRecycled(holder);
+        assertTrue(listener.thumbnailCancelled.get(next));
+        assertFalse(listener.thumbnailOwners.get(next).getAsBoolean());
     }
 
     @Test public void recycledReadyRowRemovesPlaySemanticsDuringInteractionLock()
@@ -377,9 +397,19 @@ public class OfflineShelfRowStateTest {
     }
 
     private static final class RecordingListener implements OfflineShelfAdapter.Listener {
+        private final List<java.util.function.BooleanSupplier> thumbnailOwners = new ArrayList<>();
+        private final List<Boolean> thumbnailCancelled = new ArrayList<>();
         private final List<String> played = new ArrayList<>();
         private final List<String> selected = new ArrayList<>();
         private final List<MenuRequest> menus = new ArrayList<>();
+
+        @Override public Runnable thumbnail(final OfflineStore.Entry entry, final ImageView target,
+                final java.util.function.BooleanSupplier current) {
+            final int index = thumbnailOwners.size();
+            thumbnailOwners.add(current);
+            thumbnailCancelled.add(false);
+            return () -> thumbnailCancelled.set(index, true);
+        }
 
         @Override public void play(final OfflineStore.Entry entry) {
             played.add(entry.id);

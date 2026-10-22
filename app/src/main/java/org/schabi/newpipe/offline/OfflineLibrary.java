@@ -164,7 +164,8 @@ public final class OfflineLibrary {
         final StreamInfoItem item = new StreamInfoItem(entry.serviceId, entry.localUrl(),
                 entry.title, entry.mime.startsWith("video/")
                 ? StreamType.VIDEO_STREAM : StreamType.AUDIO_STREAM);
-        item.setUploaderName(context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+        item.setUploaderName(context.getString(OfflineThumbnailFiles.playLabel(entry)));
+        item.setThumbnails(OfflineThumbnailFiles.images(store, entry));
         item.setDuration(durationSeconds(entry.serviceId, entry.localUrl()));
         return item;
     }
@@ -190,8 +191,11 @@ public final class OfflineLibrary {
 
     @WorkerThread
     public OfflinePlayQueue queueAll() throws IOException {
-        return new OfflinePlayQueue(store,
-                context.getString(org.schabi.newpipe.R.string.offline_saved_copy));
+        final List<String> ids = new ArrayList<>();
+        for (final OfflineStore.Entry entry : store.list()) {
+            ids.add(entry.id);
+        }
+        return queueSelected(ids);
     }
 
     /** Build a fresh finite subset in current shelf order; an empty request stays empty.
@@ -230,7 +234,8 @@ public final class OfflineLibrary {
     @WorkerThread
     public StreamInfo streamInfo(final int serviceId, final String url) throws IOException {
         final OfflineStore.Entry entry = requireSavedEntry(serviceId, url);
-        return new OfflineMediaTag(queue(entry).getItem()).getMaybeStreamInfo().orElseThrow();
+        return new OfflineMediaTag(queue(entry).getItem(), store)
+                .getMaybeStreamInfo().orElseThrow();
     }
 
     @WorkerThread
@@ -252,6 +257,12 @@ public final class OfflineLibrary {
 
     @Nullable
     public MediaSource source(final PlayQueueItem item) throws IOException {
+        return source(item, tag -> { });
+    }
+
+    @Nullable
+    public MediaSource source(final PlayQueueItem item,
+            final java.util.function.Consumer<OfflineMediaTag> artworkReady) throws IOException {
         // An origin match describes the saved entry; it does not request saved playback.
         if (!OfflineStore.isLocalUrl(item.getUrl())) {
             return null;
@@ -260,7 +271,13 @@ public final class OfflineLibrary {
         if (entry == null) {
             return null;
         }
-        final OfflineMediaTag tag = new OfflineMediaTag(item);
+        final OfflineMediaTag tag = new OfflineMediaTag(item, store);
+        OfflineThumbnails.schedule(context, store, entry, images -> {
+            if (!images.isEmpty()) {
+                tag.updateArtwork(images);
+                artworkReady.accept(tag);
+            }
+        });
         return new ProgressiveMediaSource.Factory(() -> new SavedFileSource(store, entry.id))
                 .createMediaSource(tag.asMediaItem().buildUpon()
                         .setUri(Uri.fromFile(store.file(entry))).setMimeType(entry.mime).build());

@@ -213,6 +213,13 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         rows.setId(R.id.offline_saved_rows);
         rows.setLayoutManager(new LinearLayoutManager(this));
         adapter = new OfflineShelfAdapter(new OfflineShelfAdapter.Listener() {
+            @Override public Runnable thumbnail(final OfflineStore.Entry entry,
+                    final android.widget.ImageView target,
+                    final java.util.function.BooleanSupplier current) {
+                return library == null ? () -> { } : OfflineThumbnails.bind(
+                        OfflineLibraryActivity.this, library.store(), entry, target, current);
+            }
+
             @Override public void play(final OfflineStore.Entry entry) {
                 playSaved(entry);
             }
@@ -368,6 +375,9 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(refresh);
+        if (rows != null) {
+            rows.setAdapter(null);
+        }
         reads.dispose();
         if (bound) {
             unbindService(connection);
@@ -495,7 +505,11 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             final long total = mission == null ? 0 : mission.getLength();
             progress = total <= 0 ? -2 : (int) Math.min(100, 100.0 * mission.done / total);
         }
-        return new OfflineShelfAdapter.RowDetails(label + " · "
+        final String kind = getString(entry.state == OfflineStore.State.READY
+                ? OfflineThumbnailFiles.playLabel(entry)
+                : OfflineThumbnailFiles.isVideo(entry)
+                ? R.string.offline_video_copy : R.string.offline_audio_copy);
+        return new OfflineShelfAdapter.RowDetails(kind + " · " + label + " · "
                 + getString(R.string.offline_size, entry.bytes / 1_000_000.0), progress);
     }
 

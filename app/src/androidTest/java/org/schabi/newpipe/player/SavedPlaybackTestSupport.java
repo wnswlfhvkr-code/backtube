@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Test-only owned media, real service restore, controller, and network boundaries. */
-final class SavedPlaybackTestSupport {
+public final class SavedPlaybackTestSupport {
     private SavedPlaybackTestSupport() { }
 
     static Player restoreSavedService(final Context context, final PlayerService service)
@@ -91,13 +91,13 @@ final class SavedPlaybackTestSupport {
         }
     }
 
-    static final class RejectNetwork extends Downloader implements AutoCloseable {
+    public static final class RejectNetwork extends Downloader implements AutoCloseable {
         private final Downloader previous = NewPipe.getDownloader();
         private final Localization localization = NewPipe.getPreferredLocalization();
         private final ContentCountry country = NewPipe.getPreferredContentCountry();
-        final AtomicInteger requests = new AtomicInteger();
+        public final AtomicInteger requests = new AtomicInteger();
 
-        RejectNetwork() {
+        public RejectNetwork() {
             NewPipe.init(this, localization, country);
         }
 

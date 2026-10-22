@@ -433,6 +433,7 @@ public final class OfflineStore {
         removeFile(new File(directory, id + ".properties"));
         entries.remove(id);
         downloadClaims.remove(id);
+        OfflineThumbnailFiles.remove(this, entry);
         removeFile(part(id));
         if (!readers.containsKey(id)) {
             removeFile(file(entry));

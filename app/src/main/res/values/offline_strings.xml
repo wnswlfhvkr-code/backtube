@@ -26,6 +26,10 @@
     <string name="offline_interrupted">Interrupted · Retry copies again from the source</string>
     <string name="offline_failed">Save failed · Check the source and storage. Delete unwanted saved items if full.</string>
     <string name="offline_play">Play saved copy</string>
+    <string name="offline_video_play">Play saved video</string>
+    <string name="offline_audio_play">Play saved audio</string>
+    <string name="offline_video_copy">Saved video</string>
+    <string name="offline_audio_copy">Saved audio</string>
     <string name="offline_size">%1$.1f MB</string>
     <string name="offline_storage_error">Could not save or read this file. Check free space and access to the source media.</string>
     <string name="offline_delete_title">Delete saved copy?</string>

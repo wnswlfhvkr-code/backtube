@@ -2949,7 +2949,16 @@ public final class Player implements PlaybackListener, Listener {
     @Override
     @Nullable
     public MediaSource localSourceOf(final PlayQueueItem item) throws java.io.IOException {
-        return OfflineLibrary.get(context).source(item);
+        return OfflineLibrary.get(context).source(item, tag -> networkHandler.post(() -> {
+            if (!exoPlayerIsNull() && currentMetadata instanceof OfflineMediaTag
+                    && tag.sharesArtworkWith((OfflineMediaTag) currentMetadata)) {
+                // Artwork completion must not reload the source or change playback/recovery state.
+                tag.getMaybeStreamInfo().ifPresent(info -> {
+                    loadCurrentThumbnail(info.getThumbnails());
+                    notifyMetadataUpdateToListeners();
+                });
+            }
+        }));
     }
 
     @Override // own playback listener

@@ -5,24 +5,37 @@ import androidx.annotation.Nullable;
 
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
+import org.schabi.newpipe.extractor.Image;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
 import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Local metadata deliberately has no remote StreamInfo or recommendation lookup. */
 public final class OfflineMediaTag implements MediaItemTag {
     private final PlayQueueItem item;
+    private final AtomicReference<List<Image>> thumbnails;
     @Nullable private final Object extras;
 
     public OfflineMediaTag(final PlayQueueItem item) {
-        this(item, null);
+        this(item, new AtomicReference<>(List.of()), null);
     }
 
-    private OfflineMediaTag(final PlayQueueItem item, @Nullable final Object extras) {
+    public OfflineMediaTag(final PlayQueueItem item, final OfflineStore store)
+            throws java.io.IOException {
+        this(item, new AtomicReference<>(
+                OfflineThumbnailFiles.images(store,
+                        store.find(item.getServiceId(), item.getUrl()))), null);
+    }
+
+    private OfflineMediaTag(final PlayQueueItem item,
+                            final AtomicReference<List<Image>> thumbnails,
+                            @Nullable final Object extras) {
         this.item = item;
+        this.thumbnails = thumbnails;
         this.extras = extras;
     }
 
@@ -32,6 +45,7 @@ public final class OfflineMediaTag implements MediaItemTag {
                 item.getStreamType(), item.getUrl(), item.getTitle(), 0);
         info.setDuration(item.getDuration());
         info.setUploaderName(item.getUploader());
+        info.setThumbnails(thumbnails.get());
         return Optional.of(info);
     }
 
@@ -60,7 +74,8 @@ public final class OfflineMediaTag implements MediaItemTag {
     }
 
     @Override public String getThumbnailUrl() {
-        return "";
+        final List<Image> images = thumbnails.get();
+        return images.isEmpty() ? "" : images.get(0).getUrl();
     }
 
     @Override public String getUploaderUrl() {
@@ -76,6 +91,14 @@ public final class OfflineMediaTag implements MediaItemTag {
     }
 
     @Override public <T> MediaItemTag withExtras(@NonNull final T extra) {
-        return new OfflineMediaTag(item, extra);
+        return new OfflineMediaTag(item, thumbnails, extra);
+    }
+
+    void updateArtwork(final List<Image> images) {
+        thumbnails.set(List.copyOf(images));
+    }
+
+    public boolean sharesArtworkWith(final OfflineMediaTag other) {
+        return thumbnails == other.thumbnails;
     }
 }

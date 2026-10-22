@@ -1928,6 +1928,11 @@ public final class VideoDetailFragment
         updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
         if (currentInfo != null && info.getUrl().equals(currentInfo.getUrl())) {
             currentInfo = info;
+            if (binding != null
+                    && org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
+                CoilHelper.INSTANCE.loadDetailsThumbnail(binding.detailThumbnailImageView,
+                        info.getThumbnails());
+            }
             refreshRelatedItems(info);
             return;
         }

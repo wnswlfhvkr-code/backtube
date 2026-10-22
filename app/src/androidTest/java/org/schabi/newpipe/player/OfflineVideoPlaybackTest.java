@@ -112,6 +112,12 @@ public class OfflineVideoPlaybackTest {
             final PlayQueue queue = library.queue(video);
             runOnMain(() -> NavigationHelper.playOnMainPlayer(context, queue, false));
             assertRenderedVideo(video.localUrl());
+            assertTrue("saved artwork did not reach the active player", waitFor(
+                    () -> callOnMain(() -> player.getThumbnail() != null
+                            && player.getCurrentStreamInfo().map(info ->
+                                    !info.getThumbnails().isEmpty()
+                                    && info.getThumbnails().get(0).getUrl().startsWith("file:"))
+                                    .orElse(false)), 30));
             runOnMain(() -> {
                 player.pause();
                 player.getExoPlayer().seekTo(1000);
