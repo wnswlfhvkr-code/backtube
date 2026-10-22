@@ -94,10 +94,17 @@ class OfflineThumbnailsDeviceTest {
                         val rows = activity!!.findViewById<RecyclerView>(R.id.offline_saved_rows)
                         val adapter = rows.adapter as OfflineShelfAdapter
                         adapter.positionOf(audio.id) < adapter.positionOf(video.id) &&
-                            rowColour(video.id) == Color.RED && rowColour(audio.id) == Color.BLUE
+                            rowColour(video.id) == Color.RED && rowColour(audio.id) == Color.BLUE &&
+                            visualOrder(audio.id, video.id)
                     }
                 }
             )
+            val drawn = CountDownLatch(1)
+            main {
+                val rows = activity!!.findViewById<RecyclerView>(R.id.offline_saved_rows)
+                rows.postOnAnimation { rows.postOnAnimation { drawn.countDown() } }
+            }
+            assertTrue(drawn.await(10, TimeUnit.SECONDS))
             instrumentation.uiAutomation.takeScreenshot()?.let { screenshot ->
                 File(context.cacheDir, "offline-thumbnails-generated-ui.png").outputStream().use {
                     screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -274,6 +281,13 @@ class OfflineThumbnailsDeviceTest {
         val rows = activity!!.findViewById<RecyclerView>(R.id.offline_saved_rows)
         val adapter = rows.adapter as OfflineShelfAdapter
         return rows.findViewHolderForAdapterPosition(adapter.positionOf(id))
+    }
+
+    private fun visualOrder(first: String, second: String): Boolean {
+        val a = android.graphics.Rect()
+        val b = android.graphics.Rect()
+        return row(first)?.itemView?.getGlobalVisibleRect(a) == true &&
+            row(second)?.itemView?.getGlobalVisibleRect(b) == true && a.bottom <= b.top
     }
 
     private fun rowDetails(id: String) = row(id)!!.itemView.findViewById<TextView>(R.id.itemAdditionalDetails).text.toString()

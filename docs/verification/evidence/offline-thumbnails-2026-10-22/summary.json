@@ -1,0 +1,222 @@
+{
+  "product_source": "0a6716beac7b82d90bcde78961ec5e37aa4e2234",
+  "apk": {
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1029,
+    "version_name": "0.29.1-backtube-offline-thumbnails-20261022",
+    "size_bytes": 11547490,
+    "sha256": "7b081bfbbdcc86a3fb8dce5ad60ee2309cc50d4f74d2d2cd33f004dc7958c71f",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "signature_valid": true,
+    "zipalign_valid": true,
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    }
+  },
+  "automated": {
+    "source": "0a6716beac7b82d90bcde78961ec5e37aa4e2234",
+    "app": {
+      "suites": 87,
+      "tests": 545,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared_jvm": {
+      "suites": 9,
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "checkstyle_errors": 0,
+    "ktlint": "PASS",
+    "dependency_order": "PASS",
+    "lint": {
+      "Error": 0,
+      "Fatal": 0,
+      "Warning": 346
+    },
+    "new_lint_warning": "UseKtx style suggestion at bounded Bitmap.createScaledBitmap; no correctness warning",
+    "android_host": "compile only; no runtime-pass claim",
+    "physical_phone": "NOTRUN"
+  },
+  "independent_review": {
+    "reviewed_staged_diff_sha256": "491805d61828b0b9c61993afa90b9fd65d03ae7ae6a5b7c5dd80bcd9c2511977",
+    "product_source": "0a6716beac7b82d90bcde78961ec5e37aa4e2234",
+    "reviewer": "independent read-only thumbnail_review",
+    "spec": "PASS",
+    "quality": "PASS static review",
+    "code_blockers": [],
+    "reviewer_ran_tests": false,
+    "initial_room_candidate_P2": "fixed; device RED expected1 actual0 recorded before correction"
+  },
+  "cloud": {
+    "api": 23,
+    "debug_product_source_matches": true,
+    "thumbnail_suite": {
+      "phase": "thumbnails-final",
+      "serial": "emulator-5582",
+      "android_api": 23,
+      "fixture": "generated-images-and-webm-audio",
+      "cloud_virtual_device": true,
+      "physical_phone": false,
+      "elapsed_seconds": 20.63,
+      "adb_exit_code": 0,
+      "tests": [
+        {
+          "numtests": "5",
+          "test": "cachedArtPersistsAndActualShelfShowsDistinctVideoAudioCoversAndLabels",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "1",
+          "code": 0
+        },
+        {
+          "numtests": "5",
+          "test": "saturatedArtworkWorkerNeverDelaysOwnedMediaSourceCreation",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "2",
+          "code": 0
+        },
+        {
+          "numtests": "5",
+          "test": "roomCachedCoverIsTriedAfterEightInfoCacheMisses",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "3",
+          "code": 0
+        },
+        {
+          "numtests": "5",
+          "test": "corruptMediaAndAudioWithoutCoverKeepPlaceholderWithoutLosingSave",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "4",
+          "code": 0
+        },
+        {
+          "numtests": "5",
+          "test": "legacyVideoWithoutImageExtractsLocalFrameAndKeepsMediaBytesAndOrder",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "5",
+          "code": 0
+        }
+      ],
+      "ok_marker": true,
+      "exception_types": [],
+      "app_failure_frames": [],
+      "known_assertions": [],
+      "numeric_assertions": [],
+      "instrumentation_failed": false,
+      "process_crashed": false,
+      "raw_output_saved": false
+    },
+    "webm_playback_suite": {
+      "phase": "webm-final",
+      "serial": "emulator-5582",
+      "android_api": 23,
+      "fixture": "webm-vp8-vorbis",
+      "cloud_virtual_device": true,
+      "physical_phone": false,
+      "elapsed_seconds": 90.42,
+      "adb_exit_code": 0,
+      "tests": [
+        {
+          "numtests": "3",
+          "test": "audioOnlySaveRetainsAudioPlayerAndAudioDecoder",
+          "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+          "current": "1",
+          "code": 0
+        },
+        {
+          "numtests": "3",
+          "test": "singleSavedVideoRendersFramesAndAudioWithoutNetwork",
+          "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+          "current": "2",
+          "code": 0
+        },
+        {
+          "numtests": "3",
+          "test": "selectedAudioThenVideoRendersVideoOnAutomaticTransition",
+          "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+          "current": "3",
+          "code": 0
+        }
+      ],
+      "ok_marker": true,
+      "exception_types": [],
+      "app_failure_frames": [],
+      "known_assertions": [],
+      "numeric_assertions": [],
+      "instrumentation_failed": false,
+      "process_crashed": false,
+      "raw_output_saved": false
+    },
+    "final_visual_geometry_check": {
+      "phase": "thumbnails-visual-order",
+      "serial": "emulator-5582",
+      "android_api": 23,
+      "fixture": "generated-images-and-webm-audio",
+      "cloud_virtual_device": true,
+      "physical_phone": false,
+      "elapsed_seconds": 24.79,
+      "adb_exit_code": 0,
+      "tests": [
+        {
+          "numtests": "1",
+          "test": "cachedArtPersistsAndActualShelfShowsDistinctVideoAudioCoversAndLabels",
+          "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+          "current": "1",
+          "code": 0
+        }
+      ],
+      "ok_marker": true,
+      "exception_types": [],
+      "app_failure_frames": [],
+      "known_assertions": [],
+      "numeric_assertions": [],
+      "instrumentation_failed": false,
+      "process_crashed": false,
+      "raw_output_saved": false
+    },
+    "actual_candidate_upgrade": {
+      "cloud_serial": "emulator-5582",
+      "physical_phone": false,
+      "original_generated_fixture_only": true,
+      "new_runtime_permissions": false,
+      "raw_output_saved": false,
+      "install_1028": true,
+      "fixture_creation": "Generated valid legacy store record; external import intent harness did not complete",
+      "old_generated_save_ready": true,
+      "install_1029_update": true,
+      "saved_metadata_unchanged": true,
+      "saved_media_sha_unchanged": true,
+      "actual_version_code": 1029,
+      "candidate_shelf_launch": true,
+      "passed": true,
+      "candidate_video_audio_instrumentation": "NOTRUN; identical product sources tested in debug variant",
+      "candidate_legacy_frame_jpeg_generated": true,
+      "generated_thumbnail_dimensions": [
+        320,
+        180
+      ]
+    },
+    "settled_generated_ui_inspected": true,
+    "settled_image_sha256": "0613d2e5594438e0c10b6836fadaa052f5cb675e84e7c58b92091cec8f7bc6fc",
+    "screenshots_published": true,
+    "screenshot_content": "Only generated test titles and solid-colour artwork; no account or external original media"
+  },
+  "release_hold": true,
+  "main_merged": false,
+  "apk1027_do_not_install": true,
+  "physical_phone": "NOTRUN",
+  "network_download_mux_e2e": "NOTRUN",
+  "candidate_av_instrumentation": "NOTRUN",
+  "previous_h264_cloud_native_decoder_limit": "unresolved; not claimed passing",
+  "credentials_or_external_original_media_uploaded": false
+}

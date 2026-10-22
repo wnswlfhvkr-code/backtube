@@ -4,6 +4,10 @@ APK1026 release finalization remains on hold. No release, tag or release asset w
 created or changed during this work. The fix is a review candidate, with physical
 phone validation still NOTRUN.
 
+The subsequent artwork/Korean-label candidate APK1029 is documented in
+[offline-thumbnails-2026-10-22.md](offline-thumbnails-2026-10-22.md). The APK1028
+identity and historical results below remain unchanged.
+
 ## Build identity
 
 | Item | Value |
