@@ -59,7 +59,12 @@ final class PlaybackTestUi {
             final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                     .getUiAutomation().getRootInActiveWindow();
             if (root != null) {
-                scrollForward(root);
+                // A missing node may mean accessibility has not published the dialog yet.
+                // Never scroll the detail screen underneath it. Search a list from its
+                // start first, so a stale lookup cannot strand an early option above us.
+                scrollList(root, attempt < 3
+                        ? AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                        : AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
                 root.recycle();
             }
             SystemClock.sleep(300);
@@ -124,15 +129,15 @@ final class PlaybackTestUi {
         return true;
     }
 
-    private static boolean scrollForward(final AccessibilityNodeInfo node) {
-        if (node.isScrollable()
-                && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+    private static boolean scrollList(final AccessibilityNodeInfo node, final int action) {
+        if ("android.widget.ListView".equals(String.valueOf(node.getClassName()))
+                && node.isScrollable() && node.performAction(action)) {
             return true;
         }
         for (int index = 0; index < node.getChildCount(); index++) {
             final AccessibilityNodeInfo child = node.getChild(index);
             if (child != null) {
-                final boolean scrolled = scrollForward(child);
+                final boolean scrolled = scrollList(child, action);
                 child.recycle();
                 if (scrolled) {
                     return true;
@@ -267,7 +272,13 @@ final class PlaybackTestUi {
     }
 
     private static void tapDetailTimer(final Supplier<MainActivity> activity) {
+        final var automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         final Rect bounds = revealDetailTimer(activity);
+        final AccessibilityNodeInfo previous = automation.getRootInActiveWindow();
+        final int previousWindow = previous == null ? -1 : previous.getWindowId();
+        if (previous != null) {
+            previous.recycle();
+        }
         final long now = SystemClock.uptimeMillis();
         final MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN,
                 bounds.centerX(), bounds.centerY(), 0);
@@ -280,6 +291,26 @@ final class PlaybackTestUi {
             down.recycle();
             up.recycle();
         }
+        final String title = readOnMain(
+                () -> activity.get().getString(R.string.personal_sleep_timer_title));
+        final long deadline = SystemClock.uptimeMillis() + 8000;
+        boolean opened = false;
+        do {
+            final AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+            if (root != null) {
+                final List<AccessibilityNodeInfo> titles = root
+                        .findAccessibilityNodeInfosByText(title);
+                opened = root.getWindowId() != previousWindow && titles.stream().anyMatch(
+                        node -> node.isVisibleToUser()
+                                && title.equals(String.valueOf(node.getText())));
+                titles.forEach(AccessibilityNodeInfo::recycle);
+                root.recycle();
+            }
+            if (!opened) {
+                SystemClock.sleep(50);
+            }
+        } while (!opened && SystemClock.uptimeMillis() < deadline);
+        assertTrue("real timer tap did not open the timer dialog window", opened);
     }
 
     private static void captureDetailTimer(final Context context,

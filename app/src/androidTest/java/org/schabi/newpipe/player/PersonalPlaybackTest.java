@@ -1158,13 +1158,12 @@ public class PersonalPlaybackTest {
                 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
                 && !App.getInstance().getNotificationsRequested();
-        if (expectsNotificationPrompt) {
-            final android.app.UiAutomation automation = InstrumentationRegistry
-                    .getInstrumentation().getUiAutomation();
-            final AccessibilityServiceInfo info = automation.getServiceInfo();
-            info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
-            automation.setServiceInfo(info);
-        }
+        // Connect accessibility before the first real tap, including cold API 23 runs.
+        final android.app.UiAutomation automation = InstrumentationRegistry
+                .getInstrumentation().getUiAutomation();
+        final AccessibilityServiceInfo info = automation.getServiceInfo();
+        info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+        automation.setServiceInfo(info);
         final MainActivity activity = (MainActivity) InstrumentationRegistry
                 .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
