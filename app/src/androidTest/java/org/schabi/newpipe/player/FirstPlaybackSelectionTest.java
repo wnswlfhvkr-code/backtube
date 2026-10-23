@@ -137,8 +137,8 @@ public class FirstPlaybackSelectionTest {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             runOnMain(() -> {
                 if ("audio".equals(path)) {
-                    NavigationHelper.playOnBackgroundPlayer(context, selected, true);
-                    NavigationHelper.openPlayQueue(context);
+                    NavigationHelper.playOnBackgroundPlayer(activity, selected, true);
+                    NavigationHelper.openPlayQueue(activity);
                 } else {
                     NavigationHelper.playOnMainPlayer(activity, selected);
                 }
