@@ -146,9 +146,14 @@ public class FirstPlaybackSelectionTest {
             if (!bound) {
                 bind();
             }
-            assertTrue("first selection did not play A", waitFor(() -> callOnMain(() ->
+            final boolean selectedPlaying = waitFor(() -> callOnMain(() ->
                     service.getPlayer() != null && service.getPlayer().isPlaying()
-                            && expectedUrl.equals(service.getPlayer().getVideoUrl())), 60));
+                            && expectedUrl.equals(service.getPlayer().getVideoUrl())), 60);
+            if (!selectedPlaying) {
+                PlaybackTestUi.captureScreen(context, "first-selection-failure.png");
+            }
+            assertTrue(callOnMain(() -> selectionDiagnostic(activity, expectedUrl)),
+                    selectedPlaying);
             final Player player = callOnMain(service::getPlayer);
             assertTrue("first selection produced no audio frames", waitFor(() -> callOnMain(() ->
                     player.getExoPlayer().getAudioDecoderCounters() != null
@@ -248,11 +253,51 @@ public class FirstPlaybackSelectionTest {
     }
 
     private void bind() throws Exception {
+        // Observe the service started by the user navigation; do not create an empty service.
         bound = context.bindService(new Intent(context, PlayerService.class)
                         .setAction(PlayerService.BIND_PLAYER_HOLDER_ACTION), connection,
-                Context.BIND_AUTO_CREATE);
+                0);
         assertTrue(bound);
         assertTrue(connected.await(30, TimeUnit.SECONDS));
+    }
+
+    private String selectionDiagnostic(final MainActivity activity, final String expectedUrl)
+            throws Exception {
+        final Player current = service.getPlayer();
+        final VideoDetailFragment detail = (VideoDetailFragment) activity
+                .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder);
+        final StringBuilder result = new StringBuilder("first selection did not play A")
+                .append(" hasPlayer=").append(current != null)
+                .append(" detailSelected=").append(detail != null
+                        && expectedUrl.equals(detail.getUrl()));
+        if (current != null) {
+            result.append(" type=").append(current.getPlayerType())
+                    .append(" hasEngine=").append(!current.exoPlayerIsNull())
+                    .append(" ready=").append(current.getPlayWhenReady())
+                    .append(" playing=").append(current.isPlaying())
+                    .append(" mediaSelected=").append(expectedUrl.equals(current.getVideoUrl()))
+                    .append(" queueSelected=").append(current.getPlayQueue() != null
+                            && current.getPlayQueue().getItem() != null && expectedUrl.equals(
+                            current.getPlayQueue().getItem().getUrl()));
+        }
+        if (detail != null) {
+            final java.lang.reflect.Field error = org.schabi.newpipe.fragments.BaseStateFragment
+                    .class.getDeclaredField("lastPanelError");
+            error.setAccessible(true);
+            final org.schabi.newpipe.error.ErrorInfo info =
+                    (org.schabi.newpipe.error.ErrorInfo) error.get(detail);
+            if (info != null) {
+                for (final String trace : info.getStackTraces()) {
+                    final java.util.regex.Matcher names = java.util.regex.Pattern.compile(
+                            "(?:java|android|org\\.schabi)[A-Za-z0-9_.$]*(?:Exception|Error)")
+                            .matcher(trace);
+                    while (names.find()) {
+                        result.append(" errorClass=").append(names.group());
+                    }
+                }
+            }
+        }
+        return result.toString();
     }
 
     @After public void tearDown() throws Exception {

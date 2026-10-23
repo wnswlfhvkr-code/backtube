@@ -217,6 +217,8 @@ public final class VideoDetailFragment
     boolean selectionPending = false;
     @State
     boolean selectionRequestSent = false;
+    @Nullable
+    private Player pendingMainSelectionPlayer;
     @State
     int selectedServiceId = Constants.NO_SERVICE_ID;
     @State
@@ -324,6 +326,7 @@ public final class VideoDetailFragment
     public void onPlayerDisconnected() {
         dismissSleepTimerDialog();
         player = null;
+        pendingMainSelectionPlayer = null;
         updateSleepTimerUpdates();
         // the binding could be null at this point, if the app is finishing
         if (binding != null) {
@@ -829,6 +832,7 @@ public final class VideoDetailFragment
         infoUpdateGeneration++;
         selectionPending = newUrl != null;
         selectionRequestSent = false;
+        pendingMainSelectionPlayer = null;
         selectedServiceId = newServiceId;
         selectedUrl = newUrl;
         selectedCanonicalUrl = null;
@@ -1169,6 +1173,7 @@ public final class VideoDetailFragment
         } else {
             replaceQueueIfUserConfirms(() -> {
                 selectionRequestSent = true;
+                pendingMainSelectionPlayer = null;
                 NavigationHelper.playOnPopupPlayer(activity, queue, true, !playOnSelection
                             && player != null && player.getPlayQueue() != null
                             && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null);
@@ -1245,6 +1250,12 @@ public final class VideoDetailFragment
 
         final PlayQueue queue = setupPlayQueueForIntent(false);
         tryAddVideoPlayerView();
+        if (selectionPending && selectionRequestSent
+                && pendingMainSelectionPlayer != null && pendingMainSelectionPlayer == player) {
+            // Service connection and extraction can both open the same pending selection.
+            // Re-sending its fresh seek while the local timeline loads can end it immediately.
+            return;
+        }
 
         final Context context = requireContext();
         final Intent playerIntent =
@@ -1256,6 +1267,7 @@ public final class VideoDetailFragment
                                 || player.getPlayQueue() == null
                                 || !player.getPlayQueue().equalStreamsAndIndex(queue));
         selectionRequestSent = true;
+        pendingMainSelectionPlayer = player;
         ContextCompat.startForegroundService(activity, playerIntent);
         playOnSelection = false;
     }
@@ -1973,6 +1985,7 @@ public final class VideoDetailFragment
             }
             selectionPending = false;
             pendingSelectionQueue = null;
+            pendingMainSelectionPlayer = null;
         }
         if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())
                 && !org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(queue)) {
@@ -2388,6 +2401,7 @@ public final class VideoDetailFragment
         infoUpdateGeneration++;
         selectionPending = false;
         selectionRequestSent = false;
+        pendingMainSelectionPlayer = null;
         pendingSelectionQueue = null;
         stack.clear();
         if (currentWorker != null) {
