@@ -25,6 +25,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.HorizontalScrollView;
+import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
 import androidx.preference.PreferenceManager;
@@ -201,6 +202,126 @@ public class PlaybackNavigationTest {
         InfoCache.getInstance().removeInfo(1, "orientation-video", InfoCache.Type.STREAM);
         InfoCache.getInstance().removeInfo(1, "navigation-A", InfoCache.Type.STREAM);
         InfoCache.getInstance().removeInfo(1, "navigation-B", InfoCache.Type.STREAM);
+    }
+
+    @Test
+    public void explicitSelectionSurvivesInitialOldPlayerCallbacks() throws Exception {
+        onMain(() -> {
+            final VideoDetailFragment detail = (VideoDetailFragment) activity
+                    .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder);
+            final StreamInfo selected = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "navigation-A", InfoCache.Type.STREAM);
+            NavigationHelper.openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
+                    1, selected.getUrl(), selected.getName(), new SinglePlayQueue(selected),
+                    false, true);
+            // The service can finish binding while extraction of the selected item is pending.
+            // Use its real listener registration, which synchronously emits the current B queue
+            // and B metadata before the queued A extraction callback runs on the main thread.
+            org.schabi.newpipe.player.helper.PlayerHolder.getInstance().setListener(detail);
+        });
+        try {
+            await(() -> player.isPlaying() && "navigation-A".equals(player.getVideoUrl()));
+        } catch (final AssertionError timeout) {
+            onMain(() -> assertEquals("navigation-A", player.getVideoUrl()));
+            throw timeout;
+        }
+        onMain(() -> {
+            assertEquals("navigation-A", player.getPlayQueue().getItem().getUrl());
+            assertEquals("navigation-A", ((VideoDetailFragment) activity
+                    .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                    .getUrl());
+            assertEquals("navigation-A", ((android.widget.TextView) activity
+                    .findViewById(R.id.detail_video_title_view)).getText().toString());
+        });
+    }
+
+    @Test
+    public void oldDelayedMetadataCannotReplaceExplicitSelection() throws Exception {
+        final CountDownLatch previousRenderDue = new CountDownLatch(1);
+        final long[] previousRenderEarliest = new long[1];
+        onMain(() -> {
+            final VideoDetailFragment detail = (VideoDetailFragment) activity
+                    .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder);
+            try {
+                final java.lang.reflect.Method delayed = VideoDetailFragment.class
+                        .getDeclaredMethod("prepareAndHandleInfoIfNeededAfterDelay",
+                                StreamInfo.class, boolean.class, long.class);
+                delayed.setAccessible(true);
+                previousRenderEarliest[0] = SystemClock.uptimeMillis() + 10_000;
+                delayed.invoke(detail, player.getCurrentStreamInfo().orElseThrow(), true, 10_000L);
+            } catch (final ReflectiveOperationException error) {
+                throw new AssertionError(error);
+            }
+            final StreamInfo selected = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "navigation-A", InfoCache.Type.STREAM);
+            NavigationHelper.openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
+                    1, selected.getUrl(), selected.getName(), new SinglePlayQueue(selected),
+                    false, true);
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                    .postDelayed(previousRenderDue::countDown, 10_500);
+        });
+        await(() -> player.isPlaying() && "navigation-A".equals(player.getVideoUrl()));
+        onMain(() -> assertEquals("navigation-A", ((VideoDetailFragment) activity
+                .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                .getUrl()));
+        assertEquals("old render already ran before A was confirmed", 1,
+                previousRenderDue.getCount());
+        assertTrue("A was not confirmed before the old render's earliest dispatch",
+                SystemClock.uptimeMillis() < previousRenderEarliest[0]);
+        assertTrue(previousRenderDue.await(20, TimeUnit.SECONDS));
+        onMain(() -> {
+            assertEquals("navigation-A", ((VideoDetailFragment) activity
+                    .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                    .getUrl());
+            assertEquals("navigation-A", ((android.widget.TextView) activity
+                    .findViewById(R.id.detail_video_title_view)).getText().toString());
+        });
+    }
+
+    @Test
+    public void pendingPlaylistSurvivesRecreationAndThenFollowsNext() throws Exception {
+        final MainActivity previous = activity;
+        onMain(() -> {
+            final SinglePlayQueue queue = new SinglePlayQueue(List.of(
+                    new StreamInfoItem(1, "navigation-A", "navigation-A", StreamType.AUDIO_STREAM),
+                    new StreamInfoItem(1, "navigation-B", "navigation-B", StreamType.AUDIO_STREAM)),
+                    0);
+            NavigationHelper.openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
+                    1, "navigation-A", "navigation-A", queue, false, true);
+            activity.recreate();
+        });
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT) && activity != previous
+                && player.isPlaying() && "navigation-A".equals(player.getVideoUrl()));
+        onMain(() -> {
+            assertEquals(2, player.getPlayQueue().size());
+            assertEquals(0, player.getPlayQueue().getIndex());
+            player.playNext();
+        });
+        await(() -> player.isPlaying() && "navigation-B".equals(player.getVideoUrl())
+                && "navigation-B".equals(((VideoDetailFragment) activity
+                .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                .getUrl()));
+    }
+
+    @Test
+    public void browsingAnotherItemWithoutAutoplayKeepsSelectedDetails() throws Exception {
+        onMain(() -> {
+            final VideoDetailFragment detail = (VideoDetailFragment) activity
+                    .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder);
+            detail.setAutoPlay(false);
+            final StreamInfo selected = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "navigation-A", InfoCache.Type.STREAM);
+            detail.selectAndLoadVideo(1, "navigation-A", "navigation-A",
+                    new SinglePlayQueue(selected), false);
+            org.schabi.newpipe.player.helper.PlayerHolder.getInstance().setListener(detail);
+        });
+        await(() -> "navigation-A".equals(((TextView) activity
+                .findViewById(R.id.detail_video_title_view)).getText().toString())
+                && "navigation-A".equals(((VideoDetailFragment) activity
+                .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                .getUrl()));
+        onMain(() -> assertTrue(service.getPlayer() == null
+                || !service.getPlayer().getPlayWhenReady()));
     }
 
     @Test

@@ -85,4 +85,18 @@ for orientation in portrait landscape portrait-locked; do
     adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/popup-expanded-${orientation}.png" \
         "$output_dir/popup-expanded-${orientation}.png"
 done
+# Explicit selection must win on the first playback in a genuinely new process. The online
+# entry path uses cached synthetic metadata and owned WAV media, never a provider download.
+first_selection_class=org.schabi.newpipe.player.FirstPlaybackSelectionTest
+for path in online video audio; do
+    for prior in none saved restored; do
+        for phase in seed verify; do
+            adb shell am force-stop "$app_id"
+            run_phase "first-selection-$path-$prior-$phase" \
+                -e first_selection_path "$path" -e first_selection_prior "$prior" \
+                -e first_selection_phase "$phase" \
+                -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
+        done
+    done
+done
 # Leave networking disabled for the subsequent local connected suite.

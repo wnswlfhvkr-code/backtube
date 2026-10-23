@@ -213,6 +213,22 @@ public final class VideoDetailFragment
     protected boolean autoPlayEnabled = true;
     @State
     boolean playOnSelection = false;
+    @State
+    boolean selectionPending = false;
+    @State
+    boolean selectionRequestSent = false;
+    @State
+    int selectedServiceId = Constants.NO_SERVICE_ID;
+    @State
+    @Nullable
+    String selectedUrl;
+    @State
+    @Nullable
+    String selectedCanonicalUrl;
+    @State
+    @Nullable
+    PlayQueue pendingSelectionQueue;
+    private long infoUpdateGeneration;
     private boolean forceFullscreen = false;
 
     @Nullable
@@ -350,6 +366,9 @@ public final class VideoDetailFragment
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (selectionPending && pendingSelectionQueue != null) {
+            playQueue = pendingSelectionQueue;
+        }
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
         showComments = prefs.getBoolean(getString(R.string.show_comments_key), true);
@@ -468,6 +487,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        infoUpdateGeneration++;
         if (offlineSaveCheck != null) {
             offlineSaveCheck.dispose();
             offlineSaveCheck = null;
@@ -806,6 +826,13 @@ public final class VideoDetailFragment
                                    @NonNull final String newTitle,
                                    @Nullable final PlayQueue newQueue,
                                    final boolean playImmediately) {
+        infoUpdateGeneration++;
+        selectionPending = newUrl != null;
+        selectionRequestSent = false;
+        selectedServiceId = newServiceId;
+        selectedUrl = newUrl;
+        selectedCanonicalUrl = null;
+        pendingSelectionQueue = newQueue;
         playOnSelection = playImmediately;
         if (isPlayerAvailable() && newQueue != null && playQueue != null
                 && playQueue.getItem() != null && !playQueue.getItem().getUrl().equals(newUrl)) {
@@ -820,8 +847,9 @@ public final class VideoDetailFragment
     private void prepareAndHandleInfoIfNeededAfterDelay(final StreamInfo info,
                                                         final boolean scrollToTop,
                                                         final long delay) {
+        final long generation = infoUpdateGeneration;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (activity == null || binding == null) {
+            if (activity == null || binding == null || generation != infoUpdateGeneration) {
                 return;
             }
             // Data can already be drawn, don't spend time twice
@@ -1139,10 +1167,12 @@ public final class VideoDetailFragment
         if (append) { //resumePlayback: false
             NavigationHelper.enqueueOnPlayer(activity, queue, PlayerType.POPUP);
         } else {
-            replaceQueueIfUserConfirms(() -> NavigationHelper
-                    .playOnPopupPlayer(activity, queue, true, !playOnSelection
+            replaceQueueIfUserConfirms(() -> {
+                selectionRequestSent = true;
+                NavigationHelper.playOnPopupPlayer(activity, queue, true, !playOnSelection
                             && player != null && player.getPlayQueue() != null
-                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null));
+                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null);
+            });
         }
     }
 
@@ -1225,6 +1255,7 @@ public final class VideoDetailFragment
                         .putExtra(Player.FRESH_SELECTION, playOnSelection
                                 || player.getPlayQueue() == null
                                 || !player.getPlayQueue().equalStreamsAndIndex(queue));
+        selectionRequestSent = true;
         ContextCompat.startForegroundService(activity, playerIntent);
         playOnSelection = false;
     }
@@ -1561,6 +1592,12 @@ public final class VideoDetailFragment
     public void handleResult(@NonNull final StreamInfo info) {
         super.handleResult(info);
 
+        if (selectionPending && info.getServiceId() == selectedServiceId
+                && (Objects.equals(selectedUrl, info.getOriginalUrl())
+                || Objects.equals(selectedUrl, info.getUrl()))) {
+            // Only this selection's extractor result may establish its canonical URL.
+            selectedCanonicalUrl = info.getUrl();
+        }
         currentInfo = info;
         setInitialData(info.getServiceId(), info.getOriginalUrl(), info.getName(), playQueue);
 
@@ -1846,6 +1883,9 @@ public final class VideoDetailFragment
 
     @Override
     public void onQueueUpdate(final PlayQueue queue) {
+        if (selectionPending && (isWaitingForSelectionRequest() || !isSelectedQueueItem(queue))) {
+            return;
+        }
         playQueue = queue;
         if (DEBUG) {
             Log.d(TAG, "onQueueUpdate() called with: serviceId = ["
@@ -1924,6 +1964,16 @@ public final class VideoDetailFragment
 
     @Override
     public void onMetadataUpdate(final StreamInfo info, final PlayQueue queue) {
+        if (selectionPending) {
+            // Initial service callbacks still describe the previous session. Do not let those
+            // replace the selection while extraction or the explicit player intent is pending.
+            if (isWaitingForSelectionRequest() || !isSelectedQueueItem(queue)
+                    || !isSelectedItem(info.getServiceId(), info.getUrl())) {
+                return;
+            }
+            selectionPending = false;
+            pendingSelectionQueue = null;
+        }
         if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())
                 && !org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(queue)) {
             if (queue.equalStreams(playQueue)) {
@@ -1968,6 +2018,22 @@ public final class VideoDetailFragment
         // next/previous video you see visual glitches
         // (when non-vertical video goes after vertical video)
         prepareAndHandleInfoIfNeededAfterDelay(info, true, 200);
+    }
+
+    private boolean isSelectedQueueItem(@Nullable final PlayQueue queue) {
+        final PlayQueueItem item = queue == null ? null : queue.getItem();
+        return item != null && isSelectedItem(item.getServiceId(), item.getUrl());
+    }
+
+    private boolean isWaitingForSelectionRequest() {
+        // Browsing the already-playing item without autoplay needs no new player intent.
+        return !selectionRequestSent && (autoPlayEnabled || playOnSelection);
+    }
+
+    private boolean isSelectedItem(final int itemServiceId, final String itemUrl) {
+        return itemServiceId == selectedServiceId
+                && (Objects.equals(itemUrl, selectedUrl)
+                || Objects.equals(itemUrl, selectedCanonicalUrl));
     }
 
     private void refreshRelatedItems(final StreamInfo info) {
@@ -2319,6 +2385,10 @@ public final class VideoDetailFragment
      * */
     private void cleanUp() {
         // New beginning
+        infoUpdateGeneration++;
+        selectionPending = false;
+        selectionRequestSent = false;
+        pendingSelectionQueue = null;
         stack.clear();
         if (currentWorker != null) {
             currentWorker.dispose();
