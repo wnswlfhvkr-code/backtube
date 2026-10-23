@@ -43,11 +43,13 @@ import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.util.AudioTrackAdapter.AudioTracksWrapper;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -166,10 +168,18 @@ public class OfflineLibraryAccessTest {
         info.setAudioStreams(List.of(new AudioStream.Builder().setId("local-audio")
                 .setContent(Uri.fromFile(source).toString(), true).setMediaFormat(MediaFormat.WAV)
                 .setAverageBitrate(128).build()));
+        final DownloadDialog dialog = main(() ->
+                DownloadDialog.forOffline(active(MainActivity.class), info));
+        // This owned file already has known metadata; HTTP HEAD cannot inspect a file URI.
+        // The wrapper is saved with the dialog, so rotation retains the generated file size.
+        final Field audioTracks = DownloadDialog.class.getDeclaredField("wrappedAudioTracks");
+        audioTracks.setAccessible(true);
+        final AudioTracksWrapper tracks = (AudioTracksWrapper) audioTracks.get(dialog);
+        final var audio = tracks.getTracksList().get(0);
+        audio.setSize(audio.getStreamsList().get(0), source.length());
         main(() -> {
             final MainActivity activity = active(MainActivity.class);
-            DownloadDialog.forOffline(activity, info).show(activity.getSupportFragmentManager(),
-                    "offline_access_selector");
+            dialog.show(activity.getSupportFragmentManager(), "offline_access_selector");
             return null;
         });
         await(this::offlineSelectorVisible);
@@ -424,10 +434,14 @@ public class OfflineLibraryAccessTest {
         assertTrue("shelf recovery frame did not draw", drawn.await(10, TimeUnit.SECONDS));
         awaitDragReady(fromId, toId);
         final Rect from = trackRect(fromId, R.id.itemHandle);
-        final Rect to = trackRect(toId, R.id.itemRoot);
         // ItemTouchHelper requires the dragged top to cross the target top, not just align.
-        final float destinationY = to.centerY()
-                - 16 * context.getResources().getDisplayMetrics().density;
+        final float destinationY = main(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            return from.centerY() + list.findViewWithTag(toId).getTop()
+                    - list.findViewWithTag(fromId).getTop()
+                    - 16 * context.getResources().getDisplayMetrics().density;
+        });
         final long start = SystemClock.uptimeMillis();
         sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
         boolean ended = false;
@@ -441,12 +455,38 @@ public class OfflineLibraryAccessTest {
                 sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
                         from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
             }
-            await(() -> {
-                final RecyclerView list = active(OfflineLibraryActivity.class)
-                        .findViewById(R.id.offline_saved_rows);
-                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
-                return adapter.positionOf(fromId) < adapter.positionOf(toId);
-            });
+            final long deadline = SystemClock.uptimeMillis() + 10000;
+            boolean previewMoved;
+            do {
+                // ItemTouchHelper skips move detection while a layout is requested. Keep the
+                // pointer active so a MOVE after that layout can perform the same hit test.
+                sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(), destinationY);
+                previewMoved = main(() -> {
+                    final RecyclerView list = active(OfflineLibraryActivity.class)
+                            .findViewById(R.id.offline_saved_rows);
+                    final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                    return adapter.positionOf(fromId) < adapter.positionOf(toId);
+                });
+                if (!previewMoved) {
+                    SystemClock.sleep(20);
+                }
+            } while (!previewMoved && SystemClock.uptimeMillis() < deadline);
+            if (!previewMoved) {
+                final String geometry = main(() -> {
+                    final RecyclerView list = active(OfflineLibraryActivity.class)
+                            .findViewById(R.id.offline_saved_rows);
+                    final View sourceRow = list.findViewWithTag(fromId);
+                    final View targetRow = list.findViewWithTag(toId);
+                    return " sourceTop=" + (sourceRow == null ? "missing" : sourceRow.getTop())
+                            + " targetTop=" + (targetRow == null ? "missing" : targetRow.getTop())
+                            + " translation=" + (sourceRow == null
+                                    ? "missing" : sourceRow.getTranslationY())
+                            + " layout=" + list.isLayoutRequested()
+                            + " computing=" + list.isComputingLayout();
+                });
+                assertTrue("active drag did not preview the requested order" + geometry,
+                        previewMoved);
+            }
             assertEquals("drag preview must not persist", before, savedIds());
             sendPointer(start, terminal, from.centerX(), destinationY);
             ended = true;
@@ -464,8 +504,16 @@ public class OfflineLibraryAccessTest {
             final RecyclerView list = shelf.findViewById(R.id.offline_saved_rows);
             final View from = list.findViewWithTag(fromId);
             final View to = list.findViewWithTag(toId);
+            final Rect fromVisible = new Rect();
+            final Rect toVisible = new Rect();
             // Cancellation restores adapter order before recovery/layout animations finish.
-            return from != null && to != null && from.getTranslationY() == 0
+            return from != null && to != null
+                    && from.getGlobalVisibleRect(fromVisible) && to.getGlobalVisibleRect(toVisible)
+                    && fromVisible.height() == from.getHeight()
+                    && toVisible.height() == to.getHeight()
+                    && fromVisible.width() == from.getWidth()
+                    && toVisible.width() == to.getWidth()
+                    && from.getTranslationY() == 0
                     && to.getTranslationY() == 0 && !list.isLayoutRequested()
                     && !list.isComputingLayout()
                     && (list.getItemAnimator() == null || !list.getItemAnimator().isRunning())
