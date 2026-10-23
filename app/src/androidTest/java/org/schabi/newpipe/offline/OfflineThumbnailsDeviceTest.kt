@@ -295,7 +295,11 @@ class OfflineThumbnailsDeviceTest {
     private fun rowColour(id: String): Int? {
         val image = row(id)?.itemView?.findViewById<ImageView>(R.id.itemThumbnailView) ?: return null
         // Coil 3 wraps BitmapImage in ImageDrawable, rather than Android's BitmapDrawable.
-        val drawable = image.drawable ?: return null
+        var drawable = image.drawable ?: return null
+        while (drawable is coil3.transition.CrossfadeDrawable) {
+            if (drawable.isRunning) return null
+            drawable = drawable.end ?: return null
+        }
         val bitmap = ((drawable as? coil3.ImageDrawable)?.image as? coil3.BitmapImage)?.bitmap
             ?: (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
             ?: drawable.toBitmap(1, 1)

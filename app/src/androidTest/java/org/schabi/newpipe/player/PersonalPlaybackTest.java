@@ -237,8 +237,14 @@ public class PersonalPlaybackTest {
                 return entry != null && entry.state
                         == org.schabi.newpipe.offline.OfflineStore.State.READY;
             }), 15));
-            assertTrue("shelf did not render saved playback action", waitFor(() -> callOnMain(() ->
-                    offlinePlayRow(shelf, library.store().find(0, origin).id) != null), 10));
+            assertTrue("shelf did not render saved playback action",
+                    waitFor(() -> callOnMain(() -> {
+                final android.view.View row = offlinePlayRow(shelf,
+                        library.store().find(0, origin).id);
+                // File completion precedes the asynchronous row refresh. A listener can return
+                // true from performClick even while its IMPORTING row is still unplayable.
+                return row != null && row.isClickable();
+            }), 10));
             runOnMain(() -> {
                 final android.view.View play = offlinePlayRow(shelf,
                         library.store().find(0, origin).id);
@@ -591,66 +597,84 @@ public class PersonalPlaybackTest {
 
     @Test
     public void qualityReloadKeepsPausedPositionAndDataSaverUiRenders() throws Exception {
-        runOnMain(() -> {
-            cacheOfflineRecommendationChain();
-            final StreamInfo first = (StreamInfo) InfoCache.getInstance()
-                    .getFromKey(1, "offline-A", InfoCache.Type.STREAM);
-            NavigationHelper.playOnMainPlayer(context, new SinglePlayQueue(first), false);
-        });
-        assertTrue("normal MAIN entry did not start", waitFor(() -> callOnMain(() ->
-                player.getPlayerType() == PlayerType.MAIN && player.isPlaying()
-                        && "offline-A".equals(player.getVideoUrl())), 10));
-        runOnMain(() -> {
-            player.pause();
-            player.getExoPlayer().seekTo(1200);
-        });
-        assertTrue(waitFor(() -> callOnMain(
-                () -> player.getExoPlayer().getCurrentPosition() >= 1100),
-                PLAYBACK_TIMEOUT_SECONDS));
-        runOnMain(() -> player.getPrefs().edit()
-                .putString(context.getString(R.string.audio_quality_key), DataSaver.LOW).commit());
-        assertTrue("quality reload lost paused position", waitFor(() -> callOnMain(
-                () -> player.getExoPlayer().getPlaybackState() == Player.STATE_READY
-                        && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150
-                        && !player.getPlayWhenReady()), 10));
-        InstrumentationRegistry.getInstrumentation().startActivitySync(
-                new Intent(context, PlayQueueActivity.class)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null), 5));
-        runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
-                .findViewById(R.id.toolbar)).showOverflowMenu());
-        captureScreen(context, "backtube-data-saver-menu-portrait.png");
-        clickAccessibilityText(context.getString(R.string.data_saver_title));
-        assertTrue("saver switch lost paused position or playback state", waitFor(() -> callOnMain(
-                () -> player.audioPlayerSelected() && !player.getPlayWhenReady()
-                        && player.getExoPlayer().getPlaybackState() == Player.STATE_READY
-                        && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150), 10));
-        runOnMain(() -> {
-            assertTrue(DataSaver.isEnabled(context));
-            assertEquals(DataSaver.LOW, DataSaver.getAudioQuality(context));
-            activeQueueActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        });
-        assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
-                && activeQueueActivity().getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_PORTRAIT), 5));
-        captureScreen(context, "backtube-data-saver-portrait.png");
-        runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
-                .findViewById(R.id.toolbar)).showOverflowMenu());
-        clickAccessibilityText(context.getString(R.string.audio_quality_current,
-                context.getString(DataSaver.getQualityLabel(context))));
-        captureScreen(context, "backtube-audio-quality-dialog.png");
-        clickAccessibilityText(context.getString(R.string.audio_quality_high));
-        assertTrue("quality selection did not persist", waitFor(() -> DataSaver.HIGH.equals(
-                player.getPrefs().getString(context.getString(R.string.audio_quality_key), "")),
-                5));
-        assertEquals(DataSaver.HIGH, player.getPrefs().getString(
-                context.getString(R.string.audio_quality_key), ""));
-        runOnMain(() -> activeQueueActivity().setRequestedOrientation(
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
-        assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
-                && activeQueueActivity().getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE), 5));
-        captureScreen(context, "backtube-data-saver-landscape.png");
+        final String commentsKey = context.getString(R.string.show_comments_key);
+        final boolean comments = player.getPrefs().getBoolean(commentsKey, true);
+        player.getPrefs().edit().putBoolean(commentsKey, false).commit();
+        try (RejectNetwork network = new RejectNetwork()) {
+            final MainActivity activity = (MainActivity) InstrumentationRegistry
+                    .getInstrumentation().startActivitySync(new Intent(context, MainActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            runOnMain(() -> {
+                cacheOfflineRecommendationChain();
+                final StreamInfo first = (StreamInfo) InfoCache.getInstance()
+                        .getFromKey(1, "offline-A", InfoCache.Type.STREAM);
+                NavigationHelper.playOnMainPlayer(activity, new SinglePlayQueue(first));
+            });
+            final boolean mainStarted = waitFor(() -> callOnMain(() ->
+                    player.getPlayerType() == PlayerType.MAIN && player.isPlaying()
+                            && "offline-A".equals(player.getVideoUrl())), 30);
+            assertTrue("normal MAIN entry did not start: type=" + callOnMain(player::getPlayerType)
+                    + ", " + playbackDiagnostics(), mainStarted);
+            runOnMain(() -> {
+                player.pause();
+                player.getExoPlayer().seekTo(1200);
+            });
+            assertTrue(waitFor(() -> callOnMain(
+                    () -> player.getExoPlayer().getCurrentPosition() >= 1100),
+                    PLAYBACK_TIMEOUT_SECONDS));
+            runOnMain(() -> player.getPrefs().edit()
+                    .putString(context.getString(R.string.audio_quality_key), DataSaver.LOW)
+                    .commit());
+            assertTrue("quality reload lost paused position", waitFor(() -> callOnMain(
+                    () -> player.getExoPlayer().getPlaybackState() == Player.STATE_READY
+                            && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150
+                            && !player.getPlayWhenReady()), 10));
+            InstrumentationRegistry.getInstrumentation().startActivitySync(
+                    new Intent(context, PlayQueueActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null), 5));
+            runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
+                    .findViewById(R.id.toolbar)).showOverflowMenu());
+            captureScreen(context, "backtube-data-saver-menu-portrait.png");
+            clickAccessibilityText(context.getString(R.string.data_saver_title));
+            assertTrue("saver switch lost paused position or playback state",
+                    waitFor(() -> callOnMain(
+                    () -> player.audioPlayerSelected() && !player.getPlayWhenReady()
+                            && player.getExoPlayer().getPlaybackState() == Player.STATE_READY
+                            && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150),
+                            10));
+            runOnMain(() -> {
+                assertTrue(DataSaver.isEnabled(context));
+                assertEquals(DataSaver.LOW, DataSaver.getAudioQuality(context));
+                activeQueueActivity().setRequestedOrientation(
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            });
+            assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
+                    && activeQueueActivity().getResources().getConfiguration().orientation
+                    == Configuration.ORIENTATION_PORTRAIT), 5));
+            captureScreen(context, "backtube-data-saver-portrait.png");
+            runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
+                    .findViewById(R.id.toolbar)).showOverflowMenu());
+            clickAccessibilityText(context.getString(R.string.audio_quality_current,
+                    context.getString(DataSaver.getQualityLabel(context))));
+            captureScreen(context, "backtube-audio-quality-dialog.png");
+            clickAccessibilityText(context.getString(R.string.audio_quality_high));
+            assertTrue("quality selection did not persist", waitFor(() -> DataSaver.HIGH.equals(
+                    player.getPrefs().getString(context.getString(R.string.audio_quality_key), "")),
+                    5));
+            assertEquals(DataSaver.HIGH, player.getPrefs().getString(
+                    context.getString(R.string.audio_quality_key), ""));
+            runOnMain(() -> activeQueueActivity().setRequestedOrientation(
+                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+            assertTrue(waitFor(() -> callOnMain(() -> activeQueueActivity() != null
+                    && activeQueueActivity().getResources().getConfiguration().orientation
+                    == Configuration.ORIENTATION_LANDSCAPE), 5));
+            captureScreen(context, "backtube-data-saver-landscape.png");
+            assertEquals("generated playback unexpectedly requested network", 0,
+                    network.requests.get());
+        } finally {
+            player.getPrefs().edit().putBoolean(commentsKey, comments).commit();
+        }
     }
 
     @Test
