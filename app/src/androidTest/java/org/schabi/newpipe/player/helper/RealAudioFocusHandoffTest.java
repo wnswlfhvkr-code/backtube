@@ -178,6 +178,7 @@ public class RealAudioFocusHandoffTest {
                 }
             }
             editor.commit();
+            org.schabi.newpipe.player.SavedPlaybackTestSupport.awaitPlaybackTeardown(context);
         }
     }
 

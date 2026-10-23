@@ -153,7 +153,7 @@ public class PersonalPlaybackTest {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Exception {
         finishQueueActivity();
         if (service != null) {
             runOnMain(service::destroyPlayerAndStopService);
@@ -174,6 +174,7 @@ public class PersonalPlaybackTest {
         for (final String id : List.of("offline-A", "offline-B", "offline-C")) {
             InfoCache.getInstance().removeInfo(1, id, InfoCache.Type.STREAM);
         }
+        SavedPlaybackTestSupport.awaitPlaybackTeardown(context);
     }
 
     @Test

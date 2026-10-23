@@ -4,8 +4,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.app.ActivityManager;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
+import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
 
@@ -30,6 +36,44 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Test-only owned media, real service restore, controller, and network boundaries. */
 public final class SavedPlaybackTestSupport {
     private SavedPlaybackTestSupport() { }
+
+    /**
+     * Let system notification removal finish before a new fixture reuses the media identity.
+     * @param context the target application's context, never another package's context
+     */
+    @SuppressWarnings("deprecation") // The framework still exposes the caller's own services.
+    public static void awaitPlaybackTeardown(final Context context) throws Exception {
+        final ActivityManager activities = (ActivityManager) context.getSystemService(
+                Context.ACTIVITY_SERVICE);
+        final NotificationManager notifications = (NotificationManager) context.getSystemService(
+                Context.NOTIFICATION_SERVICE);
+        final ComponentName component = new ComponentName(context, PlayerService.class);
+        final long deadline = SystemClock.uptimeMillis() + 10_000;
+        long quietSince = -1;
+        do {
+            final boolean servicePresent = activities.getRunningServices(Integer.MAX_VALUE).stream()
+                    .anyMatch(service -> component.equals(service.service));
+            boolean notificationPresent = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                for (final var notification : notifications.getActiveNotifications()) {
+                    notificationPresent |= Notification.CATEGORY_TRANSPORT.equals(
+                            notification.getNotification().category);
+                }
+            }
+            if (servicePresent || notificationPresent) {
+                quietSince = -1;
+            } else if (quietSince < 0) {
+                quietSince = SystemClock.uptimeMillis();
+            } else if (SystemClock.uptimeMillis() - quietSince >= 500) {
+                // Supplemental UI drain; service/notification absence above is also required.
+                InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                        .waitForIdle(500, 5000);
+                return;
+            }
+            SystemClock.sleep(50);
+        } while (SystemClock.uptimeMillis() < deadline);
+        throw new AssertionError("previous playback service/notification did not settle");
+    }
 
     static Player restoreSavedService(final Context context, final PlayerService service)
             throws Exception {
