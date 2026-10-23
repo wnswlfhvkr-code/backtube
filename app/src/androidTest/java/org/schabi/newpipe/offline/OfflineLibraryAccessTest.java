@@ -1,6 +1,7 @@
 package org.schabi.newpipe.offline;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -26,6 +27,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.annotation.StringRes;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
@@ -46,6 +48,7 @@ import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.util.AudioTrackAdapter.AudioTracksWrapper;
 
 import java.io.File;
+import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
@@ -58,9 +61,13 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
+import io.reactivex.rxjava3.schedulers.TestScheduler;
 
 /** Access paths use a generated WAV only; no remote media is downloaded. */
 @RunWith(AndroidJUnit4.class)
@@ -571,29 +578,133 @@ public class OfflineLibraryAccessTest {
 
     @Test
     public void oversizedLocalImportShowsCapacityFeedbackAndKeepsExistingSave() throws Exception {
+        assertOversizedImportFeedback(false, false);
+    }
+
+    @Test
+    public void oversizedImportFeedbackSurvivesActivityRecreation() throws Exception {
+        assertOversizedImportFeedback(true, false);
+    }
+
+    @Test
+    public void pendingOversizedImportSurvivesActivityRecreation() throws Exception {
+        assertOversizedImportFeedback(false, true);
+    }
+
+    @Test
+    public void retainedImportCopiesGeneratedBytesOnceAcrossRecreation() throws Exception {
+        final File extra = newGeneratedSource();
+        final var previousIoHandler = RxJavaPlugins.getIoSchedulerHandler();
+        final TestScheduler deferredIo = new TestScheduler();
+        final AtomicInteger executions = new AtomicInteger();
+        final OfflineStore.Entry[] imported = new OfflineStore.Entry[1];
+        try {
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            final int entriesBefore = library.store().list().size();
+            RxJavaPlugins.setIoSchedulerHandler(ignored -> deferredIo);
+            main(() -> {
+                final OfflineImportState state = new ViewModelProvider(
+                        active(OfflineLibraryActivity.class)).get(OfflineImportState.class);
+                state.start(() -> {
+                    executions.incrementAndGet();
+                    imported[0] = library.importUri(Uri.fromFile(extra),
+                            "Generated retained import WAV", "", 0, "audio/wav");
+                    return imported[0];
+                });
+                return null;
+            });
+            recreateShelf();
+            deferredIo.triggerActions();
+            await(() -> {
+                try {
+                    return imported[0] != null && library.store().get(imported[0].id).state
+                            == OfflineStore.State.READY;
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            recreateShelf();
+            deferredIo.triggerActions();
+            assertEquals("recreation must not execute the import again", 1, executions.get());
+            assertEquals(entriesBefore + 1, library.store().list().size());
+            final byte[] originalBytes = new byte[(int) extra.length()];
+            final byte[] copiedBytes = new byte[originalBytes.length];
+            try (DataInputStream original = new DataInputStream(new FileInputStream(extra));
+                 DataInputStream copy = new DataInputStream(
+                         new FileInputStream(library.store().file(imported[0])))) {
+                original.readFully(originalBytes);
+                copy.readFully(copiedBytes);
+                assertEquals(-1, copy.read());
+                assertArrayEquals(originalBytes, copiedBytes);
+            }
+            assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+        } finally {
+            RxJavaPlugins.setIoSchedulerHandler(previousIoHandler);
+            if (imported[0] != null) {
+                library.store().delete(imported[0].id);
+            }
+        }
+    }
+
+    private void assertOversizedImportFeedback(final boolean recreate,
+                                                final boolean recreatePending) throws Exception {
         final File oversized = File.createTempFile("offline-capacity-", ".wav",
                 context.getCacheDir());
+        final var previousIoHandler = RxJavaPlugins.getIoSchedulerHandler();
+        final TestScheduler deferredIo = new TestScheduler();
         try {
             try (RandomAccessFile file = new RandomAccessFile(oversized, "rw")) {
                 file.setLength(OfflineStore.DEFAULT_LIMIT + 1);
             }
             final int entriesBefore = library.store().list().size();
+            if (recreatePending) {
+                // Hold real import work until the original Activity has been destroyed.
+                RxJavaPlugins.setIoSchedulerHandler(ignored -> deferredIo);
+            }
             InstrumentationRegistry.getInstrumentation().startActivitySync(
                     new Intent(context, OfflineLibraryActivity.class)
                             .setData(Uri.fromFile(oversized))
                             .putExtra("title", "Generated oversized WAV")
                             .putExtra("mime", "audio/wav")
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            awaitAccessibilityText(context.getString(R.string.offline_storage_full));
+            if (recreatePending) {
+                recreateShelf();
+                deferredIo.triggerActions();
+            }
+            final int dialogWindow = awaitAccessibilityText(
+                    context.getString(R.string.offline_storage_full), -1);
+            if (recreate) {
+                recreateShelf();
+                awaitAccessibilityText(context.getString(R.string.offline_storage_full),
+                        dialogWindow);
+            }
             assertEquals(entriesBefore, library.store().list().size());
             assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
             assertTrue(library.store().file(saved).isFile());
         } finally {
+            RxJavaPlugins.setIoSchedulerHandler(previousIoHandler);
             oversized.delete();
         }
     }
 
+    private void recreateShelf() throws Exception {
+        final OfflineLibraryActivity previous = main(() -> active(OfflineLibraryActivity.class));
+        main(() -> {
+            previous.recreate();
+            return null;
+        });
+        await(() -> active(OfflineLibraryActivity.class) != null
+                && active(OfflineLibraryActivity.class) != previous);
+    }
+
     private OfflineStore.Entry newGeneratedEntry(final String title) throws Exception {
+        final File extra = newGeneratedSource();
+        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
+    }
+
+    private File newGeneratedSource() throws Exception {
         final File extra = File.createTempFile("offline-distinct-", ".wav", context.getCacheDir());
         additionalSources.add(extra);
         try (FileInputStream input = new FileInputStream(source);
@@ -604,7 +715,7 @@ public class OfflineLibraryAccessTest {
                 output.write(buffer, 0, read);
             }
         }
-        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
+        return extra;
     }
 
     private boolean offlineSelectorVisible() {
@@ -723,26 +834,31 @@ public class OfflineLibraryAccessTest {
         }
     }
 
-    private void awaitAccessibilityText(final String text) {
+    private int awaitAccessibilityText(final String text, final int previousWindow) {
         final long deadline = SystemClock.uptimeMillis() + 10000;
         while (SystemClock.uptimeMillis() < deadline) {
             final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                     .getUiAutomation().getRootInActiveWindow();
             boolean found = false;
+            int windowId = -1;
             if (root != null) {
+                windowId = root.getWindowId();
                 for (final AccessibilityNodeInfo node
                         : root.findAccessibilityNodeInfosByText(text)) {
-                    found |= node.isVisibleToUser();
+                    found |= windowId != previousWindow && node.isVisibleToUser()
+                            && node.getText() != null
+                            && text.contentEquals(node.getText());
                     node.recycle();
                 }
                 root.recycle();
             }
             if (found) {
-                return;
+                return windowId;
             }
             SystemClock.sleep(50);
         }
         assertTrue("capacity feedback did not appear", false);
+        return -1;
     }
 
     private static <T extends Activity> T active(final Class<T> type) {

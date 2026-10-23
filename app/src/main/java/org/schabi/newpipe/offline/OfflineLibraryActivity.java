@@ -1,5 +1,6 @@
 package org.schabi.newpipe.offline;
 
+import android.app.Dialog;
 import android.content.Context;
 import android.content.ComponentName;
 import android.content.ServiceConnection;
@@ -39,6 +40,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.fragment.app.DialogFragment;
+import androidx.lifecycle.ViewModelProvider;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.util.NavigationHelper;
@@ -61,6 +64,10 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public final class OfflineLibraryActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final CompositeDisposable reads = new CompositeDisposable();
+    private OfflineImportState imports;
+    private boolean importUiReady;
+    private boolean pendingCapacityError;
+    private static final String CAPACITY_DIALOG = "offline_capacity_dialog";
     private RecyclerView rows;
     private OfflineShelfAdapter adapter;
     private ItemTouchHelper touchHelper;
@@ -141,6 +148,10 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     @Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
         ThemeHelper.setTheme(this);
         super.onCreate(savedInstanceState);
+        imports = new ViewModelProvider(this).get(OfflineImportState.class);
+        imports.observe(this, ignored -> deliverImportResults());
+        pendingCapacityError = savedInstanceState != null
+                && savedInstanceState.getBoolean("offlinePendingCapacityError");
         final LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         final Toolbar toolbar = new Toolbar(this);
@@ -353,6 +364,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     }
 
     @Override protected void onPause() {
+        importUiReady = false;
         resumed = false;
         playbackRequest++;
         revision++;
@@ -389,12 +401,14 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private void importFile(final Uri uri, @Nullable final String suppliedTitle,
                             @Nullable final String origin, final int serviceId,
                             @Nullable final String suppliedMime) {
-        reads.add(Single.fromCallable(() -> {
-            final OfflineLibrary target = OfflineLibrary.get(this);
+        final Context application = getApplicationContext();
+        final String fallbackTitle = getString(R.string.offline_saved_copy);
+        imports.start(() -> {
+            final OfflineLibrary target = OfflineLibrary.get(application);
             String title = suppliedTitle;
             if (title == null || title.isEmpty()) {
-                title = getString(R.string.offline_saved_copy);
-                try (Cursor cursor = getContentResolver().query(uri,
+                title = fallbackTitle;
+                try (Cursor cursor = application.getContentResolver().query(uri,
                         new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
                     if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {
                         title = cursor.getString(0);
@@ -402,11 +416,11 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 }
             }
             final String mime = suppliedMime == null
-                    ? getContentResolver().getType(uri) : suppliedMime;
+                    ? application.getContentResolver().getType(uri) : suppliedMime;
             if (mime == null || !(mime.startsWith("audio/") || mime.startsWith("video/"))) {
                 throw new IOException("Unsupported media");
             }
-            try (AssetFileDescriptor source = getContentResolver()
+            try (AssetFileDescriptor source = application.getContentResolver()
                     .openAssetFileDescriptor(uri, "r")) {
                 if (source != null && source.getLength() > OfflineStore.DEFAULT_LIMIT
                         - target.store().usedBytes()) {
@@ -414,8 +428,32 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 }
             }
             return target.importUri(uri, title, origin == null ? "" : origin, serviceId, mime);
-        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(entry -> refresh(), this::showError));
+        });
+    }
+
+    @Override protected void onPostResume() {
+        super.onPostResume();
+        importUiReady = true;
+        deliverImportResults();
+        showPendingCapacityError();
+    }
+
+    private void deliverImportResults() {
+        if (!importUiReady || getSupportFragmentManager().isStateSaved()) {
+            return;
+        }
+        OfflineImportState.Result result;
+        while ((result = imports.peek()) != null) {
+            if (result == OfflineImportState.Result.IMPORTED) {
+                refresh();
+            } else if (result == OfflineImportState.Result.STORAGE_FULL) {
+                pendingCapacityError = true;
+                showPendingCapacityError();
+            } else {
+                Toast.makeText(this, R.string.offline_storage_error, Toast.LENGTH_LONG).show();
+            }
+            imports.delivered();
+        }
     }
 
     private void refresh() {
@@ -640,6 +678,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     }
 
     @Override protected void onSaveInstanceState(@NonNull final Bundle state) {
+        state.putBoolean("offlinePendingCapacityError", pendingCapacityError);
         state.putBoolean("offlineSelecting", selection.isActive());
         state.putStringArrayList("offlineSelectedIds", new ArrayList<>(selection.snapshot()));
         super.onSaveInstanceState(state);
@@ -792,11 +831,31 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
 
     private void showError(final Throwable error) {
         if (error instanceof OfflineStore.StorageFullException) {
-            new AlertDialog.Builder(this).setTitle(R.string.offline_library)
-                    .setMessage(R.string.offline_storage_full)
-                    .setPositiveButton(android.R.string.ok, null).show();
+            pendingCapacityError = true;
+            showPendingCapacityError();
         } else {
             Toast.makeText(this, R.string.offline_storage_error, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showPendingCapacityError() {
+        if (!pendingCapacityError || !importUiReady || isFinishing()
+                || getSupportFragmentManager().isStateSaved()) {
+            return;
+        }
+        if (getSupportFragmentManager().findFragmentByTag(CAPACITY_DIALOG) == null) {
+            new CapacityDialog().showNow(getSupportFragmentManager(), CAPACITY_DIALOG);
+        }
+        pendingCapacityError = false;
+    }
+
+    /** Fragment-owned capacity feedback survives Activity recreation. */
+    public static final class CapacityDialog extends DialogFragment {
+        @NonNull
+        @Override public Dialog onCreateDialog(@Nullable final Bundle savedInstanceState) {
+            return new AlertDialog.Builder(requireContext()).setTitle(R.string.offline_library)
+                    .setMessage(R.string.offline_storage_full)
+                    .setPositiveButton(android.R.string.ok, null).create();
         }
     }
 
