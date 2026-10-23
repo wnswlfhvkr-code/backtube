@@ -1,6 +1,7 @@
 package org.schabi.newpipe.player.helper;
 
 import android.app.Activity;
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -13,8 +14,6 @@ import android.os.Bundle;
 import android.os.Process;
 import android.util.Log;
 import android.widget.TextView;
-
-import androidx.core.content.ContextCompat;
 
 import java.io.File;
 
@@ -80,10 +79,19 @@ public final class AudioFocusOwnerActivity extends Activity {
             modernRequest = Api26.createRequest(gainType, focusListener);
         }
         // The separately installed target app controls this token-checked fixture across UIDs.
-        ContextCompat.registerReceiver(this, control, new IntentFilter(CONTROL),
-                ContextCompat.RECEIVER_EXPORTED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(control, new IntentFilter(CONTROL), Context.RECEIVER_EXPORTED);
+        } else {
+            registerLegacyControl();
+        }
         configured = true;
         registered = true;
+    }
+
+    // API < 33 has no exported receiver flag. The cross-UID fixture validates its random token.
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private void registerLegacyControl() {
+        registerReceiver(control, new IntentFilter(CONTROL));
     }
 
     @Override

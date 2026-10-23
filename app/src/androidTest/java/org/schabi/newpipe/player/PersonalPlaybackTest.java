@@ -591,7 +591,15 @@ public class PersonalPlaybackTest {
 
     @Test
     public void qualityReloadKeepsPausedPositionAndDataSaverUiRenders() throws Exception {
-        startOfflineRecommendationChain(false);
+        runOnMain(() -> {
+            cacheOfflineRecommendationChain();
+            final StreamInfo first = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "offline-A", InfoCache.Type.STREAM);
+            NavigationHelper.playOnMainPlayer(context, new SinglePlayQueue(first), false);
+        });
+        assertTrue("normal MAIN entry did not start", waitFor(() -> callOnMain(() ->
+                player.getPlayerType() == PlayerType.MAIN && player.isPlaying()
+                        && "offline-A".equals(player.getVideoUrl())), 10));
         runOnMain(() -> {
             player.pause();
             player.getExoPlayer().seekTo(1200);
@@ -612,12 +620,8 @@ public class PersonalPlaybackTest {
         runOnMain(() -> ((androidx.appcompat.widget.Toolbar) activeQueueActivity()
                 .findViewById(R.id.toolbar)).showOverflowMenu());
         captureScreen(context, "backtube-data-saver-menu-portrait.png");
-        runOnMain(() -> {
-            setField("playerType", org.schabi.newpipe.player.PlayerType.MAIN);
-            setField("isAudioOnly", false);
-        });
         clickAccessibilityText(context.getString(R.string.data_saver_title));
-        assertTrue("saver switch resumed paused playback", waitFor(() -> callOnMain(
+        assertTrue("saver switch lost paused position or playback state", waitFor(() -> callOnMain(
                 () -> player.audioPlayerSelected() && !player.getPlayWhenReady()
                         && player.getExoPlayer().getPlaybackState() == Player.STATE_READY
                         && Math.abs(player.getExoPlayer().getCurrentPosition() - 1200) < 150), 10));

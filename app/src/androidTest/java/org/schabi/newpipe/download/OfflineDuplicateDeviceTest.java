@@ -9,8 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
 import android.widget.RadioGroup;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.widget.Toolbar;
@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Generated stream metadata and owned bytes. Real button, selector and Android Toast. */
 @RunWith(AndroidJUnit4.class)
@@ -52,12 +53,23 @@ public class OfflineDuplicateDeviceTest {
     private OfflineLibrary library;
     private final List<String> created = new ArrayList<>();
     private MainActivity activity;
+    private final AtomicBoolean savedToastAnnounced = new AtomicBoolean();
 
     @Before public void setup() throws Exception {
         library = OfflineLibrary.get(context);
+        InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                .setOnAccessibilityEventListener(event -> {
+                    if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED
+                            && event.getText().stream().anyMatch(text -> context.getString(
+                                    R.string.offline_already_saved).contentEquals(text))) {
+                        savedToastAnnounced.set(true);
+                    }
+                });
     }
 
     @After public void cleanup() throws Exception {
+        InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                .setOnAccessibilityEventListener(null);
         main(() -> {
             if (activity != null) {
                 activity.finish();
@@ -91,6 +103,7 @@ public class OfflineDuplicateDeviceTest {
                 assertNull(activity.getSupportFragmentManager().findFragmentByTag("offline_save"));
                 return null;
             });
+            assertTrue("short Toast text was not announced", waitFor(savedToastAnnounced::get));
             assertEquals(0, network.requests.get());
         }
         assertEquals(1, library.store().list().size());
@@ -123,6 +136,7 @@ public class OfflineDuplicateDeviceTest {
             assertShortToast((Toast) field(dialog, "alreadySavedToast"));
             return null;
         });
+        assertTrue("short Toast text was not announced", waitFor(savedToastAnnounced::get));
         assertTrue(waitFor(() -> main(() -> activity.getSupportFragmentManager()
                 .findFragmentByTag("offline_save") == null)));
         assertEquals(1, library.store().list().size());
@@ -169,9 +183,6 @@ public class OfflineDuplicateDeviceTest {
 
     private void assertShortToast(final Toast toast) {
         assertEquals(Toast.LENGTH_SHORT, toast.getDuration());
-        final TextView message = toast.getView().findViewById(android.R.id.message);
-        assertEquals(context.getString(R.string.offline_already_saved),
-                message.getText().toString());
         final Configuration config = new Configuration(context.getResources().getConfiguration());
         config.setLocale(Locale.KOREAN);
         assertEquals("이미 저장된 항목입니다", context.createConfigurationContext(config)

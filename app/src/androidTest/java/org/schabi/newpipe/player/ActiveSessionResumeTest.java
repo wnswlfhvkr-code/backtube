@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-/** Generated saved media and fixture-scoped history only. Compile-only until Windows QA runs it. */
+/** Generated saved media and fixture-scoped history using real service intents. */
 @RunWith(AndroidJUnit4.class)
 @LargeTest
 public class ActiveSessionResumeTest {
@@ -48,7 +48,7 @@ public class ActiveSessionResumeTest {
     private OfflineLibrary library;
     private PlayerService service;
     private Player player;
-    private File audio;
+    private final List<File> sources = new ArrayList<>();
     private boolean bound;
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -66,8 +66,9 @@ public class ActiveSessionResumeTest {
     @Before
     public void setUp() throws Exception {
         library = OfflineLibrary.get(context);
-        audio = SavedPlaybackTestSupport.createSilentWav(context, 300);
         for (final String id : List.of("first", "last-active")) {
+            final File audio = SavedPlaybackTestSupport.createSilentWav(context, 300);
+            sources.add(audio);
             final OfflineStore.Entry entry = library.store().create("Generated session " + id,
                     "", 0, Uri.fromFile(audio).toString(), "audio/wav");
             entries.add(entry);
@@ -104,15 +105,21 @@ public class ActiveSessionResumeTest {
         }
         final HistoryRecordManager history = new HistoryRecordManager(context);
         for (final OfflineStore.Entry entry : entries) {
-            final StreamInfo info = library.streamInfo(0, entry.localUrl());
-            final var state = history.loadStreamState(info).blockingGet();
-            if (state != null) {
-                history.deleteStreamHistoryAndState(state.getStreamUid()).blockingAwait();
+            try {
+                final OfflineStore.Entry current = library.store().get(entry.id);
+                if (current != null && current.state == OfflineStore.State.READY) {
+                    final StreamInfo info = library.streamInfo(0, entry.localUrl());
+                    final var state = history.loadStreamState(info).blockingGet();
+                    if (state != null) {
+                        history.deleteStreamHistoryAndState(state.getStreamUid()).blockingAwait();
+                    }
+                }
+            } finally {
+                library.store().delete(entry.id);
             }
-            library.store().delete(entry.id);
         }
-        if (audio != null) {
-            assertTrue(audio.delete());
+        for (final File source : sources) {
+            assertTrue(source.delete());
         }
     }
 

@@ -268,7 +268,8 @@ public class OfflineLibraryAccessTest {
                     .createAccessibilityNodeInfo();
             assertTrue(node.getActionList().stream().anyMatch(action -> action.getId()
                     == AccessibilityNodeInfo.ACTION_CLICK && action.getLabel() != null
-                    && context.getString(R.string.offline_play).contentEquals(action.getLabel())));
+                    && context.getString(R.string.offline_audio_play)
+                            .contentEquals(action.getLabel())));
             assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());
@@ -363,7 +364,10 @@ public class OfflineLibraryAccessTest {
                 return false;
             }
             final TextView details = row.findViewById(R.id.itemAdditionalDetails);
-            if (!details.getText().toString().startsWith(shelf.getString(stateLabel))) {
+            final int kindLabel = stateLabel == R.string.offline_ready
+                    ? R.string.offline_audio_play : R.string.offline_audio_copy;
+            if (!details.getText().toString().startsWith(shelf.getString(kindLabel)
+                    + " · " + shelf.getString(stateLabel) + " · ")) {
                 return false;
             }
             final View root = row.findViewById(R.id.itemRoot);

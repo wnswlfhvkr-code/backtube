@@ -142,11 +142,12 @@ public class SavedUriPlaybackTest {
                 org.schabi.newpipe.offline.OfflineLibrary.get(context);
         final var first = library.store().create("Generated queue first", "", 0,
                 Uri.fromFile(localAudio).toString(), "audio/wav");
+        final File secondAudio = SavedPlaybackTestSupport.createSilentWav(context);
         final var second = library.store().create("Generated queue second", "", 0,
-                Uri.fromFile(localAudio).toString(), "audio/wav");
+                Uri.fromFile(secondAudio).toString(), "audio/wav");
         try (RejectNetwork network = new RejectNetwork()) {
             library.store().copy(first.id, new FileInputStream(localAudio));
-            library.store().copy(second.id, new FileInputStream(localAudio));
+            library.store().copy(second.id, new FileInputStream(secondAudio));
             InfoCache.getInstance().clearCache();
             final var all = library.queueAll();
             for (int index = 0; index < all.size(); index++) {
@@ -190,6 +191,7 @@ public class SavedUriPlaybackTest {
         } finally {
             library.store().delete(first.id);
             library.store().delete(second.id);
+            assertTrue(secondAudio.delete());
         }
     }
 
