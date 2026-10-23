@@ -722,6 +722,14 @@ public final class Player implements PlaybackListener, Listener {
                 useVideoAndSubtitles(!audioPlayerSelected() && isScreenOn());
             } else {
                 // Remote streams may need a different resolved source/quality for the new type.
+                // handleIntent may already have consumed the snapshot with a seek. Preserve
+                // that prepared position before replacing sources, but retain pending recovery
+                // for a newly initialized queue or an explicit timestamp.
+                if (isPrepared && playQueue.getItem() != null
+                        && playQueue.getItem().getRecoveryPosition()
+                                == PlayQueueItem.RECOVERY_UNSET) {
+                    setRecovery();
+                }
                 reloadPlayQueueManager();
             }
         }

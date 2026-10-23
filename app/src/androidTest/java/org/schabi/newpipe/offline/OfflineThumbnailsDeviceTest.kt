@@ -295,7 +295,23 @@ class OfflineThumbnailsDeviceTest {
     private fun rowColour(id: String): Int? {
         val image = row(id)?.itemView?.findViewById<ImageView>(R.id.itemThumbnailView) ?: return null
         // Coil 3 wraps BitmapImage in ImageDrawable, rather than Android's BitmapDrawable.
-        return image.drawable?.toBitmap(1, 1)?.getPixel(0, 0)?.let {
+        var drawable = image.drawable ?: return null
+        while (drawable is coil3.transition.CrossfadeDrawable) {
+            if (drawable.isRunning) return null
+            drawable = drawable.end ?: return null
+        }
+        val bitmap = ((drawable as? coil3.ImageDrawable)?.image as? coil3.BitmapImage)?.bitmap
+            ?: (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            ?: drawable.toBitmap(1, 1)
+        // Copy only the test's displayed bitmap; never draw hardware pixels onto a software canvas.
+        val readable = if (android.os.Build.VERSION.SDK_INT >= 26 && bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            bitmap
+        }
+        val pixel = readable.getPixel(0, 0)
+        if (readable !== bitmap) readable.recycle()
+        return pixel.let {
             // JPEG quantisation may change each channel by a few units.
             when {
                 Color.red(it) > 240 && Color.blue(it) < 10 -> Color.RED

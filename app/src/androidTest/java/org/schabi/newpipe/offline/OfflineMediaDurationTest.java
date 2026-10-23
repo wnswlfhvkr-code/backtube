@@ -16,11 +16,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
-/** Native codec coverage using generated test-package files; no saved user media is opened. */
+/** Native codec coverage using generated target-cache files; no saved user media is opened. */
 @RunWith(AndroidJUnit4.class)
 public class OfflineMediaDurationTest {
     @Rule public final TemporaryFolder temporary = new TemporaryFolder(
-            InstrumentationRegistry.getInstrumentation().getContext().getCacheDir());
+            InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir());
 
     @Test public void generatedPcmWaveSuppliesDurationInSeconds() throws Exception {
         final File wave = temporary.newFile("generated-duration.wav");

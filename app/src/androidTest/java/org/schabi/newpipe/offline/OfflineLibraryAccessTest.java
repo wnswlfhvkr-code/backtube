@@ -1,6 +1,7 @@
 package org.schabi.newpipe.offline;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -26,6 +27,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.annotation.StringRes;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
@@ -43,20 +45,29 @@ import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.util.AudioTrackAdapter.AudioTracksWrapper;
 
 import java.io.File;
+import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
+import io.reactivex.rxjava3.schedulers.TestScheduler;
 
 /** Access paths use a generated WAV only; no remote media is downloaded. */
 @RunWith(AndroidJUnit4.class)
@@ -164,10 +175,18 @@ public class OfflineLibraryAccessTest {
         info.setAudioStreams(List.of(new AudioStream.Builder().setId("local-audio")
                 .setContent(Uri.fromFile(source).toString(), true).setMediaFormat(MediaFormat.WAV)
                 .setAverageBitrate(128).build()));
+        final DownloadDialog dialog = main(() ->
+                DownloadDialog.forOffline(active(MainActivity.class), info));
+        // This owned file already has known metadata; HTTP HEAD cannot inspect a file URI.
+        // The wrapper is saved with the dialog, so rotation retains the generated file size.
+        final Field audioTracks = DownloadDialog.class.getDeclaredField("wrappedAudioTracks");
+        audioTracks.setAccessible(true);
+        final AudioTracksWrapper tracks = (AudioTracksWrapper) audioTracks.get(dialog);
+        final var audio = tracks.getTracksList().get(0);
+        audio.setSize(audio.getStreamsList().get(0), source.length());
         main(() -> {
             final MainActivity activity = active(MainActivity.class);
-            DownloadDialog.forOffline(activity, info).show(activity.getSupportFragmentManager(),
-                    "offline_access_selector");
+            dialog.show(activity.getSupportFragmentManager(), "offline_access_selector");
             return null;
         });
         await(this::offlineSelectorVisible);
@@ -268,7 +287,8 @@ public class OfflineLibraryAccessTest {
                     .createAccessibilityNodeInfo();
             assertTrue(node.getActionList().stream().anyMatch(action -> action.getId()
                     == AccessibilityNodeInfo.ACTION_CLICK && action.getLabel() != null
-                    && context.getString(R.string.offline_play).contentEquals(action.getLabel())));
+                    && context.getString(R.string.offline_audio_play)
+                            .contentEquals(action.getLabel())));
             assertTrue(row.findViewById(R.id.offline_item_menu).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemHandle).hasOnClickListeners());
             assertTrue(row.findViewById(R.id.itemThumbnailView).isShown());
@@ -363,7 +383,10 @@ public class OfflineLibraryAccessTest {
                 return false;
             }
             final TextView details = row.findViewById(R.id.itemAdditionalDetails);
-            if (!details.getText().toString().startsWith(shelf.getString(stateLabel))) {
+            final int kindLabel = stateLabel == R.string.offline_ready
+                    ? R.string.offline_audio_play : R.string.offline_audio_copy;
+            if (!details.getText().toString().startsWith(shelf.getString(kindLabel)
+                    + " · " + shelf.getString(stateLabel) + " · ")) {
                 return false;
             }
             final View root = row.findViewById(R.id.itemRoot);
@@ -405,36 +428,105 @@ public class OfflineLibraryAccessTest {
             list.scrollToPosition(adapter.positionOf(fromId));
             return null;
         });
-        await(() -> {
+        awaitDragReady(fromId, toId);
+        final CountDownLatch drawn = new CountDownLatch(1);
+        main(() -> {
             final RecyclerView list = active(OfflineLibraryActivity.class)
                     .findViewById(R.id.offline_saved_rows);
-            return list.findViewWithTag(fromId) != null && list.findViewWithTag(toId) != null
-                    && !list.isLayoutRequested();
+            // The recovery touch guard clears in draw-over, after clearView enables controls.
+            list.invalidate();
+            list.postOnAnimation(() -> list.postOnAnimation(drawn::countDown));
+            return null;
         });
+        assertTrue("shelf recovery frame did not draw", drawn.await(10, TimeUnit.SECONDS));
+        awaitDragReady(fromId, toId);
         final Rect from = trackRect(fromId, R.id.itemHandle);
-        final Rect to = trackRect(toId, R.id.itemRoot);
         // ItemTouchHelper requires the dragged top to cross the target top, not just align.
-        final float destinationY = to.centerY()
-                - 16 * context.getResources().getDisplayMetrics().density;
+        final float destinationY = main(() -> {
+            final RecyclerView list = active(OfflineLibraryActivity.class)
+                    .findViewById(R.id.offline_saved_rows);
+            return from.centerY() + list.findViewWithTag(toId).getTop()
+                    - list.findViewWithTag(fromId).getTop()
+                    - 16 * context.getResources().getDisplayMetrics().density;
+        });
         final long start = SystemClock.uptimeMillis();
         sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        assertFalse("touching the handle must start drag and disable Play all", main(() ->
-                active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
-                        .isEnabled()));
-        for (int step = 1; step <= 12; step++) {
-            SystemClock.sleep(20);
-            sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
-                    from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
+        boolean ended = false;
+        try {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            assertFalse("touching the handle must start drag and disable Play all", main(() ->
+                    active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
+                            .isEnabled()));
+            for (int step = 1; step <= 12; step++) {
+                SystemClock.sleep(20);
+                sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
+                        from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
+            }
+            final long deadline = SystemClock.uptimeMillis() + 10000;
+            boolean previewMoved;
+            do {
+                // ItemTouchHelper skips move detection while a layout is requested. Keep the
+                // pointer active so a MOVE after that layout can perform the same hit test.
+                sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(), destinationY);
+                previewMoved = main(() -> {
+                    final RecyclerView list = active(OfflineLibraryActivity.class)
+                            .findViewById(R.id.offline_saved_rows);
+                    final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                    return adapter.positionOf(fromId) < adapter.positionOf(toId);
+                });
+                if (!previewMoved) {
+                    SystemClock.sleep(20);
+                }
+            } while (!previewMoved && SystemClock.uptimeMillis() < deadline);
+            if (!previewMoved) {
+                final String geometry = main(() -> {
+                    final RecyclerView list = active(OfflineLibraryActivity.class)
+                            .findViewById(R.id.offline_saved_rows);
+                    final View sourceRow = list.findViewWithTag(fromId);
+                    final View targetRow = list.findViewWithTag(toId);
+                    return " sourceTop=" + (sourceRow == null ? "missing" : sourceRow.getTop())
+                            + " targetTop=" + (targetRow == null ? "missing" : targetRow.getTop())
+                            + " translation=" + (sourceRow == null
+                                    ? "missing" : sourceRow.getTranslationY())
+                            + " layout=" + list.isLayoutRequested()
+                            + " computing=" + list.isComputingLayout();
+                });
+                assertTrue("active drag did not preview the requested order" + geometry,
+                        previewMoved);
+            }
+            assertEquals("drag preview must not persist", before, savedIds());
+            sendPointer(start, terminal, from.centerX(), destinationY);
+            ended = true;
+        } finally {
+            if (!ended) {
+                // A failed gesture must not leave the injected pointer active for later tests.
+                sendPointer(start, MotionEvent.ACTION_CANCEL, from.centerX(), destinationY);
+            }
         }
+    }
+
+    private void awaitDragReady(final String fromId, final String toId) throws Exception {
         await(() -> {
-            final RecyclerView list = active(OfflineLibraryActivity.class)
-                    .findViewById(R.id.offline_saved_rows);
-            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
-            return adapter.positionOf(fromId) < adapter.positionOf(toId);
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final RecyclerView list = shelf.findViewById(R.id.offline_saved_rows);
+            final View from = list.findViewWithTag(fromId);
+            final View to = list.findViewWithTag(toId);
+            final Rect fromVisible = new Rect();
+            final Rect toVisible = new Rect();
+            // Cancellation restores adapter order before recovery/layout animations finish.
+            return from != null && to != null
+                    && from.getGlobalVisibleRect(fromVisible) && to.getGlobalVisibleRect(toVisible)
+                    && fromVisible.height() == from.getHeight()
+                    && toVisible.height() == to.getHeight()
+                    && fromVisible.width() == from.getWidth()
+                    && toVisible.width() == to.getWidth()
+                    && from.getTranslationY() == 0
+                    && to.getTranslationY() == 0 && !list.isLayoutRequested()
+                    && !list.isComputingLayout()
+                    && (list.getItemAnimator() == null || !list.getItemAnimator().isRunning())
+                    && shelf.findViewById(R.id.offline_select).isEnabled()
+                    && shelf.findViewById(R.id.offline_play_all).isEnabled();
         });
-        assertEquals("drag preview must not persist", before, savedIds());
-        sendPointer(start, terminal, from.centerX(), destinationY);
     }
 
     private Rect trackRect(final String entryId, final int viewId) throws Exception {
@@ -486,29 +578,133 @@ public class OfflineLibraryAccessTest {
 
     @Test
     public void oversizedLocalImportShowsCapacityFeedbackAndKeepsExistingSave() throws Exception {
+        assertOversizedImportFeedback(false, false);
+    }
+
+    @Test
+    public void oversizedImportFeedbackSurvivesActivityRecreation() throws Exception {
+        assertOversizedImportFeedback(true, false);
+    }
+
+    @Test
+    public void pendingOversizedImportSurvivesActivityRecreation() throws Exception {
+        assertOversizedImportFeedback(false, true);
+    }
+
+    @Test
+    public void retainedImportCopiesGeneratedBytesOnceAcrossRecreation() throws Exception {
+        final File extra = newGeneratedSource();
+        final var previousIoHandler = RxJavaPlugins.getIoSchedulerHandler();
+        final TestScheduler deferredIo = new TestScheduler();
+        final AtomicInteger executions = new AtomicInteger();
+        final OfflineStore.Entry[] imported = new OfflineStore.Entry[1];
+        try {
+            InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,
+                    OfflineLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            awaitShelf();
+            final int entriesBefore = library.store().list().size();
+            RxJavaPlugins.setIoSchedulerHandler(ignored -> deferredIo);
+            main(() -> {
+                final OfflineImportState state = new ViewModelProvider(
+                        active(OfflineLibraryActivity.class)).get(OfflineImportState.class);
+                state.start(() -> {
+                    executions.incrementAndGet();
+                    imported[0] = library.importUri(Uri.fromFile(extra),
+                            "Generated retained import WAV", "", 0, "audio/wav");
+                    return imported[0];
+                });
+                return null;
+            });
+            recreateShelf();
+            deferredIo.triggerActions();
+            await(() -> {
+                try {
+                    return imported[0] != null && library.store().get(imported[0].id).state
+                            == OfflineStore.State.READY;
+                } catch (final java.io.IOException error) {
+                    return false;
+                }
+            });
+            recreateShelf();
+            deferredIo.triggerActions();
+            assertEquals("recreation must not execute the import again", 1, executions.get());
+            assertEquals(entriesBefore + 1, library.store().list().size());
+            final byte[] originalBytes = new byte[(int) extra.length()];
+            final byte[] copiedBytes = new byte[originalBytes.length];
+            try (DataInputStream original = new DataInputStream(new FileInputStream(extra));
+                 DataInputStream copy = new DataInputStream(
+                         new FileInputStream(library.store().file(imported[0])))) {
+                original.readFully(originalBytes);
+                copy.readFully(copiedBytes);
+                assertEquals(-1, copy.read());
+                assertArrayEquals(originalBytes, copiedBytes);
+            }
+            assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+        } finally {
+            RxJavaPlugins.setIoSchedulerHandler(previousIoHandler);
+            if (imported[0] != null) {
+                library.store().delete(imported[0].id);
+            }
+        }
+    }
+
+    private void assertOversizedImportFeedback(final boolean recreate,
+                                                final boolean recreatePending) throws Exception {
         final File oversized = File.createTempFile("offline-capacity-", ".wav",
                 context.getCacheDir());
+        final var previousIoHandler = RxJavaPlugins.getIoSchedulerHandler();
+        final TestScheduler deferredIo = new TestScheduler();
         try {
             try (RandomAccessFile file = new RandomAccessFile(oversized, "rw")) {
                 file.setLength(OfflineStore.DEFAULT_LIMIT + 1);
             }
             final int entriesBefore = library.store().list().size();
+            if (recreatePending) {
+                // Hold real import work until the original Activity has been destroyed.
+                RxJavaPlugins.setIoSchedulerHandler(ignored -> deferredIo);
+            }
             InstrumentationRegistry.getInstrumentation().startActivitySync(
                     new Intent(context, OfflineLibraryActivity.class)
                             .setData(Uri.fromFile(oversized))
                             .putExtra("title", "Generated oversized WAV")
                             .putExtra("mime", "audio/wav")
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            awaitAccessibilityText(context.getString(R.string.offline_storage_full));
+            if (recreatePending) {
+                recreateShelf();
+                deferredIo.triggerActions();
+            }
+            final int dialogWindow = awaitAccessibilityText(
+                    context.getString(R.string.offline_storage_full), -1);
+            if (recreate) {
+                recreateShelf();
+                awaitAccessibilityText(context.getString(R.string.offline_storage_full),
+                        dialogWindow);
+            }
             assertEquals(entriesBefore, library.store().list().size());
             assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
             assertTrue(library.store().file(saved).isFile());
         } finally {
+            RxJavaPlugins.setIoSchedulerHandler(previousIoHandler);
             oversized.delete();
         }
     }
 
+    private void recreateShelf() throws Exception {
+        final OfflineLibraryActivity previous = main(() -> active(OfflineLibraryActivity.class));
+        main(() -> {
+            previous.recreate();
+            return null;
+        });
+        await(() -> active(OfflineLibraryActivity.class) != null
+                && active(OfflineLibraryActivity.class) != previous);
+    }
+
     private OfflineStore.Entry newGeneratedEntry(final String title) throws Exception {
+        final File extra = newGeneratedSource();
+        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
+    }
+
+    private File newGeneratedSource() throws Exception {
         final File extra = File.createTempFile("offline-distinct-", ".wav", context.getCacheDir());
         additionalSources.add(extra);
         try (FileInputStream input = new FileInputStream(source);
@@ -519,7 +715,7 @@ public class OfflineLibraryAccessTest {
                 output.write(buffer, 0, read);
             }
         }
-        return library.store().create(title, "", 0, Uri.fromFile(extra).toString(), "audio/wav");
+        return extra;
     }
 
     private boolean offlineSelectorVisible() {
@@ -638,26 +834,31 @@ public class OfflineLibraryAccessTest {
         }
     }
 
-    private void awaitAccessibilityText(final String text) {
+    private int awaitAccessibilityText(final String text, final int previousWindow) {
         final long deadline = SystemClock.uptimeMillis() + 10000;
         while (SystemClock.uptimeMillis() < deadline) {
             final AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                     .getUiAutomation().getRootInActiveWindow();
             boolean found = false;
+            int windowId = -1;
             if (root != null) {
+                windowId = root.getWindowId();
                 for (final AccessibilityNodeInfo node
                         : root.findAccessibilityNodeInfosByText(text)) {
-                    found |= node.isVisibleToUser();
+                    found |= windowId != previousWindow && node.isVisibleToUser()
+                            && node.getText() != null
+                            && text.contentEquals(node.getText());
                     node.recycle();
                 }
                 root.recycle();
             }
             if (found) {
-                return;
+                return windowId;
             }
             SystemClock.sleep(50);
         }
         assertTrue("capacity feedback did not appear", false);
+        return -1;
     }
 
     private static <T extends Activity> T active(final Class<T> type) {
