@@ -99,4 +99,23 @@ for path in online video audio; do
         done
     done
 done
+# Related B must not displace the explicit first A, but must start after A really completes.
+for prior in none saved restored; do
+    for phase in seed verify; do
+        adb shell am force-stop "$app_id"
+        run_phase "first-selection-auto-next-$prior-$phase" \
+            -e first_selection_path online -e first_selection_prior "$prior" \
+            -e first_selection_phase "$phase" -e first_selection_auto_next true \
+            -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
+    done
+done
+# A failed initial source must retain A for retry instead of starting its related B.
+for phase in seed verify; do
+    adb shell am force-stop "$app_id"
+    run_phase "first-selection-source-failure-$phase" \
+        -e first_selection_path online -e first_selection_prior none \
+        -e first_selection_phase "$phase" -e first_selection_auto_next true \
+        -e first_selection_source_failure true \
+        -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
+done
 # Leave networking disabled for the subsequent local connected suite.

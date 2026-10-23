@@ -3,8 +3,8 @@
     <string name="data_saver_key" translatable="false">data_saver</string>
     <string name="audio_quality_key" translatable="false">audio_quality</string>
     <string name="data_saver_title">Data saver · audio only</string>
-    <string name="data_saver_summary">Use separate audio only. Skip items without an audio source. On metered networks, use low audio quality and small thumbnails. Applies when a source is loaded again.</string>
-    <string name="data_saver_audio_unavailable">No audio-only source is available. Skipping this item. Turn off data saver to allow video fallback.</string>
+    <string name="data_saver_summary">Use separate audio only. Stop on the selected item if no audio source is available. On metered networks, use low audio quality and small thumbnails. Applies when a source is loaded again.</string>
+    <string name="data_saver_audio_unavailable">No audio-only source is available. Playback stopped on this item. Turn off data saver and press play to retry with video fallback.</string>
     <string name="audio_quality_title">Audio quality</string>
     <string name="audio_quality_current">Audio quality: %1$s</string>
     <string name="audio_quality_low">Low</string>

@@ -33,6 +33,7 @@ import org.schabi.newpipe.R;
 import org.schabi.newpipe.extractor.MediaFormat;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
+import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
 import org.schabi.newpipe.offline.OfflineLibrary;
@@ -64,6 +65,11 @@ public class FirstPlaybackSelectionTest {
             .getString("first_selection_path", "online");
     private final String prior = InstrumentationRegistry.getArguments()
             .getString("first_selection_prior", "saved");
+    private final boolean autoNext = Boolean.parseBoolean(InstrumentationRegistry.getArguments()
+            .getString("first_selection_auto_next", "false"));
+    private final boolean initialSourceFailure = Boolean.parseBoolean(
+            InstrumentationRegistry.getArguments()
+                    .getString("first_selection_source_failure", "false"));
     private final CountDownLatch connected = new CountDownLatch(1);
     private PlayerService service;
     private boolean bound;
@@ -83,7 +89,7 @@ public class FirstPlaybackSelectionTest {
                 PlayerHolder.getInstance().isPlayerOpen());
         final SharedPreferences preferences =
                 PreferenceManager.getDefaultSharedPreferences(context);
-        preferences.edit().putBoolean(context.getString(R.string.auto_queue_key), false)
+        preferences.edit().putBoolean(context.getString(R.string.auto_queue_key), autoNext)
                 .putBoolean(context.getString(R.string.show_comments_key), false)
                 .putBoolean(context.getString(R.string.start_main_player_fullscreen_key), false)
                 .commit();
@@ -107,11 +113,23 @@ public class FirstPlaybackSelectionTest {
         final String expectedUrl;
         final String expectedMedia;
         if ("online".equals(path)) {
-            final StreamInfo info = onlineInfo(new File(fixture.getString("audio", "")));
+            final File selectedMedia = new File(fixture.getString("audio", "")
+                    + (initialSourceFailure ? ".missing" : ""));
+            if (initialSourceFailure) {
+                assertFalse("failure fixture unexpectedly exists", selectedMedia.exists());
+            }
+            final StreamInfo info = onlineInfo(selectedMedia);
+            if (autoNext) {
+                final StreamInfo related = relatedInfo();
+                InfoCache.getInstance().putInfo(1, related.getUrl(), related,
+                        InfoCache.Type.STREAM);
+                info.setRelatedItems(List.of(new StreamInfoItem(1, related.getUrl(),
+                        related.getName(), StreamType.AUDIO_STREAM)));
+            }
             InfoCache.getInstance().putInfo(1, info.getUrl(), info, InfoCache.Type.STREAM);
             selected = new SinglePlayQueue(info);
             expectedUrl = info.getUrl();
-            expectedMedia = Uri.fromFile(new File(fixture.getString("audio", ""))).toString();
+            expectedMedia = Uri.fromFile(selectedMedia).toString();
         } else {
             final OfflineStore.Entry entry = library.store().get(fixture.getString("selected", ""));
             assertNotNull(entry);
@@ -145,6 +163,9 @@ public class FirstPlaybackSelectionTest {
             });
             if (!bound) {
                 bind();
+            }
+            if (initialSourceFailure) {
+                verifyInitialFailureAndRetry(activity, expectedUrl);
             }
             final boolean selectedPlaying = waitFor(() -> callOnMain(() ->
                     service.getPlayer() != null && service.getPlayer().isPlaying()
@@ -187,8 +208,13 @@ public class FirstPlaybackSelectionTest {
                     assertEquals("Selected A", ((TextView) activity
                             .findViewById(R.id.detail_video_title_view)).getText().toString());
                 }
-                player.pause();
+                if (!autoNext) {
+                    player.pause();
+                }
             });
+            if (autoNext) {
+                verifyAutomaticNext(activity, player, expectedUrl);
+            }
             if ("audio".equals(path)) {
                 assertTrue("audio controller displayed another item", waitFor(() -> callOnMain(() ->
                         SavedPlaybackTestSupport.controllerReady(player)), 30));
@@ -212,6 +238,10 @@ public class FirstPlaybackSelectionTest {
         if ("online".equals(path)) {
             final File audio = SavedPlaybackTestSupport.createSilentWav(context, 60);
             fixture.edit().putString("audio", audio.getAbsolutePath()).commit();
+            if (autoNext) {
+                final File related = SavedPlaybackTestSupport.createSilentWav(context, 30);
+                fixture.edit().putString("related", related.getAbsolutePath()).commit();
+            }
         } else {
             final boolean video = "video".equals(path);
             final boolean webm = "webm".equals(InstrumentationRegistry.getArguments()
@@ -250,6 +280,116 @@ public class FirstPlaybackSelectionTest {
                 .setContent(Uri.fromFile(audio).toString(), true).setMediaFormat(MediaFormat.WAV)
                 .setAverageBitrate(128).build()));
         return info;
+    }
+
+    private StreamInfo relatedInfo() {
+        final String id = "https://example.invalid/first-selection-related-B";
+        final StreamInfo info = new StreamInfo(1, id, id, StreamType.AUDIO_STREAM,
+                id, "Related B", 0);
+        info.setUploaderName("Generated fixture");
+        info.setDuration(30);
+        info.setRelatedItems(List.of());
+        info.setAudioStreams(List.of(new AudioStream.Builder().setId("related-B")
+                .setContent(Uri.fromFile(new File(fixture.getString("related", ""))).toString(),
+                        true).setMediaFormat(MediaFormat.WAV).setAverageBitrate(128).build()));
+        return info;
+    }
+
+    private void verifyInitialFailureAndRetry(final MainActivity activity,
+                                             final String selectedUrl) throws Exception {
+        assertTrue("failure fixture requires automatic recommendations", autoNext);
+        final java.lang.reflect.Field recoveryFailed = Player.class
+                .getDeclaredField("recoveryFailed");
+        recoveryFailed.setAccessible(true);
+        assertTrue("initial source error was not retained for retry", waitFor(() ->
+                callOnMain(() -> service.getPlayer() != null
+                        && recoveryFailed.getBoolean(service.getPlayer())), 60));
+        final Player player = callOnMain(service::getPlayer);
+        final long until = android.os.SystemClock.elapsedRealtime() + 3000;
+        while (android.os.SystemClock.elapsedRealtime() < until) {
+            runOnMain(() -> {
+                assertEquals("initial error skipped selected A", selectedUrl,
+                        player.getPlayQueue().getItem().getUrl());
+                assertFalse("initial error kept automatic playback active",
+                        player.getPlayWhenReady());
+                assertEquals("Selected A", ((TextView) activity
+                        .findViewById(R.id.detail_video_title_view)).getText().toString());
+            });
+            Thread.sleep(50);
+        }
+        // Repair only the owned local fixture, then issue the ordinary retry/play action.
+        try (InputStream source = new FileInputStream(fixture.getString("audio", ""));
+                java.io.OutputStream target = new java.io.FileOutputStream(
+                        fixture.getString("audio", "") + ".missing")) {
+            final byte[] bytes = new byte[8192];
+            int count;
+            while ((count = source.read(bytes)) != -1) {
+                target.write(bytes, 0, count);
+            }
+        }
+        runOnMain(player::play);
+    }
+
+    private void verifyAutomaticNext(final MainActivity activity, final Player player,
+                                     final String selectedUrl) throws Exception {
+        assertEquals("automatic-next fixture must use the online entry", "online", path);
+        final String relatedUrl = relatedInfo().getUrl();
+        assertTrue("related B was not queued", waitFor(() -> callOnMain(() ->
+                player.getPlayQueue().size() == 2), 30));
+        // Observe real playback before seeking near the end. An early completion or a second
+        // initial MAIN request must not replace A with its already available recommendation B.
+        final long until = android.os.SystemClock.elapsedRealtime() + 3000;
+        while (android.os.SystemClock.elapsedRealtime() < until) {
+            runOnMain(() -> {
+                assertEquals("related item replaced A before completion", selectedUrl,
+                        player.getVideoUrl());
+                assertEquals(selectedUrl, player.getPlayQueue().getItem().getUrl());
+                assertEquals("Selected A", ((TextView) activity
+                        .findViewById(R.id.detail_video_title_view)).getText().toString());
+                assertTrue("A did not remain playing", player.isPlaying());
+                assertTrue("fixture reached its end before the observation window",
+                        player.getExoPlayer().getCurrentPosition() < 59000);
+            });
+            Thread.sleep(50);
+        }
+        final java.util.concurrent.atomic.AtomicBoolean naturalEnd =
+                new java.util.concurrent.atomic.AtomicBoolean();
+        final com.google.android.exoplayer2.Player.Listener observer =
+                new com.google.android.exoplayer2.Player.Listener() {
+                    @Override public void onPositionDiscontinuity(
+                            final com.google.android.exoplayer2.Player.PositionInfo oldPosition,
+                            final com.google.android.exoplayer2.Player.PositionInfo newPosition,
+                            final int reason) {
+                        if (reason == com.google.android.exoplayer2.Player
+                                .DISCONTINUITY_REASON_AUTO_TRANSITION
+                                && oldPosition.positionMs >= 59900) {
+                            naturalEnd.set(true);
+                        }
+                    }
+                };
+        runOnMain(() -> {
+            assertEquals(relatedUrl, player.getPlayQueue().getItem(1).getUrl());
+            player.getExoPlayer().addListener(observer);
+            player.getExoPlayer().seekTo(59000);
+        });
+        try {
+            assertTrue("normal completion did not start related B", waitFor(() -> callOnMain(() ->
+                    relatedUrl.equals(player.getVideoUrl()) && player.isPlaying()), 30));
+            assertTrue("B started without the actual end of A", naturalEnd.get());
+            assertTrue("related B title was not displayed", waitFor(() -> callOnMain(() ->
+                    "Related B".contentEquals(((TextView) activity
+                            .findViewById(R.id.detail_video_title_view)).getText())), 30));
+            runOnMain(() -> {
+                assertEquals(relatedUrl, player.getPlayQueue().getItem().getUrl());
+                assertEquals(Uri.fromFile(new File(fixture.getString("related", ""))).toString(),
+                        player.getExoPlayer().getCurrentMediaItem()
+                                .localConfiguration.uri.toString());
+                assertEquals(30000, player.getExoPlayer().getDuration(), 100);
+                player.pause();
+            });
+        } finally {
+            runOnMain(() -> player.getExoPlayer().removeListener(observer));
+        }
     }
 
     private void bind() throws Exception {
@@ -332,9 +472,14 @@ public class FirstPlaybackSelectionTest {
                 OfflineLibrary.get(context).store().delete(id);
             }
         }
-        final String file = fixture.getString("audio", "");
-        if (!file.isEmpty()) {
-            new File(file).delete();
+        for (final String name : new String[]{"audio", "related"}) {
+            final String file = fixture.getString(name, "");
+            if (!file.isEmpty()) {
+                new File(file).delete();
+                if ("audio".equals(name)) {
+                    new File(file + ".missing").delete();
+                }
+            }
         }
         fixture.edit().clear().commit();
     }

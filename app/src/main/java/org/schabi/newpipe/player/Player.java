@@ -1682,8 +1682,10 @@ public final class Player implements PlaybackListener, Listener {
 
             if (currentMetadata.getErrors().stream()
                     .anyMatch(AudioOnlyUnavailableException.class::isInstance)) {
-                Toast.makeText(context, R.string.data_saver_audio_unavailable,
-                        Toast.LENGTH_LONG).show();
+                // This is a failed source, not a completed item. Its two-second silence must
+                // never advance an explicit selection to an already queued recommendation.
+                finishPlaybackRecovery(R.string.data_saver_audio_unavailable);
+                return;
             } else if (currentMetadata instanceof ExceptionTag
                     && (recoveryRefreshingSource || currentMetadata.getErrors().stream().anyMatch(
                             FailedMediaSource.FailedMediaSourceException.class::isInstance))) {
@@ -2012,6 +2014,10 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private void finishPlaybackRecovery() {
+        finishPlaybackRecovery(R.string.playback_recovery_failed);
+    }
+
+    private void finishPlaybackRecovery(@androidx.annotation.StringRes final int message) {
         cancelPlaybackRecovery();
         if (exoPlayerIsNull()) {
             return;
@@ -2037,7 +2043,7 @@ public final class Player implements PlaybackListener, Listener {
         changeState(STATE_PAUSED);
         if (!recoveryFailed) {
             recoveryFailed = true;
-            Toast.makeText(context, R.string.playback_recovery_failed, Toast.LENGTH_LONG).show();
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show();
         }
     }
 

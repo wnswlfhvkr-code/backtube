@@ -55,7 +55,14 @@ public final class SavedPlaybackTestSupport {
                     .anyMatch(service -> component.equals(service.service));
             boolean notificationPresent = false;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                for (final var notification : notifications.getActiveNotifications()) {
+                final var activeNotifications = notifications.getActiveNotifications();
+                if (activeNotifications == null) {
+                    // A missing framework response is inconclusive, not proof of teardown.
+                    quietSince = -1;
+                    Thread.sleep(50);
+                    continue;
+                }
+                for (final var notification : activeNotifications) {
                     notificationPresent |= Notification.CATEGORY_TRANSPORT.equals(
                             notification.getNotification().category);
                 }
