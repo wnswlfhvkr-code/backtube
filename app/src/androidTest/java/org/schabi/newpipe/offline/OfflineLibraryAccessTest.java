@@ -53,7 +53,9 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -409,12 +411,18 @@ public class OfflineLibraryAccessTest {
             list.scrollToPosition(adapter.positionOf(fromId));
             return null;
         });
-        await(() -> {
+        awaitDragReady(fromId, toId);
+        final CountDownLatch drawn = new CountDownLatch(1);
+        main(() -> {
             final RecyclerView list = active(OfflineLibraryActivity.class)
                     .findViewById(R.id.offline_saved_rows);
-            return list.findViewWithTag(fromId) != null && list.findViewWithTag(toId) != null
-                    && !list.isLayoutRequested();
+            // The recovery touch guard clears in draw-over, after clearView enables controls.
+            list.invalidate();
+            list.postOnAnimation(() -> list.postOnAnimation(drawn::countDown));
+            return null;
         });
+        assertTrue("shelf recovery frame did not draw", drawn.await(10, TimeUnit.SECONDS));
+        awaitDragReady(fromId, toId);
         final Rect from = trackRect(fromId, R.id.itemHandle);
         final Rect to = trackRect(toId, R.id.itemRoot);
         // ItemTouchHelper requires the dragged top to cross the target top, not just align.
@@ -422,23 +430,48 @@ public class OfflineLibraryAccessTest {
                 - 16 * context.getResources().getDisplayMetrics().density;
         final long start = SystemClock.uptimeMillis();
         sendPointer(start, MotionEvent.ACTION_DOWN, from.centerX(), from.centerY());
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        assertFalse("touching the handle must start drag and disable Play all", main(() ->
-                active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
-                        .isEnabled()));
-        for (int step = 1; step <= 12; step++) {
-            SystemClock.sleep(20);
-            sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
-                    from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
+        boolean ended = false;
+        try {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            assertFalse("touching the handle must start drag and disable Play all", main(() ->
+                    active(OfflineLibraryActivity.class).findViewById(R.id.offline_play_all)
+                            .isEnabled()));
+            for (int step = 1; step <= 12; step++) {
+                SystemClock.sleep(20);
+                sendPointer(start, MotionEvent.ACTION_MOVE, from.centerX(),
+                        from.centerY() + (destinationY - from.centerY()) * step / 12.0f);
+            }
+            await(() -> {
+                final RecyclerView list = active(OfflineLibraryActivity.class)
+                        .findViewById(R.id.offline_saved_rows);
+                final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
+                return adapter.positionOf(fromId) < adapter.positionOf(toId);
+            });
+            assertEquals("drag preview must not persist", before, savedIds());
+            sendPointer(start, terminal, from.centerX(), destinationY);
+            ended = true;
+        } finally {
+            if (!ended) {
+                // A failed gesture must not leave the injected pointer active for later tests.
+                sendPointer(start, MotionEvent.ACTION_CANCEL, from.centerX(), destinationY);
+            }
         }
+    }
+
+    private void awaitDragReady(final String fromId, final String toId) throws Exception {
         await(() -> {
-            final RecyclerView list = active(OfflineLibraryActivity.class)
-                    .findViewById(R.id.offline_saved_rows);
-            final OfflineShelfAdapter adapter = (OfflineShelfAdapter) list.getAdapter();
-            return adapter.positionOf(fromId) < adapter.positionOf(toId);
+            final OfflineLibraryActivity shelf = active(OfflineLibraryActivity.class);
+            final RecyclerView list = shelf.findViewById(R.id.offline_saved_rows);
+            final View from = list.findViewWithTag(fromId);
+            final View to = list.findViewWithTag(toId);
+            // Cancellation restores adapter order before recovery/layout animations finish.
+            return from != null && to != null && from.getTranslationY() == 0
+                    && to.getTranslationY() == 0 && !list.isLayoutRequested()
+                    && !list.isComputingLayout()
+                    && (list.getItemAnimator() == null || !list.getItemAnimator().isRunning())
+                    && shelf.findViewById(R.id.offline_select).isEnabled()
+                    && shelf.findViewById(R.id.offline_play_all).isEnabled();
         });
-        assertEquals("drag preview must not persist", before, savedIds());
-        sendPointer(start, terminal, from.centerX(), destinationY);
     }
 
     private Rect trackRect(final String entryId, final int viewId) throws Exception {
