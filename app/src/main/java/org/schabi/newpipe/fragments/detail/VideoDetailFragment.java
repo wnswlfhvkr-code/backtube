@@ -1284,6 +1284,11 @@ public final class VideoDetailFragment
         if (!isPlayerServiceAvailable() || root.isEmpty() || !player.videoPlayerSelected()) {
             return;
         }
+        if (selectionPending && selectionRequestSent && pendingMainSelectionPlayer == player) {
+            // A second extraction result can arrive while the same explicit request is loading.
+            // openMainPlayer() will not send that request twice, so do not stop its engine here.
+            return;
+        }
 
         removeVideoPlayerView();
         if (isAutoplayEnabled()) {
@@ -1942,6 +1947,14 @@ public final class VideoDetailFragment
                                  final int repeatMode,
                                  final boolean shuffled,
                                  final PlaybackParameters parameters) {
+        if (selectionPending && selectionRequestSent && player != null
+                && player.hasPlaybackFailure() && isSelectedQueueItem(player.getPlayQueue())) {
+            // A failed A is still an applied selection. Do not reject the user's later Next
+            // just because this failed source cannot publish a successful StreamInfo for A.
+            selectionPending = false;
+            pendingSelectionQueue = null;
+            pendingMainSelectionPlayer = null;
+        }
         setOverlayPlayPauseImage(player != null && player.isPlaying());
 
         switch (state) {

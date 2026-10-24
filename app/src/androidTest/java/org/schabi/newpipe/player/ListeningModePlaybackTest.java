@@ -53,7 +53,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
-/** Generated black/silent MP4 only; checks actual ExoPlayer video-track selection. */
+/** Generated black/silent media only; checks actual ExoPlayer video-track selection. */
 @RunWith(AndroidJUnit4.class)
 public class ListeningModePlaybackTest {
     private final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -82,9 +82,12 @@ public class ListeningModePlaybackTest {
     public void setUp() throws Exception {
         setPreference(R.string.auto_queue_key, false);
         setPreference(R.string.data_saver_key, false);
-        video = File.createTempFile("listening-mode-", ".mp4", context.getCacheDir());
+        final boolean webm = "webm".equals(InstrumentationRegistry.getArguments()
+                .getString("offlineVideoFixture"));
+        final String extension = webm ? ".webm" : ".mp4";
+        video = File.createTempFile("listening-mode-", extension, context.getCacheDir());
         try (InputStream input = InstrumentationRegistry.getInstrumentation().getContext()
-                .getAssets().open("listening-mode-fixture.mp4");
+                .getAssets().open("listening-mode-fixture" + extension);
              FileOutputStream output = new FileOutputStream(video)) {
             final byte[] buffer = new byte[8192];
             int read;
@@ -110,7 +113,8 @@ public class ListeningModePlaybackTest {
             info.setDuration(30);
             final VideoStream stream = new VideoStream.Builder().setId("local-muxed")
                     .setContent(Uri.fromFile(video).toString(), true)
-                    .setMediaFormat(MediaFormat.MPEG_4).setResolution("90p")
+                    .setMediaFormat(webm ? MediaFormat.WEBM : MediaFormat.MPEG_4)
+                    .setResolution("90p")
                     .setIsVideoOnly(false).build();
             info.setVideoStreams(List.of(stream));
             info.setAudioStreams(List.of());

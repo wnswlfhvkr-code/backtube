@@ -457,3 +457,105 @@ AudioOnlyUnavailableException도 공통 재생 실패 정지를 거치도록 최
 null인 별도 테스트 문제도 관측했다. null을 알림 없음으로 간주하지 않고 기존 10초
 기한 안에서 다시 확인하도록 보완했다. 실제 제품 실패 assertion은 그대로 유지한다.
 수정 APK 런타임 GREEN과 1034 후보 생성은 아직 진행 중이다.
+
+
+### 1034 후보 및 최종 집중 검사 — 진행 중
+
+빌드 소스 `51b99b4d055d166aaec4495d61095efbec90dcd0`으로 1034 후보를 생성했다.
+파일은 `backtube-first-source-51b99b4-1034-20261023.apk`, 11,548,227 bytes이며 SHA256은
+`d948473a298d2deae5943ca6566edd8c21cb0b15a658a83c0e8aeec9dc681bdb`이다.
+패키지·기존 debug 서명·권한·최소 SDK 호환과 서명/정렬, 라이선스/NOTICE/아이콘 보존을
+확인했다. 아직 업데이트·후보 화면·Library 전달 검증 완료를 뜻하지 않는다.
+
+수정 후 초기 소스 실패 3개는 통과했다. 일반 첫 선택 9조합과 자동 다음 곡 3조합도
+통과했다. 온라인 MAIN 누락 파일 검사는 처음에 오류 정지 상태에 도달하지 않았다.
+독립 검토에서 정상 A와 실패 A가 동일 스트림 캐시 키를 사용함을 찾았다. 실패 fixture에
+실행별 고유 ID를 부여해 기존 미디어 캐시가 오류를 숨기지 않게 한 뒤, A 오류 유지 →
+소유 생성 파일 복구 → 수동 재시도 A → 정상 종료 B 전환까지 통과했다. 제품 오류
+정지 조건이나 기대 assertion을 완화하지 않았다.
+
+관련 회귀 16개 중 15개가 통과했고 화면 재생성 후 A를 기다리는 1개가 10초 시간
+초과였다. 화면 교체/선택/엔진 상태 진단을 추가해 원인을 확인 중이며 통과로 세지 않는다.
+제품 소스 변경 없이 테스트 진단만 추가했다. Android 35는 공식 사전 컴파일 뒤에도
+시작 ANR로 시험 전 종료하여 NOTRUN이다. Android 23 성공으로 대체 표기하지 않는다.
+
+
+화면 재생성 검사는 단독 실행에서도 실패했다. 새 세로 Activity가 생성됐지만
+playing=false, selectedA=false, playWhenReady=true, Exo state=IDLE이었다.
+독립 검토에서 정보 로딩 완료가 먼저 엔진을 정지시킨 뒤 중복 MAIN 요청 guard에서
+반환할 수 있음을 찾았다. 같은 Player에 이미 전달한 pending 선택은 앞선 로딩 처리에서도
+정지시키지 않도록 5줄 guard를 추가했다. 새 선택은 상태/참조를 초기화하며 메타데이터
+승인 뒤 정상 reload에는 적용되지 않는다. 수정 후 런타임 비교는 아직 진행 중이다.
+새 코드 JVM 560+14, lint 0 errors/346 warnings, 스타일 검사를 통과했다.
+1034는 이 추가 변경을 포함하지 않아 전달을 보류하고 최종 후보는 별도 증가 버전으로
+만들 예정이다. 기존 파일을 덮어쓰거나 최종 안정판으로 표시하지 않는다.
+
+
+## 2026-10-24 승인된 재개 — 진행 중
+
+사용자가 백튜브 작업 재개를 요청했다. 이전 비용 중단은 해제됐으며 이전 12시간 기한을
+복원하지 않는다. Windows 및 다른 프로젝트 작업은 제외한다. 재개 시 미커밋 4개 파일을
+별도 패치로 보존하고 현재 체크아웃의 HEAD 51b99b4를 확인했다.
+
+참고 자료 `backtube-chat-review-v2.zip`을 공식 Library 경로로 현재 실행기에 받아 읽었다.
+공개 main 36c37ab5 대상의 미컴파일 패치이며 그대로 적용하지 않았다. 오디오 전용 오류에서
+실패 정리를 먼저 수행하는 핵심 수정은 현재 소스에 이미 있다. 추가 완료/추천 guard는
+실제 경로 근거 없이 도입하지 않았다.
+
+재개한 클라우드 Android 23에서 마지막 화면 재생성 검사는 통과했다. 이는 이전 정지 상태
+RED 2회에 대한 5줄 guard의 첫 런타임 GREEN이다. 제품 전체 검증 완료를 뜻하지 않는다.
+독립 리뷰가 초기 실패 후 수동 Next 및 동일 큐 새 선택의 누락 가능성을 지적했다.
+실제 서비스·ExoPlayer 경로의 테스트를 추가했다. 첫 수동 Next 검사는 실패했으며 큐·엔진·
+상세 화면을 분리해 원인을 확인 중이다. 새 선택 검사의 첫 fixture는 익명 테스트 항목을
+직렬화하지 못해 정상 진입하지 않았으므로 제품 RED로 집계하지 않는다. 일반 직렬화
+가능한 큐로 바로잡아 다시 실행 중이다. 기대 조건을 완화하지 않았다.
+
+
+직렬화 가능한 새 큐를 사용하는 재선택 시험에서도 정상 A StreamInfo/미디어 재생에
+도달하지 못했다. 원인은 실패 플래그를 초기화한 뒤 동일 큐 빠른 경로가 기존 실패
+무음 소스에 prepare만 호출하는 것이다. 플래그 초기화 전에 동일 실패 큐의 새 선택을
+식별하고 이 경우 incoming queue로 initPlayback을 거치도록 최소 수정했다. 새 선택
+시작 위치 처리는 먼저 적용하며 일반 팝업/백그라운드 전환은 새 선택이 아니므로
+해당 분기에 들어가지 않는다. 독립 검토 및 컴파일/스타일은 통과했고 런타임 GREEN은
+아직 진행 중이다.
+
+수동 Next 초기 시험은 Next와 Play를 즉시 연속 호출해 최종 큐 A/IDLE을 관측했다.
+단순 제목 고정으로 단정하지 않는다. 기존 제품 규칙인 오류 후 일시정지 의도 유지에
+맞춰 Next → B 준비/상세 B → 사용자의 Play 단계를 나누고, 큐 크기·즉시 선택·엔진·
+상세 상태를 각각 검증하도록 보강했다. 원인을 확인하기 전에 UI 제품 코드는 바꾸지 않았다.
+
+
+동일 큐 재선택의 실제 Android 검사는 수정 후 GREEN이다. 수동 Next를 별도 동작으로
+검사하면 selectedB=true, queueB=true, Exo READY, playWhenReady=false지만 detailB=false로
+실패했다. 초기 실패 A에는 정상 StreamInfo 콜백이 없어 선택 보호 상태가 끝나지 않는
+원인이 확인됐다. 실패 상태를 PAUSED 알림보다 먼저 확정하고, 상세 화면이 현재 요청한
+A의 실패를 받으면 pending 보호를 해제하도록 수정했다. A 자체는 계속 정지/재시도 상태로
+유지하며 이후 명시적 Next를 허용한다. 즉시 Next+Play 경로도 별도 회귀로 유지한다.
+이 변경의 런타임은 아직 진행 중이다. Android 35는 새 실행기에서 244초에 부팅 완료했으며
+이전 실패 결과를 새 코드의 결과로 재사용하지 않는다.
+
+### 2026-10-24 — resumed error/navigation runtime evidence (in progress)
+
+- Current-source API 23 generated-media checks: fresh explicit reselection of failed A PASS; ordinary manual Next after failed A PASS; failed A remains selected and paused across Activity recreation PASS. The initial pending-playlist recreation regression also passed earlier in this resumed run.
+- Rapid Next then Play remained RED: queue B (index 1), engine A (index 0), then a REMOVE discontinuity reported index 0 and reset the queue to A. Trace: `beforePlay=1:0:126`, `transition=0:0:4:0`. This establishes a source-replacement race independently of the failed-detail acknowledgement bug.
+- Minimal correction under validation: keep STATE_BLOCKED through setMediaSource, then change to BUFFERING and prepare, preserving the existing discontinuity guard during synchronous replacement. Read-only independent review found no additional code blocker; GREEN is still required.
+- API 35 installed both packages but instrumentation executed zero tests and exited with startup ANR (exit reason 6). VM stopped; API 35 validation is NOT RUN, not PASS. No timeout/security setting changes, Windows work, or user-device use.
+
+- Fresh full JVM execution initially reported 559/560 app tests passing, with `ActiveSessionResumeTest.freshSelectionRestartsRetryBudgetAndClearsPriorFailureFlags` failing (expected 0ms, actual 45000ms). Its mocked UI allocation boundary threw during destroyPlayer, and dispatch swallowed that boundary before the required new engine was allocated. The subsequent synthetic error was incorrectly delivered to the unchanged old mock engine. The test now executes real handleIntent/initPlayback through mocked Android allocation, verifies one new engine and the incoming queue, then retains the original retry-budget/zero-position assertions. Focused class plus Checkstyle PASS; full final rerun remains pending.
+- Guard app update installed successfully in 280.41 seconds. During the install, adb remained online and dex2oat was active; no duplicate install was started.
+
+- Rapid Next→Play now GREEN on API 23 after the source-replacement ordering correction (same failing device test, 28.48s). Independent review found no remaining code blocker and confirmed the corrected JVM allocation fixture preserves its retry-budget assertions.
+- Broader navigation run: first back-navigation assertion read `snackbar_text` before the asynchronously attached Snackbar existed (test NPE). The instrumentation then crashed; sanitized system diagnostics identified SIGILL in `libstagefright_soft_avcdec.so`, matching the cloud API 23 H.264 decoder issue. This run is FAIL, not a pass and not a complete 18-test run.
+- Preparing test-only synchronization for Snackbar appearance and a selectable 30-second black/silent VP8/Vorbis fixture (160×90, same duration as the MP4). Default H.264 remains available; WebM results will not be claimed as H.264 coverage. No protected/downloaded media is included.
+
+- Final product code: fresh JVM app 560/560 and shared 14/14 PASS; lint 0 errors / 346 warnings; Checkstyle PASS. Test-only portable media/await changes subsequently compiled and passed Checkstyle/lint.
+- Portable API 23 navigation suite: 17 PASS, 0 FAIL, 1 NOT RUN (existing system rotation-lock prerequisite absent). Includes explicit A versus old callbacks, late metadata, pending recreation, failed-A recreation, manual Next, immediate Next→Play, fullscreen/back and popup orientation/pause paths. Full suite took 360.07s. Previous failed MP4 run is retained separately.
+
+- Core portable run completed 55 PASS / 1 FAIL / 1 NOT RUN. The only remaining failure was `pauseAfterMetadataRequestStartedCannotResumeFromLateResult`: static expectation 42000ms versus observed 42402ms. This test starts real playback before injecting a stop/error, so setup's seek position is not the position that the error necessarily stopped. Independent source review confirmed this mismatch in the test contract; the original result alone does not establish when those 402ms elapsed.
+- Test-only correction records the exact stopped position immediately after error injection, bounds it to [42000,45000), then requires exact equality before pause and after the late callback plus 500ms, preserving IDLE/not-playing/selected-A and explicit-resume assertions. No tolerance was added to the no-drift check. Focused rerun pending; product source unchanged.
+
+- Follow-up measurement: the extra pre-pause diagnostic assertion failed at error-stop capture 42000ms versus 42019ms **before** the user pause and before delivery of the late metadata result. This rules out the late callback as the cause of that difference; asynchronous engine stop settlement remains an inference, not a proven internal cause.
+- Final test contract captures position immediately after the user's pause, still requires [42000,45000), exact position equality after late success + 500ms, IDLE and play intent false, and selected A with resume position at least the captured pause position. The diagnostic pre-pause equality was not part of the original contract and was removed. Independent review accepted this correction; runtime result remains pending.
+
+- Corrected user-pause invariant GREEN (9.36s): exact position retained across late metadata result and 500ms; explicit resume retained A and its position bounds. No product change was made for this test issue. Final unique focused Android results: 56 PASS / 0 remaining FAIL / 1 NOT RUN, across navigation, source errors/retries, listening, saved media/thumbnails/duplicates, active-session restoration and recovery. Earlier RED runs remain in the evidence ledger.
+- Candidate plan: versionCode 1035, versionName `0.29.1-backtube-first-selection-20261024`; continuous variant on a branch normalizing to `testofflinelibrary20261011`, existing package/signing input and unchanged permissions. Build and force-stop matrices are pending at this source checkpoint; not a published release.

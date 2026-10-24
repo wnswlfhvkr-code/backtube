@@ -290,8 +290,30 @@ public class PlaybackNavigationTest {
                     1, "navigation-A", "navigation-A", queue, false, true);
             activity.recreate();
         });
-        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT) && activity != previous
-                && player.isPlaying() && "navigation-A".equals(player.getVideoUrl()));
+        final String[] recreationState = {"not observed"};
+        try {
+            await(() -> {
+                final boolean portrait = refreshActivity(Configuration.ORIENTATION_PORTRAIT);
+                recreationState[0] = "portrait=" + portrait + "; newActivity="
+                        + (activity != previous) + "; playing=" + player.isPlaying()
+                        + "; selectedA=" + "navigation-A".equals(player.getVideoUrl())
+                        + "; ready=" + player.getPlayWhenReady()
+                        + "; state=" + player.getExoPlayer().getPlaybackState()
+                        + "; samePlayer=" + (service.getPlayer() == player)
+                        + "; queueA=" + (player.getPlayQueue() != null
+                        && player.getPlayQueue().getItem() != null
+                        && "navigation-A".equals(player.getPlayQueue().getItem().getUrl()))
+                        + "; detailA=" + "navigation-A".equals(((VideoDetailFragment) activity
+                        .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
+                        .getUrl())
+                        + "; errorCode=" + (player.getExoPlayer().getPlayerError() == null ? 0
+                        : player.getExoPlayer().getPlayerError().errorCode);
+                return portrait && activity != previous && player.isPlaying()
+                        && "navigation-A".equals(player.getVideoUrl());
+            });
+        } catch (final AssertionError error) {
+            throw new AssertionError("pending recreation: " + recreationState[0], error);
+        }
         onMain(() -> {
             assertEquals(2, player.getPlayQueue().size());
             assertEquals(0, player.getPlayQueue().getIndex());
@@ -301,6 +323,111 @@ public class PlaybackNavigationTest {
                 && "navigation-B".equals(((VideoDetailFragment) activity
                 .getSupportFragmentManager().findFragmentById(R.id.fragment_player_holder))
                 .getUrl()));
+    }
+
+    @Test
+    public void manualNextAfterInitialSourceFailureUpdatesSelectedDetails() throws Exception {
+        verifyNextAfterInitialFailure(false);
+    }
+
+    @Test
+    public void immediatePlayAfterFailedNextKeepsTheSelectedSuccessor() throws Exception {
+        verifyNextAfterInitialFailure(true);
+    }
+
+    @Test
+    public void failedSelectionRemainsPausedAcrossRecreation() throws Exception {
+        selectInitialFailedSource();
+        final MainActivity previous = activity;
+        onMain(activity::recreate);
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT) && activity != previous
+                && activity.findViewById(R.id.detail_title_root_layout).isClickable());
+        Thread.sleep(3500);
+        onMain(() -> {
+            assertEquals("recreation skipped failed A", "navigation-A",
+                    player.getPlayQueue().getItem().getUrl());
+            assertFalse("recreation retried without user action", player.getPlayWhenReady());
+            assertEquals("navigation-A", ((TextView) activity
+                    .findViewById(R.id.detail_video_title_view)).getText().toString());
+        });
+    }
+
+    private void selectInitialFailedSource() throws Exception {
+        onMain(() -> {
+            final StreamInfo failed = (StreamInfo) InfoCache.getInstance()
+                    .getFromKey(1, "navigation-A", InfoCache.Type.STREAM);
+            failed.setAudioStreams(List.of());
+            player.getPrefs().edit().putBoolean(context.getString(R.string.data_saver_key), true)
+                    .commit();
+            final SinglePlayQueue queue = new SinglePlayQueue(List.of(
+                    new StreamInfoItem(1, "navigation-A", "navigation-A", StreamType.AUDIO_STREAM),
+                    new StreamInfoItem(1, "navigation-B", "navigation-B", StreamType.AUDIO_STREAM)),
+                    0);
+            NavigationHelper.openVideoDetailFragment(activity, activity.getSupportFragmentManager(),
+                    1, "navigation-A", "navigation-A", queue, false, true);
+        });
+        await(() -> "navigation-A".equals(player.getPlayQueue().getItem().getUrl())
+                && !player.getPlayWhenReady()
+                && org.schabi.newpipe.player.mediaitem.MediaItemTag
+                .from(player.getExoPlayer().getCurrentMediaItem())
+                .map(tag -> !tag.getErrors().isEmpty()).orElse(false));
+        Thread.sleep(3500);
+    }
+
+    private void verifyNextAfterInitialFailure(final boolean immediatePlay) throws Exception {
+        selectInitialFailedSource();
+        final List<String> transitions = new java.util.ArrayList<>();
+        onMain(() -> {
+            assertEquals("navigation-A", player.getPlayQueue().getItem().getUrl());
+            assertEquals("failure lost queued successor", 2, player.getPlayQueue().size());
+            player.getExoPlayer().addListener(new com.google.android.exoplayer2.Player.Listener() {
+                @Override
+                public void onPositionDiscontinuity(
+                        final com.google.android.exoplayer2.Player.PositionInfo oldPosition,
+                        final com.google.android.exoplayer2.Player.PositionInfo newPosition,
+                        final int reason) {
+                    transitions.add("transition=" + oldPosition.mediaItemIndex + ":"
+                            + newPosition.mediaItemIndex + ":" + reason + ":"
+                            + player.getPlayQueue().getIndex());
+                }
+            });
+            player.playNext();
+            assertEquals("manual next did not select B", "navigation-B",
+                    player.getPlayQueue().getItem().getUrl());
+            if (immediatePlay) {
+                transitions.add("beforePlay=" + player.getPlayQueue().getIndex() + ":"
+                        + player.getExoPlayer().getCurrentMediaItemIndex() + ":"
+                        + player.getCurrentState());
+                player.play();
+            }
+        });
+        final String[] nextState = {"not observed"};
+        try {
+            await(() -> {
+                final boolean detailB = "navigation-B".equals(((VideoDetailFragment) activity
+                        .getSupportFragmentManager()
+                        .findFragmentById(R.id.fragment_player_holder)).getUrl());
+                nextState[0] = "playing=" + player.isPlaying() + "; selectedB="
+                        + "navigation-B".equals(player.getVideoUrl()) + "; queueB="
+                        + "navigation-B".equals(player.getPlayQueue().getItem().getUrl())
+                        + "; detailB=" + detailB + "; ready=" + player.getPlayWhenReady()
+                        + "; state=" + player.getExoPlayer().getPlaybackState();
+                return player.getExoPlayer().getPlaybackState()
+                        == com.google.android.exoplayer2.Player.STATE_READY
+                        && "navigation-B".equals(player.getVideoUrl())
+                        && detailB && "navigation-B".equals(((TextView) activity
+                        .findViewById(R.id.detail_video_title_view)).getText().toString());
+            });
+        } catch (final AssertionError error) {
+            throw new AssertionError("manual next after failure: " + nextState[0]
+                    + "; " + transitions, error);
+        }
+        onMain(() -> {
+            assertEquals("manual next changed play intent", immediatePlay,
+                    player.getPlayWhenReady());
+            player.play();
+        });
+        await(() -> player.isPlaying() && "navigation-B".equals(player.getVideoUrl()));
     }
 
     @Test
@@ -335,6 +462,8 @@ public class PlaybackNavigationTest {
             assertTrue(player.getExoPlayer().getCurrentPosition() >= 10000);
         });
         pressBack();
+        await(() -> activity.findViewById(
+                com.google.android.material.R.id.snackbar_text) != null);
         onMain(() -> {
             assertFalse(activity.isFinishing());
             final android.widget.TextView notice = activity.findViewById(
@@ -573,9 +702,12 @@ public class PlaybackNavigationTest {
     }
 
     private void prepareOrientationVideo() throws Exception {
-        orientationVideo = File.createTempFile("orientation-", ".mp4", context.getCacheDir());
+        final boolean webm = "webm".equals(InstrumentationRegistry.getArguments()
+                .getString("offlineVideoFixture"));
+        final String extension = webm ? ".webm" : ".mp4";
+        orientationVideo = File.createTempFile("orientation-", extension, context.getCacheDir());
         try (InputStream input = InstrumentationRegistry.getInstrumentation().getContext()
-                .getAssets().open("listening-mode-fixture.mp4");
+                .getAssets().open("listening-mode-fixture" + extension);
              FileOutputStream output = new FileOutputStream(orientationVideo)) {
             final byte[] buffer = new byte[8192];
             int count;
@@ -590,7 +722,8 @@ public class PlaybackNavigationTest {
             info.setUploaderName("Local orientation fixture");
             info.setVideoStreams(List.of(new VideoStream.Builder().setId("local-video")
                     .setContent(Uri.fromFile(orientationVideo).toString(), true)
-                    .setMediaFormat(MediaFormat.MPEG_4).setResolution("90p")
+                    .setMediaFormat(webm ? MediaFormat.WEBM : MediaFormat.MPEG_4)
+                    .setResolution("90p")
                     .setIsVideoOnly(false).build()));
             info.setAudioStreams(List.of());
             info.setRelatedItems(List.of());

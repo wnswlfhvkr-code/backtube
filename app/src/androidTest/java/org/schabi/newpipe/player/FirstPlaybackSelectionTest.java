@@ -270,7 +270,10 @@ public class FirstPlaybackSelectionTest {
     }
 
     private StreamInfo onlineInfo(final File audio) {
-        final String id = "https://example.invalid/first-selection-A";
+        // Media cache keys use the stream ID, not its refreshed file URI. Give the failure
+        // fixture a fresh identity so a previous successful run cannot hide the missing file.
+        final String id = "https://example.invalid/first-selection-A"
+                + (initialSourceFailure ? "/" + audio.getName() : "");
         final StreamInfo info = new StreamInfo(1, id, id, StreamType.AUDIO_STREAM,
                 id, "Selected A", 0);
         info.setUploaderName("Generated fixture");
@@ -301,9 +304,13 @@ public class FirstPlaybackSelectionTest {
         final java.lang.reflect.Field recoveryFailed = Player.class
                 .getDeclaredField("recoveryFailed");
         recoveryFailed.setAccessible(true);
-        assertTrue("initial source error was not retained for retry", waitFor(() ->
+        final boolean retained = waitFor(() ->
                 callOnMain(() -> service.getPlayer() != null
-                        && recoveryFailed.getBoolean(service.getPlayer())), 60));
+                        && recoveryFailed.getBoolean(service.getPlayer())), 60);
+        assertTrue(callOnMain(() -> "initial source error was not retained for retry; "
+                + selectionDiagnostic(activity, selectedUrl)
+                + "; errorCode=" + (service.getPlayer().getExoPlayer().getPlayerError() == null
+                ? 0 : service.getPlayer().getExoPlayer().getPlayerError().errorCode)), retained);
         final Player player = callOnMain(service::getPlayer);
         final long until = android.os.SystemClock.elapsedRealtime() + 3000;
         while (android.os.SystemClock.elapsedRealtime() < until) {

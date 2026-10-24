@@ -98,6 +98,8 @@ public class InitialSourceFailureTest {
         } finally {
             org.schabi.newpipe.util.InfoCache.getInstance().removeInfo(1, "initial-related-B",
                     org.schabi.newpipe.util.InfoCache.Type.STREAM);
+            org.schabi.newpipe.util.InfoCache.getInstance().removeInfo(1, "initial-failed-A",
+                    org.schabi.newpipe.util.InfoCache.Type.STREAM);
             if (localAudio != null) {
                 localAudio.delete();
             }
@@ -122,21 +124,27 @@ public class InitialSourceFailureTest {
 
     @Test
     public void initialAudioOnlyFailureRetainsSelectionUntilRetry() throws Exception {
-        verifyInitialFailedSourceRetainsSelection(true, true);
+        verifyInitialFailedSourceRetainsSelection(true, true, false);
     }
 
     @Test
     public void initialAudioOnlyFailureDoesNotStartRelatedRecommendation() throws Exception {
-        verifyInitialFailedSourceRetainsSelection(true, false);
+        verifyInitialFailedSourceRetainsSelection(true, false, false);
     }
 
     @Test
     public void initialExtractorFailureRetainsSelectionUntilRetry() throws Exception {
-        verifyInitialFailedSourceRetainsSelection(false, true);
+        verifyInitialFailedSourceRetainsSelection(false, true, false);
+    }
+
+    @Test
+    public void freshReselectionAfterInitialFailureReloadsSelectedSource() throws Exception {
+        verifyInitialFailedSourceRetainsSelection(true, true, true);
     }
 
     private void verifyInitialFailedSourceRetainsSelection(final boolean audioOnly,
-                                                          final boolean queuedRelated)
+                                                          final boolean queuedRelated,
+                                                          final boolean freshReselection)
             throws Exception {
         final java.util.concurrent.atomic.AtomicBoolean fail =
                 new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -207,10 +215,22 @@ public class InitialSourceFailureTest {
             assertFalse("initial failure did not stop for retry", player.getPlayWhenReady());
             assertEquals(queuedRelated ? 2 : 1, player.getPlayQueue().size());
             fail.set(false);
-            player.play();
+            if (freshReselection) {
+                selected.setAudioStreams(streams);
+                org.schabi.newpipe.util.InfoCache.getInstance().putInfo(1, selected.getUrl(),
+                        selected, org.schabi.newpipe.util.InfoCache.Type.STREAM);
+                // Real navigation serializes its queue; anonymous extractor test items do not.
+                final SinglePlayQueue reselected = new SinglePlayQueue(selected);
+                reselected.append(List.of(new PlayQueueItem(related)));
+                org.schabi.newpipe.util.NavigationHelper.playOnBackgroundPlayer(context,
+                        reselected, true, null, false);
+            } else {
+                player.play();
+            }
         });
         assertTrue("manual retry did not play selected A", waitFor(() -> callOnMain(() ->
-                player.isPlaying() && "initial-failed-A".equals(player.getVideoUrl())), 30));
+                player.isPlaying() && "initial-failed-A".equals(player.getVideoUrl())
+                        && player.getCurrentStreamInfo().isPresent()), 30));
         runOnMain(() -> {
             assertEquals(Uri.fromFile(localAudio).toString(), player.getExoPlayer()
                     .getCurrentMediaItem().localConfiguration.uri.toString());

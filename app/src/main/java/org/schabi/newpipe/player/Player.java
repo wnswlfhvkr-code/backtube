@@ -649,6 +649,8 @@ public final class Player implements PlaybackListener, Listener {
         final boolean samePlayQueue = playQueue != null && playQueue.equalStreamsAndIndex(newQueue);
 
         final boolean freshSelection = intent.getBooleanExtra(FRESH_SELECTION, false);
+        final boolean replaceFailedSource = freshSelection && samePlayQueue
+                && (recoveryFailed || currentMetadata instanceof ExceptionTag);
         if (freshSelection) {
             cancelPlaybackRecovery();
             playbackRecovery.reset();
@@ -668,6 +670,12 @@ public final class Player implements PlaybackListener, Listener {
                 newQueue.setRecovery(newQueue.getIndex(),
                         start == PlayQueueItem.RECOVERY_UNSET ? 0 : start);
             }
+        }
+
+        if (replaceFailedSource) {
+            // A fresh retry must resolve A again, not prepare its old failed silence source.
+            initPlayback(newQueue, playWhenReady);
+            return;
         }
 
         // seek to timestamp if stream is already playing
@@ -1400,10 +1408,12 @@ public final class Player implements PlaybackListener, Listener {
         if (exoPlayerIsNull()) {
             return;
         }
+        // Replacing the source can synchronously report the old engine index. Keep the
+        // queue protected until replacement finishes; synchronization selects its item next.
+        simpleExoPlayer.setMediaSource(mediaSource, false);
         if (currentState == STATE_BLOCKED) {
             changeState(STATE_BUFFERING);
         }
-        simpleExoPlayer.setMediaSource(mediaSource, false);
         simpleExoPlayer.prepare();
     }
 
@@ -2038,13 +2048,18 @@ public final class Player implements PlaybackListener, Listener {
                 // Stop below; an unreadable store cannot select another saved file safely.
             }
         }
+        final boolean firstFailure = !recoveryFailed;
+        recoveryFailed = true;
         pause();
         simpleExoPlayer.stop();
         changeState(STATE_PAUSED);
-        if (!recoveryFailed) {
-            recoveryFailed = true;
+        if (firstFailure) {
             Toast.makeText(context, message, Toast.LENGTH_LONG).show();
         }
+    }
+
+    public boolean hasPlaybackFailure() {
+        return recoveryFailed;
     }
 
     private void createErrorNotification(@NonNull final PlaybackException error) {

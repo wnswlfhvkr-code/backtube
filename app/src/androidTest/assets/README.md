@@ -15,6 +15,13 @@ ffmpeg -hide_banner -loglevel error \
 ```
 # Offline video fixtures
 
+`listening-mode-fixture.webm` is the same 30-second black/silent generated fixture
+encoded as VP8/Vorbis, 160×90 at 10 fps. Pass `offlineVideoFixture=webm` for listening
+and orientation tests when the emulator's H.264 decoder is unavailable. All frame,
+position, listening-mode and navigation assertions remain enabled; this does not
+establish H.264 coverage. Generated locally with FFmpeg lavfi `color` and `anullsrc`,
+`-c:v libvpx -threads 1 -b:v 80k -c:a libvorbis -b:a 32k`; CC0-1.0.
+
 `offline-generated-av.mp4` and `offline-generated-audio.m4a` were generated locally
 on 2026-10-21 using FFmpeg lavfi `testsrc2` and `sine`, with no downloaded material.
 The authors dedicate these generated fixtures to the public domain (CC0-1.0).
