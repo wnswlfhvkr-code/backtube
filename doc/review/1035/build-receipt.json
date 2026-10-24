@@ -1,0 +1,21 @@
+{
+  "exit_code": 0,
+  "elapsed_seconds": 295.903,
+  "build_success_marker": true,
+  "signing_guard_confirmed": true,
+  "signing_input_identity_unchanged": true,
+  "failed_tasks": [],
+  "source_error_locations": [],
+  "raw_output_saved": false,
+  "new_key_generated": false,
+  "key_contents_inspected_or_copied": false,
+  "build_source": "486fe10f24c2ed1a1e38d3b8769fd924cc25cac5",
+  "java_version": 21,
+  "variant": "continuous",
+  "version_code_override": 1035,
+  "version_name_suffix": "-backtube-first-selection-20261024",
+  "build_branch": "test.offline_library.20261011",
+  "normalized_package_suffix": "testofflinelibrary20261011",
+  "app_fault_endpoint": "",
+  "signing_material_included": false
+}
