@@ -583,3 +583,11 @@ A의 실패를 받으면 pending 보호를 해제하도록 수정했다. A 자�
 - Required recovery: restore the existing selected cloud execution's official Library hosted-app authentication, then establish the prior write outcome before any retry. Do not switch to a different upload path to bypass the 401. Library prepared-uploads guidance: “Never switch a started helper write to a direct action.”
 - Library IDs: NOT AVAILABLE. Local installable APK, exact source archive, verification JSON, R8 mapping, sanitized receipts and handoff remain preserved. Product build source remains `486fe10f24c2ed1a1e38d3b8769fd924cc25cac5`; this journal update is documentation only.
 - GitHub publication was not attempted in this resumed work. The earlier draft PR auto-review denial (authorization evidence/scope not accepted) and official GitHub release asset-upload HTTP401 remain unresolved; no bypass or new authentication attempt occurred. No Windows or user-PC work was used.
+
+### Follow-up — APK 1035 attached successfully
+
+- User explicitly requested resolving the remaining problem and attaching the APK. Exact-name Library lookup found no existing APK item; the verified 11,548,214-byte APK was saved as the single requested deliverable using the official connected Library single-file create route. No new credential, permission change or APK rebuild was involved.
+- Library ID: `libfile_91ded02391a48191b9b8b09623062e44`; filename: `backtube-first-selection-486fe10-1035-20261024.apk`.
+- Local Library identity metadata applied successfully. Official Library materialization/read-back succeeded; downloaded SHA-256 exactly matched `36a8c8984eb4809f93b818cb86d7693dc87e2a532be25d989fbd8bab2c6e0151`.
+- APK attachment is now complete. The earlier execution-side batch-helper HTTP401 remains historical; this does not claim that its authentication was repaired. Source archive/verification records remain preserved locally. GitHub publication was not attempted.
+- Build source remains `486fe10f24c2ed1a1e38d3b8769fd924cc25cac5`; previous validation and physical-device/provider limitations remain unchanged.
