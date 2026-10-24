@@ -147,12 +147,47 @@ public final class ZipHelper {
         }
     }
 
+    /**
+     * Checks nonempty ZIP entries, including payload CRCs, with bounded work.
+     * Call on an IO worker: document-provider reads may block. Interruption cancels validation.
+     * This does not establish SQLite integrity or safety of replacing an open database.
+     * @param file archive to check without changing its contents
+     * @return true when all nonempty archive entries pass the bounded checks
+     */
     public static boolean isValidZipFile(final StoredFileHelper file) {
-        try (ZipInputStream ignored = new ZipInputStream(new BufferedInputStream(
+        final long deadline = System.nanoTime()
+                + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        final long maxInflatedBytes = 512L * 1024 * 1024;
+        if (validationCanceled(deadline)) {
+            return false;
+        }
+        try (ZipInputStream inZip = new ZipInputStream(new BufferedInputStream(
                 new SharpInputStream(file.getStream())))) {
-            return true;
+            int entries = 0;
+            long inflatedBytes = 0;
+            final byte[] buffer = new byte[8192];
+            ZipEntry entry;
+            while ((entry = inZip.getNextEntry()) != null) {
+                if (++entries > 1024 || entry.getSize() > maxInflatedBytes
+                        || validationCanceled(deadline)) {
+                    return false;
+                }
+                int count;
+                while ((count = inZip.read(buffer)) != -1) {
+                    inflatedBytes += count;
+                    if (inflatedBytes > maxInflatedBytes || validationCanceled(deadline)) {
+                        return false;
+                    }
+                }
+                inZip.closeEntry();
+            }
+            return entries > 0 && !validationCanceled(deadline);
         } catch (final IOException ioe) {
             return false;
         }
+    }
+
+    private static boolean validationCanceled(final long deadline) {
+        return Thread.currentThread().isInterrupted() || System.nanoTime() - deadline >= 0;
     }
 }

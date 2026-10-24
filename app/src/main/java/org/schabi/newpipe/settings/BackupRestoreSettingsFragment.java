@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.widget.Toast;
+import android.widget.ProgressBar;
 
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
@@ -40,6 +41,12 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.SerialDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
 
@@ -56,6 +63,9 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                     this::requestExportPathResult);
     private SubscriptionsImportExportHelper importExportHelper;
+    private final SerialDisposable importValidation = new SerialDisposable();
+    private androidx.appcompat.app.AlertDialog importValidationDialog;
+    private long importValidationGeneration;
 
 
     @Override
@@ -190,13 +200,56 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
     }
 
     private void importDatabase(final StoredFileHelper file, final Uri importDataUri) {
-        // check if file is supported
-        if (!ZipHelper.isValidZipFile(file)) {
-            Toast.makeText(requireContext(), R.string.no_valid_zip_file, Toast.LENGTH_SHORT)
-                    .show();
-            return;
-        }
+        cancelImportValidation();
+        final long generation = importValidationGeneration;
+        importValidationDialog = new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.import_data)
+                .setView(new ProgressBar(requireContext()))
+                .setNegativeButton(R.string.cancel, (dialog, which) -> cancelImportValidation())
+                .setOnCancelListener(dialog -> cancelImportValidation())
+                .show();
+        importValidation.set(Single.fromCallable(() -> ZipHelper.isValidZipFile(file))
+                .subscribeOn(Schedulers.io())
+                .timeout(30, TimeUnit.SECONDS)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(valid -> {
+                    if (generation != importValidationGeneration || !isAdded()
+                            || getView() == null) {
+                        return;
+                    }
+                    cancelImportValidation();
+                    if (valid) {
+                        importValidatedDatabase(file, importDataUri);
+                    } else {
+                        Toast.makeText(requireContext(), R.string.no_valid_zip_file,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }, error -> {
+                    if (generation == importValidationGeneration && isAdded()
+                            && getView() != null) {
+                        cancelImportValidation();
+                        Toast.makeText(requireContext(), R.string.no_valid_zip_file,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }));
+    }
 
+    private void cancelImportValidation() {
+        importValidationGeneration++;
+        importValidation.set(null);
+        if (importValidationDialog != null) {
+            importValidationDialog.dismiss();
+            importValidationDialog = null;
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        cancelImportValidation();
+        super.onDestroyView();
+    }
+
+    private void importValidatedDatabase(final StoredFileHelper file, final Uri importDataUri) {
         try {
             manager.ensureDbDirectoryExists();
 
@@ -205,6 +258,7 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
                 Toast.makeText(requireContext(), R.string.could_not_import_all_files,
                                 Toast.LENGTH_LONG)
                         .show();
+                return;
             }
 
             // if settings file exist, ask if it should be imported.
@@ -283,7 +337,7 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
      *
      * @param importDataUri The import path to save
      */
-    private void finishImport(final Uri importDataUri) {
+    void finishImport(final Uri importDataUri) {
         // save import path only on success
         saveLastImportExportDataUri(importDataUri);
         // restart app to properly load db
