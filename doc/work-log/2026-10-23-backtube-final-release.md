@@ -591,3 +591,11 @@ A의 실패를 받으면 pending 보호를 해제하도록 수정했다. A 자�
 - Local Library identity metadata applied successfully. Official Library materialization/read-back succeeded; downloaded SHA-256 exactly matched `36a8c8984eb4809f93b818cb86d7693dc87e2a532be25d989fbd8bab2c6e0151`.
 - APK attachment is now complete. The earlier execution-side batch-helper HTTP401 remains historical; this does not claim that its authentication was repaired. Source archive/verification records remain preserved locally. GitHub publication was not attempted.
 - Build source remains `486fe10f24c2ed1a1e38d3b8769fd924cc25cac5`; previous validation and physical-device/provider limitations remain unchanged.
+
+### Follow-up — web Pro v2 reviewed; async-holder candidate preparation only
+
+- review-v2.zip Library libfile_21cff49cecf081918af2c69b90501de3 materialized and verified in this consumer; file_id file_00000000787c823098bba78845fa1b03, version_id unavailable. SHA matches user-provided 0960cfa1c636cf460d73f254b7d7d20b0d48af7461d263b257f2fe3204a6308e.
+- Independently confirmed both holder blockingGet paths and IO-scheduled history source; UI wait is a code-path finding, not measured jank or performance gain. No current direct InfoItemHolder.updateState caller found; unrelated LocalItemHolder calls distinguished.
+- All 4637 manifest file hashes match; 4638-versus-4637 inventory difference is the values-iw directory symlink. Java/Kotlin counts and review-depth coverage are not whole-program semantic review.
+- Isolated perf/stream-state-bind-async-review-20261024 local worktree prepared. Existing async ownership patterns and RED→GREEN criteria recorded in doc/review/stream-state-async/PREPARATION.md.
+- No actual candidate patch received/applied, no product/test change or new runtime/performance validation. No deletion, Sequence change, Preview removal, Windows work, main merge or release. Waiting for the pending web Pro async patch and reuse-row tests.
