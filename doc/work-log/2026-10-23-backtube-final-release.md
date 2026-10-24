@@ -599,3 +599,11 @@ A의 실패를 받으면 pending 보호를 해제하도록 수정했다. A 자�
 - All 4637 manifest file hashes match; 4638-versus-4637 inventory difference is the values-iw directory symlink. Java/Kotlin counts and review-depth coverage are not whole-program semantic review.
 - Isolated perf/stream-state-bind-async-review-20261024 local worktree prepared. Existing async ownership patterns and RED→GREEN criteria recorded in doc/review/stream-state-async/PREPARATION.md.
 - No actual candidate patch received/applied, no product/test change or new runtime/performance validation. No deletion, Sequence change, Preview removal, Windows work, main merge or release. Waiting for the pending web Pro async patch and reuse-row tests.
+
+### Follow-up — web Pro v4 async history implemented and focused validation passed
+
+- Exact input Library libfile_1dc1e3d3a1b48191a25c9cc0f5165b3d, SHA fb9163d0d7be87cb0ba72db1e9905dbb04d348f89df9a357caf5318bd151a207, 267969 bytes/19 ZIP members, locally materialized and CRC/read verified.
+- Two product Java files only: InfoListAdapter and StreamMiniInfoItemHolder. No unused-code/Preview deletion, Sequence conversion, player engine/schema/build identity change.
+- Original1035 bind-on-main with unresolved history Single reproduced RED. Corrected candidate initially passed10/11 Android tests; real whole-RecyclerView window detach kept an observer. Actual View attach/detach listener resolved it. A final LIVE display-rule reload regression was measured and corrected independently of visual animation mode.
+- Final Android holder11/11 PASS; final-source JVM560+shared14 PASS, Checkstyle PASS, lint0errors/346warnings. Abstract web model8 not counted. Independent source reviews accepted final changes.
+- Code is pinned for related main-player/offline regression and compatible APK1036 build; those stages are not complete at this checkpoint. Physical phone/API35/benchmark/entire Android suite NOT RUN. No Windows/main merge/release.

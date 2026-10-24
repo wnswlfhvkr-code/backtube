@@ -1,0 +1,181 @@
+{
+  "input_library_file_id": "libfile_1dc1e3d3a1b48191a25c9cc0f5165b3d",
+  "input_sha256": "fb9163d0d7be87cb0ba72db1e9905dbb04d348f89df9a357caf5318bd151a207",
+  "input_zip_bytes": 267969,
+  "input_crc_valid": true,
+  "baseline": "e7cf13eb22043d67e465af7ca804f763e280b62b",
+  "actual_tests": {
+    "holder-baseline-red": {
+      "tests": [
+        {
+          "test": "bindReturnsBeforeDatabaseCompletion",
+          "code": -2
+        }
+      ],
+      "seconds": 6.5,
+      "ok_marker": false
+    },
+    "holder-eleven-tests": {
+      "tests": [
+        {
+          "test": "actualWindowDetachDefersExternalUpdateUntilReattach",
+          "code": -2
+        },
+        {
+          "test": "emptyErrorAndPreferenceOffClearState",
+          "code": 0
+        },
+        {
+          "test": "bindAttachDoesNotDuplicateAndDetachedUpdateDoesNotQuery",
+          "code": 0
+        },
+        {
+          "test": "differentServiceUpdateIsIgnoredAndCurrentDurationIsRead",
+          "code": 0
+        },
+        {
+          "test": "alreadyQueuedOldResultCannotOverwriteNewBinding",
+          "code": 0
+        },
+        {
+          "test": "oldPropertyAndProgressAnimationsCannotHideReboundRow",
+          "code": 0
+        },
+        {
+          "test": "rapidRebindAndSameItemUpdatesAreLatestWins",
+          "code": 0
+        },
+        {
+          "test": "updatePreservesVisibleProgressUntilItsResult",
+          "code": 0
+        },
+        {
+          "test": "bindReturnsBeforeDatabaseCompletion",
+          "code": 0
+        },
+        {
+          "test": "recyclingActualRecyclerViewRowsRejectsLateResult",
+          "code": 0
+        },
+        {
+          "test": "zeroDurationAndLiveDisplayRulesRemainUnchanged",
+          "code": 0
+        }
+      ],
+      "seconds": 42.51,
+      "ok_marker": false
+    },
+    "holder-window-detach-green": {
+      "tests": [
+        {
+          "test": "actualWindowDetachDefersExternalUpdateUntilReattach",
+          "code": 0
+        }
+      ],
+      "seconds": 13.57,
+      "ok_marker": true
+    },
+    "holder-live-policy-red": {
+      "tests": [
+        {
+          "test": "zeroDurationAndLiveDisplayRulesRemainUnchanged",
+          "code": -2
+        }
+      ],
+      "seconds": 9.41,
+      "ok_marker": false
+    },
+    "holder-final-eleven": {
+      "tests": [
+        {
+          "test": "actualWindowDetachDefersExternalUpdateUntilReattach",
+          "code": 0
+        },
+        {
+          "test": "emptyErrorAndPreferenceOffClearState",
+          "code": 0
+        },
+        {
+          "test": "bindAttachDoesNotDuplicateAndDetachedUpdateDoesNotQuery",
+          "code": 0
+        },
+        {
+          "test": "differentServiceUpdateIsIgnoredAndCurrentDurationIsRead",
+          "code": 0
+        },
+        {
+          "test": "alreadyQueuedOldResultCannotOverwriteNewBinding",
+          "code": 0
+        },
+        {
+          "test": "oldPropertyAndProgressAnimationsCannotHideReboundRow",
+          "code": 0
+        },
+        {
+          "test": "rapidRebindAndSameItemUpdatesAreLatestWins",
+          "code": 0
+        },
+        {
+          "test": "updatePreservesVisibleProgressUntilItsResult",
+          "code": 0
+        },
+        {
+          "test": "bindReturnsBeforeDatabaseCompletion",
+          "code": 0
+        },
+        {
+          "test": "recyclingActualRecyclerViewRowsRejectsLateResult",
+          "code": 0
+        },
+        {
+          "test": "zeroDurationAndLiveDisplayRulesRemainUnchanged",
+          "code": 0
+        }
+      ],
+      "seconds": 38.24,
+      "ok_marker": true
+    }
+  },
+  "jvm_lint": {
+    "app": {
+      "tests": 560,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lint": {
+      "Warning": 346
+    }
+  },
+  "independent_review": "no concrete blocker after final display-policy review",
+  "related_regressions": "PENDING",
+  "new_apk": "PENDING",
+  "not_run": [
+    "physical phone",
+    "API35 runtime",
+    "frame-time/allocation benchmark",
+    "entire Android suite",
+    "whole-repository semantic review"
+  ],
+  "scope": [
+    "StreamMiniInfoItemHolder",
+    "InfoListAdapter",
+    "real Android holder tests"
+  ],
+  "excluded": [
+    "unused-code deletion",
+    "Compose Preview removal",
+    "asSequence change",
+    "player/queue engine change",
+    "database schema/preference/package/signing/build configuration change",
+    "Windows",
+    "main merge",
+    "release"
+  ]
+}

@@ -340,6 +340,30 @@ public class InfoListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     }
 
+    @Override
+    public void onViewDetachedFromWindow(@NonNull final RecyclerView.ViewHolder holder) {
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).onHolderDetached();
+        }
+        super.onViewDetachedFromWindow(holder);
+    }
+
+    @Override
+    public void onViewAttachedToWindow(@NonNull final RecyclerView.ViewHolder holder) {
+        super.onViewAttachedToWindow(holder);
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).onHolderAttached();
+        }
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull final RecyclerView.ViewHolder holder) {
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).cancelPendingStateLoad();
+        }
+        super.onViewRecycled(holder);
+    }
+
     public GridLayoutManager.SpanSizeLookup getSpanSizeLookup(final int spanCount) {
         return new GridLayoutManager.SpanSizeLookup() {
             @Override
