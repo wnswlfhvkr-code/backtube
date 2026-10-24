@@ -154,14 +154,170 @@
     }
   },
   "independent_review": "no concrete blocker after final display-policy review",
-  "related_regressions": "PENDING",
-  "new_apk": "PENDING",
+  "related_regressions": {
+    "phase": "holder-final-related",
+    "tests": [
+      {
+        "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+        "test": "explicitSelectionSurvivesInitialOldPlayerCallbacks",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+        "test": "oldDelayedMetadataCannotReplaceExplicitSelection",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+        "test": "pendingPlaylistSurvivesRecreationAndThenFollowsNext",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+        "test": "immediatePlayAfterFailedNextKeepsTheSelectedSuccessor",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+        "test": "failedSelectionRemainsPausedAcrossRecreation",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialExtractorFailureRetainsSelectionUntilRetry",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialAudioOnlyFailureDoesNotStartRelatedRecommendation",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialAudioOnlyFailureRetainsSelectionUntilRetry",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "freshReselectionAfterInitialFailureReloadsSelectedSource",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.ListeningModePlaybackTest",
+        "test": "listeningModeKeepsAudioAdvancingWithoutVideoTrack",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.ListeningModePlaybackTest",
+        "test": "uiOnlyExitKeepsServiceAndTimerWithoutResumingPause",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.ListeningModePlaybackTest",
+        "test": "listeningToggleDisablesVideoAndPreservesPlaybackSession",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "audioOnlySaveRetainsAudioPlayerAndAudioDecoder",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "singleSavedVideoRendersFramesAndAudioWithoutNetwork",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "selectedAudioThenVideoRendersVideoOnAutomaticTransition",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.download.OfflineDuplicateDeviceTest",
+        "test": "savedAudioAllowsVideoSelectorButAudioConfirmationOnlyShowsToast",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.download.OfflineDuplicateDeviceTest",
+        "test": "completedVideoRapidTapsShowShortToastWithoutSelectorOrNewSave",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+        "test": "cachedArtPersistsAndActualShelfShowsDistinctVideoAudioCoversAndLabels",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+        "test": "saturatedArtworkWorkerNeverDelaysOwnedMediaSourceCreation",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+        "test": "roomCachedCoverIsTriedAfterEightInfoCacheMisses",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+        "test": "corruptMediaAndAudioWithoutCoverKeepPlaceholderWithoutLosingSave",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.offline.OfflineThumbnailsDeviceTest",
+        "test": "legacyVideoWithoutImageExtractsLocalFrameAndKeepsMediaBytesAndOrder",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.ActiveSessionResumeTest",
+        "test": "historicalSavedSelectionAndSameActiveSelectionStartAtZero",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.ActiveSessionResumeTest",
+        "test": "lastActiveQueueAndLatestPositionRestorePausedThroughService",
+        "result": "PASS"
+      },
+      {
+        "class": "org.schabi.newpipe.player.PersonalPlaybackTest",
+        "test": "qualityReloadKeepsPausedPositionAndDataSaverUiRenders",
+        "result": "PASS"
+      }
+    ],
+    "seconds": 324.33,
+    "result": "PASS"
+  },
+  "new_apk": {
+    "source_head": "e3f506218aca6ec4c9c15c9e449b8ac1bf3c19fb",
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1036,
+    "version_name": "0.29.1-backtube-history-async-20261024",
+    "size_bytes": 11548213,
+    "sha256": "d163993b1231c9af18d75f5ef8b959e37614746f19cc683660ac8d37bd6a51d5",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "signature_valid": true,
+    "zipalign_valid": true,
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    },
+    "permissions_added": [],
+    "permissions_removed": [],
+    "filename": "backtube-history-async-e3f5062-1036-20261024.apk"
+  },
   "not_run": [
     "physical phone",
     "API35 runtime",
     "frame-time/allocation benchmark",
     "entire Android suite",
-    "whole-repository semantic review"
+    "whole-repository semantic review",
+    "actual provider downloads",
+    "new remote Android CI"
   ],
   "scope": [
     "StreamMiniInfoItemHolder",
@@ -177,5 +333,141 @@
     "Windows",
     "main merge",
     "release"
-  ]
+  ],
+  "product_source": "e3f506218aca6ec4c9c15c9e449b8ac1bf3c19fb",
+  "force_stop_scenarios": [
+    {
+      "phase": "holder-final-auto-next-source-failure-online-saved-seed",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 3.77,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-auto-next-source-failure-online-saved-verify",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 31.12,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-auto-next-online-restored-seed",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 4.22,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-auto-next-online-restored-verify",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 24.18,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-offline-cold-video-restored-seed",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 3.8,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-offline-cold-video-restored-verify",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 20.6,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-offline-cold-audio-restored-seed",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 3.38,
+      "result": "PASS"
+    },
+    {
+      "phase": "holder-final-offline-cold-audio-restored-verify",
+      "tests": [
+        {
+          "class": "org.schabi.newpipe.player.FirstPlaybackSelectionTest",
+          "test": "firstSelectionAcrossProcessRestart",
+          "result": "PASS"
+        }
+      ],
+      "seconds": 17.15,
+      "result": "PASS"
+    }
+  ],
+  "upgrade": {
+    "install_1036_update": true,
+    "saved_metadata_unchanged": true,
+    "saved_media_sha_unchanged": true,
+    "actual_version_code": 1036,
+    "candidate_shelf_launch": true,
+    "passed": true
+  },
+  "installed_apk_readback": {
+    "exact_match": true,
+    "sha256": "d163993b1231c9af18d75f5ef8b959e37614746f19cc683660ac8d37bd6a51d5"
+  },
+  "packaged_notices": {
+    "GPL_and_component_notices": true
+  },
+  "targeted_secret_checks": {
+    "passed": true,
+    "limitations": "Not a complete security audit"
+  },
+  "candidate_ui": {
+    "artifact_version": 1036,
+    "method": "direct pixel inspection of candidate screenshot",
+    "generated_media_only": true,
+    "selected_title_visible": true,
+    "selected_title": "Generated candidate long video",
+    "video_frame_visible": true,
+    "saved_video_label_visible": true,
+    "rendering_smoke": "PASS",
+    "playback_advancement_from_single_image": "NOT RUN",
+    "automated_post_playback_ui_tree": "FAIL: ParseError",
+    "note": "Rendering verified directly; XML collection failure retained and not counted as automated PASS. Related instrumentation separately verified frames and audio."
+  },
+  "library": {
+    "library_file_id": "libfile_854e42c8a91481919e0e0e7af5e745fe",
+    "filename": "backtube-history-async-e3f5062-1036-20261024.apk",
+    "readback_sha256": "d163993b1231c9af18d75f5ef8b959e37614746f19cc683660ac8d37bd6a51d5"
+  }
 }
