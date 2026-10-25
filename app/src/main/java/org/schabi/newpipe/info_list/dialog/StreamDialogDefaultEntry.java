@@ -141,18 +141,20 @@ public enum StreamDialogDefaultEntry {
     MARK_AS_WATCHED(R.string.mark_as_watched, (fragment, item) ->
         new HistoryRecordManager(fragment.getContext())
                 .markAsWatched(item)
+                .observeOn(AndroidSchedulers.mainThread())
                 .doOnError(error -> {
-                    ErrorUtil.showSnackbar(
-                            fragment.requireContext(),
-                            new ErrorInfo(
-                                    error,
-                                    UserAction.OPEN_INFO_ITEM_DIALOG,
-                                    "Got an error when trying to mark as watched"
-                            )
-                    );
+                    if (fragment.isAdded()) {
+                        ErrorUtil.showSnackbar(
+                                fragment.requireContext(),
+                                new ErrorInfo(
+                                        error,
+                                        UserAction.OPEN_INFO_ITEM_DIALOG,
+                                        "Got an error when trying to mark as watched"
+                                )
+                        );
+                    }
                 })
                 .onErrorComplete()
-                .observeOn(AndroidSchedulers.mainThread())
                 .subscribe()
     );
 

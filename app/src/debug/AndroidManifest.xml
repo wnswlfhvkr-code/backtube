@@ -4,5 +4,10 @@
 
     <application
         android:name=".DebugApp"
-        tools:replace="android:name" />
+        tools:replace="android:name">
+        <activity
+            android:name="org.schabi.newpipe.fragments.list.playlist.Batch10TestActivity"
+            android:exported="false"
+            android:theme="@style/LightTheme" />
+    </application>
 </manifest>

@@ -31,6 +31,7 @@ class StreamSegmentItem(
             // The default maxLines value is set to 1 to display all elements in the AS preview,
             viewBinding.textViewTitle.maxLines = 2
         } else {
+            viewBinding.textViewTitle.maxLines = 1
             viewBinding.textViewChannel.text = item.channelName
             viewBinding.textViewChannel.visibility = View.VISIBLE
         }
