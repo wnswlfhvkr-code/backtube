@@ -35,6 +35,7 @@ import org.schabi.newpipe.MainActivity;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.LinkedList;
@@ -173,6 +174,16 @@ public final class StateSaver {
             return newSavedState;
         }
 
+        // A failed disk replacement must retain both the previous file and its Bundle handle.
+        if (!isChangingConfig && savedState != null
+                && !TextUtils.isEmpty(savedState.getPathFileSaved())) {
+            final File previousFile = new File(savedState.getPathFileSaved());
+            if (previousFile.isFile() && previousFile.length() > 0) {
+                outState.putParcelable(StateSaver.KEY_SAVED_STATE, savedState);
+                return savedState;
+            }
+        }
+
         return null;
     }
 
@@ -222,6 +233,7 @@ public final class StateSaver {
             }
         }
 
+        File temporaryFile = null;
         try {
             File cacheDir = new File(cacheDirPath);
             if (!cacheDir.exists()) {
@@ -243,23 +255,39 @@ public final class StateSaver {
             if (file.exists() && file.length() > 0) {
                 // If the file already exists, just return it
                 return new SavedState(prefixFileName, file.getAbsolutePath());
-            } else {
-                // Delete any file that contains the prefix
-                final File[] files = cacheDir.listFiles((dir, name) ->
-                        name.contains(prefixFileName));
+            }
+
+            // Close the complete snapshot before publishing it at a reusable path.
+            temporaryFile = File.createTempFile("state-", ".tmp", cacheDir);
+            try (FileOutputStream fileOutputStream = new FileOutputStream(temporaryFile);
+                 ObjectOutputStream outputStream = new ObjectOutputStream(fileOutputStream)) {
+                outputStream.writeObject(savedObjects);
+            }
+            if (!temporaryFile.renameTo(file)) {
+                throw new IOException("Could not publish saved state");
+            }
+            temporaryFile = null;
+
+            // Keep previous generations until the replacement has been published.
+            final File[] files = cacheDir.listFiles((dir, name) ->
+                    name.contains(prefixFileName) && !name.equals(file.getName()));
+            if (files != null) {
                 for (final File fileToDelete : files) {
                     fileToDelete.delete();
                 }
             }
-
-            try (FileOutputStream fileOutputStream = new FileOutputStream(file);
-                 ObjectOutputStream outputStream = new ObjectOutputStream(fileOutputStream)) {
-                outputStream.writeObject(savedObjects);
-            }
-
             return new SavedState(prefixFileName, file.getAbsolutePath());
         } catch (final Exception e) {
             Log.e(TAG, "Failed to save state", e);
+        } finally {
+            if (temporaryFile != null) {
+                // A failed cleanup can leave a temporary file, never a reusable snapshot.
+                try {
+                    temporaryFile.delete();
+                } catch (final Exception ignored) {
+                    // The previous snapshot and Bundle handle remain available.
+                }
+            }
         }
         return null;
     }
