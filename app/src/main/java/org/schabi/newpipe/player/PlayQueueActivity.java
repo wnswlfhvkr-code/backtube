@@ -588,6 +588,12 @@ public final class PlayQueueActivity extends AppCompatActivity
 
     @Override
     public void onQueueUpdate(@Nullable final PlayQueue queue) {
+        final RecyclerView.Adapter<?> previous = queueControlBinding.playQueue.getAdapter();
+        if (previous instanceof PlayQueueAdapter) {
+            final PlayQueueAdapter previousQueueAdapter = (PlayQueueAdapter) previous;
+            previousQueueAdapter.unsetSelectedListener();
+            previousQueueAdapter.dispose();
+        }
         if (queue == null) {
             queueControlBinding.playQueue.setAdapter(null);
         } else {
