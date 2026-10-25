@@ -74,6 +74,12 @@ abstract class SubscriptionDAO : BasicDAO<SubscriptionEntity> {
     @Query("SELECT * FROM subscriptions WHERE url = :url AND service_id = :serviceId")
     abstract fun getSubscription(serviceId: Int, url: String): Maybe<SubscriptionEntity>
 
+    @Query(
+        "UPDATE subscriptions SET notification_mode = :mode " +
+            "WHERE service_id = :serviceId AND url = :url"
+    )
+    abstract fun updateNotificationMode(serviceId: Int, url: String, @NotificationMode mode: Int): Int
+
     @Query("SELECT * FROM subscriptions WHERE uid = :subscriptionId")
     abstract fun getSubscription(subscriptionId: Long): SubscriptionEntity
 

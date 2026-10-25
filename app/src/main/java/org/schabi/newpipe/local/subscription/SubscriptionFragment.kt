@@ -372,8 +372,9 @@ class SubscriptionFragment : BaseStateFragment<SubscriptionState>() {
             feedGroupsCarouselState = null
         }
 
-        binding.itemsList.post {
-            if (context == null) {
+        val currentBinding = _binding ?: return
+        currentBinding.itemsList.post {
+            if (_binding !== currentBinding || context == null) {
                 // since this part was posted to the next UI cycle, the fragment might have been
                 // removed in the meantime
                 return@post

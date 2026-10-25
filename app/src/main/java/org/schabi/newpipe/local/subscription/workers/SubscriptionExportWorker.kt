@@ -16,6 +16,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactive.awaitFirst
 import kotlinx.coroutines.withContext
@@ -46,7 +47,9 @@ class SubscriptionExportWorker(
 
             withContext(Dispatchers.IO) {
                 // Truncate file if it already exists
-                applicationContext.contentResolver.openOutputStream(uri, "wt")?.use {
+                val stream = applicationContext.contentResolver.openOutputStream(uri, "wt")
+                    ?: throw IOException("Could not open subscription export stream")
+                stream.use {
                     ImportExportJsonHelper.writeTo(subscriptions, it)
                 }
             }

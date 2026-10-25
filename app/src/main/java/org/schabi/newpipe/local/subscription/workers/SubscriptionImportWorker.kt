@@ -21,6 +21,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.asFlow
@@ -155,8 +156,8 @@ class SubscriptionImportWorker(
                 is SubscriptionImportInput.PreviousExportMode ->
                     context.contentResolver.openInputStream(input.url.toUri())?.use {
                         ImportExportJsonHelper.readFrom(it)
-                    }
-            } ?: emptyList()
+                    } ?: throw IOException("Could not open subscription import stream")
+            }
         }
     }
 
@@ -165,7 +166,7 @@ class SubscriptionImportWorker(
         text: String? = null,
         progress: Int = 0
     ): ForegroundInfo {
-        val maxProgress = subscriptions.size
+        val maxProgress = if (::subscriptions.isInitialized) subscriptions.size else 0
         val notification = NotificationCompat
             .Builder(context, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_newpipe_triangle_white)
