@@ -29,11 +29,12 @@ import org.schabi.newpipe.local.playlist.LocalPlaylistManager;
 import org.schabi.newpipe.local.playlist.RemotePlaylistManager;
 import org.schabi.newpipe.util.image.CoilHelper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
-import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.disposables.SerialDisposable;
 
 public class SelectPlaylistFragment extends DialogFragment {
 
@@ -42,7 +43,8 @@ public class SelectPlaylistFragment extends DialogFragment {
     private ProgressBar progressBar;
     private TextView emptyView;
     private RecyclerView recyclerView;
-    private Disposable disposable = null;
+    private final SerialDisposable selectionRequest = new SerialDisposable();
+    private long selectionGeneration;
 
     private List<PlaylistLocalItem> playlists = new Vector<>();
 
@@ -70,12 +72,22 @@ public class SelectPlaylistFragment extends DialogFragment {
         return v;
     }
 
+    private void cancelSelectionRequest() {
+        selectionGeneration++;
+        selectionRequest.set(null);
+    }
+
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        if (disposable != null) {
-            disposable.dispose();
+    public void onDestroyView() {
+        cancelSelectionRequest();
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
         }
+        recyclerView = null;
+        progressBar = null;
+        emptyView = null;
+        playlists = List.of();
+        super.onDestroyView();
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -83,6 +95,8 @@ public class SelectPlaylistFragment extends DialogFragment {
     //////////////////////////////////////////////////////////////////////////*/
 
     private void loadPlaylists() {
+        cancelSelectionRequest();
+        final long generation = selectionGeneration;
         progressBar.setVisibility(View.VISIBLE);
         recyclerView.setVisibility(View.GONE);
         emptyView.setVisibility(View.GONE);
@@ -91,16 +105,28 @@ public class SelectPlaylistFragment extends DialogFragment {
         final LocalPlaylistManager localPlaylistManager = new LocalPlaylistManager(database);
         final RemotePlaylistManager remotePlaylistManager = new RemotePlaylistManager(database);
 
-        disposable = getMergedOrderedPlaylists(localPlaylistManager, remotePlaylistManager)
+        selectionRequest.set(getMergedOrderedPlaylists(localPlaylistManager, remotePlaylistManager)
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(this::displayPlaylists, this::onError);
+                .subscribe(items -> {
+                    if (generation == selectionGeneration && recyclerView != null) {
+                        displayPlaylists(items);
+                    }
+                }, error -> {
+                    if (generation == selectionGeneration && recyclerView != null) {
+                        onError(error);
+                    }
+                }));
     }
 
     private void displayPlaylists(final List<PlaylistLocalItem> newPlaylists) {
-        playlists = newPlaylists;
+        playlists = new ArrayList<>(newPlaylists);
         progressBar.setVisibility(View.GONE);
         emptyView.setVisibility(newPlaylists.isEmpty() ? View.VISIBLE : View.GONE);
         recyclerView.setVisibility(newPlaylists.isEmpty() ? View.GONE : View.VISIBLE);
+        final RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
     }
 
     protected void onError(final Throwable e) {
@@ -112,9 +138,8 @@ public class SelectPlaylistFragment extends DialogFragment {
     // Handle actions
     //////////////////////////////////////////////////////////////////////////*/
 
-    private void clickedItem(final int position) {
+    private void clickedItem(final LocalItem selectedItem) {
         if (onSelectedListener != null) {
-            final LocalItem selectedItem = playlists.get(position);
 
             if (selectedItem instanceof PlaylistMetadataEntry) {
                 final PlaylistMetadataEntry entry = ((PlaylistMetadataEntry) selectedItem);
@@ -153,16 +178,21 @@ public class SelectPlaylistFragment extends DialogFragment {
         public void onBindViewHolder(@NonNull final SelectPlaylistItemHolder holder,
                                      final int position) {
             final PlaylistLocalItem selectedItem = playlists.get(position);
+            final List<PlaylistLocalItem> boundItems = playlists;
+            final long generation = selectionGeneration;
+            holder.view.setOnClickListener(view -> {
+                if (generation == selectionGeneration && boundItems == playlists) {
+                    clickedItem(selectedItem);
+                }
+            });
 
             if (selectedItem instanceof PlaylistMetadataEntry entry) {
                 holder.titleView.setText(entry.getOrderingName());
-                holder.view.setOnClickListener(view -> clickedItem(position));
                 CoilHelper.INSTANCE.loadPlaylistThumbnail(holder.thumbnailView,
                         entry.getThumbnailUrl());
 
             } else if (selectedItem instanceof PlaylistRemoteEntity entry) {
                 holder.titleView.setText(entry.getOrderingName());
-                holder.view.setOnClickListener(view -> clickedItem(position));
                 CoilHelper.INSTANCE.loadPlaylistThumbnail(holder.thumbnailView,
                         entry.getThumbnailUrl());
             }

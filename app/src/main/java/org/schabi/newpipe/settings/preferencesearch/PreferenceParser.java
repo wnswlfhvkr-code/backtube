@@ -1,6 +1,7 @@
 package org.schabi.newpipe.settings.preferencesearch;
 
 import android.content.Context;
+import android.content.res.XmlResourceParser;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -43,7 +44,7 @@ public class PreferenceParser {
             @XmlRes final int resId
     ) {
         final List<PreferenceSearchItem> results = new ArrayList<>();
-        final XmlPullParser xpp = context.getResources().getXml(resId);
+        final XmlResourceParser xpp = context.getResources().getXml(resId);
 
         try {
             xpp.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
@@ -78,6 +79,8 @@ public class PreferenceParser {
             }
         } catch (final Exception e) {
             Log.w(TAG, "Failed to parse resid=" + resId, e);
+        } finally {
+            xpp.close();
         }
         return results;
     }

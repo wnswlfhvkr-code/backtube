@@ -2,6 +2,7 @@ package org.schabi.newpipe.settings.tabs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static java.util.Objects.requireNonNull;
 
@@ -149,5 +150,32 @@ public class TabsJsonHelperTest {
         assertEquals(feedGroupTab.getFeedGroupId(), grpTabFromReturnedJson.getFeedGroupId());
         assertEquals(feedGroupTab.getIconId(), grpTabFromReturnedJson.getIconId());
         assertEquals(feedGroupTab.getFeedGroupName(), grpTabFromReturnedJson.getFeedGroupName());
+    }
+
+    @Test
+    public void localPlaylistIdsAboveIntRangeRoundTripThroughNanojson() throws Exception {
+        final List<Tab> expected = List.of(
+                new Tab.PlaylistTab(3_000_000_000L, "large local"),
+                new Tab.PlaylistTab(Long.MAX_VALUE, "largest local"),
+                new Tab.PlaylistTab(7, "https://fixture.invalid/playlist", "remote")
+        );
+        final String saved = TabsJsonHelper.getJsonToSave(expected);
+        final List<Tab> restored = TabsJsonHelper.getTabsFromJson(saved);
+        assertEquals(expected, restored);
+        assertEquals(3_000_000_000L, ((Tab.PlaylistTab) restored.get(0)).getPlaylistId());
+        assertEquals(Long.MAX_VALUE, ((Tab.PlaylistTab) restored.get(1)).getPlaylistId());
+    }
+
+    @Test
+    public void malformedTabsAndPlaylistEnumUseCheckedFallbackBoundary() {
+        for (final String json : List.of(
+                "{\"tabs\":null}",
+                "{\"tabs\":7}",
+                "{\"tabs\":\"not-array\"}",
+                "{\"tabs\":[{\"tab_id\":8,\"playlist_type\":\"NOT_A_KIND\"}]}")
+        ) {
+            assertThrows(TabsJsonHelper.InvalidJsonException.class,
+                    () -> TabsJsonHelper.getTabsFromJson(json));
+        }
     }
 }

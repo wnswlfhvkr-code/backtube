@@ -52,6 +52,9 @@ public final class TabsJsonHelper {
             }
 
             final JsonArray tabsArray = outerJsonObject.getArray(JSON_TABS_ARRAY_KEY, null);
+            if (tabsArray == null) {
+                throw new InvalidJsonException("JSON tabs value is not an array");
+            }
 
             final var returnTabs = tabsArray.streamAsJsonObjects()
                     .map(Tab::from)
@@ -59,7 +62,7 @@ public final class TabsJsonHelper {
                     .collect(Collectors.toUnmodifiableList());
 
             return returnTabs.isEmpty() ? getDefaultTabs() : returnTabs;
-        } catch (final JsonParserException e) {
+        } catch (final JsonParserException | IllegalArgumentException e) {
             throw new InvalidJsonException(e);
         }
     }
