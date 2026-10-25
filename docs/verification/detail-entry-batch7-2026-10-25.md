@@ -36,6 +36,12 @@ and did not run tests.
   The cases covered explicit selection despite old player callbacks, delayed old metadata,
   non-autoplay browsing, queue recreation followed by manual next, and a queued preference
   callback after fragment detachment. Instrumentation ended with `OK (5 tests)`.
+- API 23 force-stop first-selection phases: **4/4 PASS**, comprising two seed and two
+  verification runs in separate app processes. With a previous saved session and automatic next
+  enabled, selected A stayed active before its real end and related B started only after A's
+  natural completion. With no previous session and an initial source failure, A remained selected
+  for manual retry instead of skipping to B; the retry played A. Each phase ended with
+  `OK (1 test)` and the fixture rejected provider network requests.
 - API 35: **NOT RUN** because the cloud AVD had system ANRs before tests in prior runs.
 - H.264 video playback regression: **NOT RUN** here; the API 23 emulator's software decoder
   produced native `SIGILL` in the previous batch. This is not evidence of a product pass.
@@ -43,7 +49,7 @@ and did not run tests.
 ## Limits
 
 - Tests use generated/dummy inputs and local audio. No user data or actual provider network
-  stream was used. Full physical-device replay of the user-reported first-selection sequence
-  is not established by these cases.
+  stream was used. The force-stop cases cover the first-selection sequence with synthetic
+  metadata and generated WAVs; actual provider playback on a physical device remains untested.
 - Batch 8 and later candidates, backup restore R1, a new APK, main merge, and public release
   remain outside this batch.
