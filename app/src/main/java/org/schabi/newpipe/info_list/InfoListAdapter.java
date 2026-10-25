@@ -142,16 +142,6 @@ public class InfoListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     + "showFooter = " + showFooter);
         }
         notifyItemRangeInserted(offsetStart, data.size());
-
-        if (showFooter) {
-            final int footerNow = sizeConsideringHeaderOffset();
-            notifyItemMoved(offsetStart, footerNow);
-
-            if (DEBUG) {
-                Log.d(TAG, "addInfoItemList() footer from " + offsetStart
-                        + " to " + footerNow);
-            }
-        }
     }
 
     public void clearStreamItemList() {
