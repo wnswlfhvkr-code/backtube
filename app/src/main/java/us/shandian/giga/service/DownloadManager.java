@@ -478,12 +478,8 @@ public class DownloadManager {
             for (DownloadMission mission : mMissionsPending) {
                 if (!mission.running || mission.isPsRunning() || mission.isFinished()) continue;
 
-                if (force) {
-                    // avoid waiting for threads
-                    mission.init = null;
-                    mission.threads = new Thread[0];
-                }
-
+                // pause() signals the retained workers without joining them.
+                // Clearing their references first would skip those interrupts.
                 mission.pause();
             }
         }

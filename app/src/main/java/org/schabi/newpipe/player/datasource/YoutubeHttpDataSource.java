@@ -695,13 +695,23 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         httpURLConnection.setRequestMethod("POST");
         httpURLConnection.setDoOutput(true);
         httpURLConnection.setFixedLengthStreamingMode(POST_BODY.length);
-        httpURLConnection.connect();
-
-        final OutputStream os = httpURLConnection.getOutputStream();
-        os.write(POST_BODY);
-        os.close();
-
-        return httpURLConnection;
+        try {
+            httpURLConnection.connect();
+            try (OutputStream output = httpURLConnection.getOutputStream()) {
+                output.write(POST_BODY);
+            }
+            return httpURLConnection;
+        } catch (final IOException | RuntimeException error) {
+            // The caller cannot close this connection until setup returns it.
+            try {
+                httpURLConnection.disconnect();
+            } catch (final RuntimeException cleanupError) {
+                if (cleanupError != error) {
+                    error.addSuppressed(cleanupError);
+                }
+            }
+            throw error;
+        }
     }
 
     /**

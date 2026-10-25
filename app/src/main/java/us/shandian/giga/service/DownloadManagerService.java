@@ -300,8 +300,12 @@ public class DownloadManagerService extends Service {
                 break;
         }
 
-        if (msg.what != MESSAGE_ERROR)
-            mFailedDownloads.remove(mFailedDownloads.indexOfValue(mission));
+        if (msg.what != MESSAGE_ERROR) {
+            final int failedIndex = mFailedDownloads.indexOfValue(mission);
+            if (failedIndex >= 0) {
+                mFailedDownloads.removeAt(failedIndex);
+            }
+        }
 
         for (Callback observer : mEchoObservers)
             observer.handleMessage(msg);
