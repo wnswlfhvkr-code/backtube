@@ -195,6 +195,8 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         }
 
         ViewHolderItem h = (ViewHolderItem) view;
+        // RecyclerView can rebind a holder without recycling it first.
+        mPendingDownloadsItems.remove(h);
         h.item = item;
 
         Utility.FileType type = Utility.getFileType(item.mission.kind, item.mission.storage.getName());
