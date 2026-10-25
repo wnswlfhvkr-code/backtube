@@ -1,9 +1,14 @@
 package org.schabi.newpipe.local.history;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import android.content.Context;
+import android.view.View;
 
 import org.junit.After;
 import org.junit.Before;
@@ -38,7 +43,11 @@ public class StatisticsSelectedDeletionTest {
 
     @Test
     public void selectedRowIdIsUsedWithoutLookingUpTheCurrentAdapterIndex() throws Exception {
-        final StatisticsPlaylistFragment fragment = new StatisticsPlaylistFragment();
+        final StatisticsPlaylistFragment fragment = spy(new StatisticsPlaylistFragment());
+        final Context context = mock(Context.class);
+        when(context.getApplicationContext()).thenReturn(context);
+        doReturn(context).when(fragment).getContext();
+        doReturn(mock(View.class)).when(fragment).getView();
         final HistoryRecordManager manager = mock(HistoryRecordManager.class);
         final Field managerField = StatisticsPlaylistFragment.class
                 .getDeclaredField("recordManager");
