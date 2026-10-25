@@ -12,6 +12,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.Uri;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.upstream.DataSpec;
 
@@ -123,6 +125,45 @@ public class YoutubeHttpDataSourceSetupTest {
     }
 
     @Test
+    public void redirectResponseFailureDisconnectsLocalConnection() throws Exception {
+        final HttpURLConnection connection = connectedResponseDouble();
+        final IOException original = new IOException("generated response failure");
+        when(connection.getResponseCode()).thenThrow(original);
+
+        assertSame(original, invokeRedirectFailure(connection));
+
+        verify(connection).disconnect();
+    }
+
+    @Test
+    public void redirectHeaderFailureDisconnectsLocalConnection() throws Exception {
+        final HttpURLConnection connection = connectedResponseDouble();
+        final IllegalStateException original =
+                new IllegalStateException("generated header failure");
+        when(connection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
+        when(connection.getHeaderField("Location")).thenThrow(original);
+
+        assertSame(original, invokeRedirectFailure(connection));
+
+        verify(connection).disconnect();
+    }
+
+    @Test
+    public void redirectCleanupFailureDoesNotReplaceOriginalResponseFailure()
+            throws Exception {
+        final HttpURLConnection connection = connectedResponseDouble();
+        final IOException original = new IOException("generated response failure");
+        final IllegalStateException cleanup =
+                new IllegalStateException("generated disconnect failure");
+        when(connection.getResponseCode()).thenThrow(original);
+        doThrow(cleanup).when(connection).disconnect();
+
+        assertSame(original, invokeRedirectFailure(connection));
+        assertEquals(1, original.getSuppressed().length);
+        assertSame(cleanup, original.getSuppressed()[0]);
+    }
+
+    @Test
     public void cleanupFailureIsSuppressedWithoutReplacingConnectFailure() throws Exception {
         final HttpURLConnection connection = mock(HttpURLConnection.class);
         final IOException original = new IOException("generated connect failure");
@@ -161,6 +202,39 @@ public class YoutubeHttpDataSourceSetupTest {
             final HttpURLConnection connection) {
         return mockConstruction(URL.class, (constructed, context) ->
                 when(constructed.openConnection()).thenReturn(connection));
+    }
+
+    private static HttpURLConnection connectedResponseDouble() throws Exception {
+        final HttpURLConnection connection = mock(HttpURLConnection.class);
+        when(connection.getOutputStream()).thenReturn(mock(OutputStream.class));
+        return connection;
+    }
+
+    private static Throwable invokeRedirectFailure(final HttpURLConnection connection)
+            throws Exception {
+        final Uri uri = mock(Uri.class);
+        when(uri.toString()).thenReturn("https://example.invalid/generated");
+        final DataSpec request = new DataSpec(uri);
+        final YoutubeHttpDataSource source = new YoutubeHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .createDataSource();
+        final Method method = YoutubeHttpDataSource.class.getDeclaredMethod("makeConnection",
+                DataSpec.class);
+        method.setAccessible(true);
+        try (MockedConstruction<URL> ignored = mockConstruction(URL.class,
+                (constructed, context) -> {
+                    when(constructed.toString()).thenReturn("https://example.invalid/generated");
+                    when(constructed.getPath()).thenReturn("/generated");
+                    when(constructed.openConnection()).thenReturn(connection);
+                })) {
+            try {
+                method.invoke(source, request);
+            } catch (final InvocationTargetException error) {
+                return error.getCause();
+            }
+        }
+        fail("Redirect response inspection should fail");
+        return null;
     }
 
     private static URL originalUrl() throws Exception {

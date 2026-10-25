@@ -558,8 +558,21 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         while (redirectCount++ <= MAX_REDIRECTS) {
             final HttpURLConnection httpURLConnection = makeConnection(url, httpMethod, httpBody,
                     position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
-            final int httpURLConnectionResponseCode = httpURLConnection.getResponseCode();
-            final String location = httpURLConnection.getHeaderField("Location");
+            final int httpURLConnectionResponseCode;
+            final String location;
+            try {
+                httpURLConnectionResponseCode = httpURLConnection.getResponseCode();
+                location = httpURLConnection.getHeaderField("Location");
+            } catch (final IOException | RuntimeException error) {
+                try {
+                    httpURLConnection.disconnect();
+                } catch (final RuntimeException cleanupError) {
+                    if (cleanupError != error) {
+                        error.addSuppressed(cleanupError);
+                    }
+                }
+                throw error;
+            }
             if ((httpMethod == DataSpec.HTTP_METHOD_GET || httpMethod == DataSpec.HTTP_METHOD_HEAD)
                     && (httpURLConnectionResponseCode == HttpURLConnection.HTTP_MULT_CHOICE
                     || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_PERM
