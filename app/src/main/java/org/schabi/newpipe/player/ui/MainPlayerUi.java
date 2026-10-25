@@ -909,6 +909,10 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
     @Override
     public void onVideoSizeChanged(@NonNull final VideoSize videoSize) {
         super.onVideoSizeChanged(videoSize);
+        // A disabled renderer has no orientation to report.
+        if (videoSize.width == 0 || videoSize.height == 0) {
+            return;
+        }
         isVerticalVideo = videoSize.width < videoSize.height;
 
         if (globalScreenOrientationLocked(context)

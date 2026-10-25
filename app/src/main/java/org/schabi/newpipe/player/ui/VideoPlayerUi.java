@@ -113,6 +113,8 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
     protected PlayerBinding binding;
     private final Handler controlsVisibilityHandler = new Handler(Looper.getMainLooper());
+    // Final UI lifetime, separate from the ExoPlayer lifetime.
+    private boolean destroyed;
     @Nullable
     private SurfaceHolderCallback surfaceHolderCallback;
     boolean surfaceIsSetup = false;
@@ -418,6 +420,10 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
     @Override
     public void destroy() {
+        destroyed = true;
+        controlsVisibilityHandler.removeCallbacksAndMessages(null);
+        // Detach the old end callback before canceling animation on a reusable binding.
+        binding.playbackControlRoot.animate().setListener(null).cancel();
         super.destroy();
         binding.endScreen.setImageDrawable(null);
         deinitPlayerSeekOverlay();
@@ -686,6 +692,9 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
     }
 
     public void showControlsThenHide() {
+        if (destroyed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "showControlsThenHide() called");
         }
@@ -703,6 +712,9 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
     }
 
     public void showControls(final long duration) {
+        if (destroyed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "showControls() called");
         }
@@ -714,6 +726,9 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
     }
 
     public void hideControls(final long duration, final long delay) {
+        if (destroyed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "hideControls() called with: duration = [" + duration
                     + "], delay = [" + delay + "]");
@@ -723,9 +738,16 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
 
         controlsVisibilityHandler.removeCallbacksAndMessages(null);
         controlsVisibilityHandler.postDelayed(() -> {
+            if (destroyed) {
+                return;
+            }
             showHideShadow(false, duration);
             animate(binding.playbackControlRoot, false, duration, AnimationType.ALPHA,
-                    0, this::hideSystemUIIfNeeded);
+                    0, () -> {
+                        if (!destroyed) {
+                            hideSystemUIIfNeeded();
+                        }
+                    });
         }, delay);
     }
 
@@ -1373,6 +1395,9 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
      */
     @Override
     public void onDismiss(@Nullable final PopupMenu menu) {
+        if (destroyed) {
+            return;
+        }
         if (DEBUG) {
             Log.d(TAG, "onDismiss() called with: menu = [" + menu + "]");
         }
@@ -1482,11 +1507,18 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
      */
     protected View.OnClickListener makeOnClickListener(@NonNull final Runnable runnable) {
         return v -> {
+            if (destroyed) {
+                return;
+            }
             if (DEBUG) {
                 Log.d(TAG, "onClick() called with: v = [" + v + "]");
             }
 
             runnable.run();
+            // The action can synchronously replace this UI while reusing its binding.
+            if (destroyed) {
+                return;
+            }
 
             // Manages the player controls after handling the view click.
             if (player.getCurrentState() == STATE_COMPLETED) {
@@ -1496,7 +1528,8 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
             showHideShadow(true, DEFAULT_CONTROLS_DURATION);
             animate(binding.playbackControlRoot, true, DEFAULT_CONTROLS_DURATION,
                     AnimationType.ALPHA, 0, () -> {
-                        if (player.getCurrentState() == STATE_PLAYING && !isSomePopupMenuVisible) {
+                        if (!destroyed && player.getCurrentState() == STATE_PLAYING
+                                && !isSomePopupMenuVisible) {
                             if (v == binding.playPauseButton
                                     // Hide controls in fullscreen immediately
                                     || (v == binding.screenRotationButton && isFullscreen())) {
