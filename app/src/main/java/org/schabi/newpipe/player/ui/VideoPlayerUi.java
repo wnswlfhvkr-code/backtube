@@ -1062,6 +1062,10 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
         binding.titleTextView.setText(info.getName());
         binding.channelTextView.setText(info.getUploaderName());
 
+        // Reset the displayed image as well as the holder's suppliers: a new seek can make this
+        // view visible before onProgressChanged() has a chance to supply the new item's frame.
+        binding.currentSeekbarPreviewThumbnail.setImageDrawable(null);
+        binding.currentSeekbarPreviewThumbnail.setVisibility(View.GONE);
         this.seekbarPreviewThumbnailHolder.resetFrom(player.getContext(), info.getPreviewFrames());
     }
 

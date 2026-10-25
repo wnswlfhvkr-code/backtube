@@ -45,7 +45,11 @@ public class SeekbarPreviewThumbnailHolder {
         final int seekbarPreviewType = getSeekbarPreviewThumbnailType(context);
 
         final UUID updateRequestIdentifier = UUID.randomUUID();
-        this.currentUpdateRequestIdentifier = updateRequestIdentifier;
+        synchronized (seekbarPreviewData) {
+            currentUpdateRequestIdentifier = updateRequestIdentifier;
+            // Immediately hide the previous item's thumbnails, even while a worker is pending.
+            seekbarPreviewData.clear();
+        }
 
         final ExecutorService executorService = Executors.newSingleThreadExecutor();
         executorService.submit(() -> {
@@ -62,9 +66,8 @@ public class SeekbarPreviewThumbnailHolder {
 
     private void resetFromAsync(final int seekbarPreviewType, final List<Frameset> framesets,
                                 final UUID updateRequestIdentifier) {
-        Log.d(TAG, "Clearing seekbarPreviewData");
-        synchronized (seekbarPreviewData) {
-            seekbarPreviewData.clear();
+        if (!isRequestIdentifierCurrent(updateRequestIdentifier)) {
+            return;
         }
 
         if (seekbarPreviewType == SeekbarPreviewThumbnailType.NONE) {
@@ -116,6 +119,9 @@ public class SeekbarPreviewThumbnailHolder {
 
         // Process each url in the frameset
         for (final String url : frameset.getUrls()) {
+            if (!isRequestIdentifierCurrent(updateRequestIdentifier)) {
+                break;
+            }
             // get the bitmap
             final Bitmap srcBitMap = getBitMapFrom(url);
 
@@ -142,12 +148,8 @@ public class SeekbarPreviewThumbnailHolder {
 
             // Check if we are still the latest request
             // If not abort method execution
-            if (isRequestIdentifierCurrent(updateRequestIdentifier)) {
-                synchronized (seekbarPreviewData) {
-                    seekbarPreviewData.putAll(generatedDataForUrl);
-                }
-            } else {
-                Log.d(TAG, "Aborted of generation of seekbarPreviewData");
+            if (!publishGeneratedData(updateRequestIdentifier, generatedDataForUrl)) {
+                Log.d(TAG, "Aborted generation of stale seekbarPreviewData");
                 break;
             }
         }
@@ -166,6 +168,12 @@ public class SeekbarPreviewThumbnailHolder {
             // In such a case - we don't want a NullPointer/
             // "cannot use a recycled source in createBitmap" Exception -> simply return null
             if (srcBitMap == null || srcBitMap.isRecycled()) {
+                return null;
+            }
+
+            if (frameset.getFrameWidth() <= 0 || frameset.getFrameHeight() <= 0
+                    || srcBitMap.getWidth() < frameset.getFrameWidth()
+                    || srcBitMap.getHeight() < frameset.getFrameHeight()) {
                 return null;
             }
 
@@ -225,13 +233,28 @@ public class SeekbarPreviewThumbnailHolder {
     }
 
     private boolean isRequestIdentifierCurrent(final UUID requestIdentifier) {
-        return this.currentUpdateRequestIdentifier.equals(requestIdentifier);
+        synchronized (seekbarPreviewData) {
+            return currentUpdateRequestIdentifier.equals(requestIdentifier);
+        }
+    }
+
+    private boolean publishGeneratedData(final UUID requestIdentifier,
+            final SparseArrayCompat<Supplier<Bitmap>> generatedData) {
+        synchronized (seekbarPreviewData) {
+            if (!currentUpdateRequestIdentifier.equals(requestIdentifier)) {
+                return false;
+            }
+            seekbarPreviewData.putAll(generatedData);
+            return true;
+        }
     }
 
     public Optional<Bitmap> getBitmapAt(final int positionInMs) {
         // Get the frame supplier closest to the requested position
         Supplier<Bitmap> closestFrame = () -> null;
+        final UUID requestIdentifier;
         synchronized (seekbarPreviewData) {
+            requestIdentifier = currentUpdateRequestIdentifier;
             int min = Integer.MAX_VALUE;
             for (int i = 0; i < seekbarPreviewData.size(); i++) {
                 final int pos = Math.abs(seekbarPreviewData.keyAt(i) - positionInMs);
@@ -242,6 +265,16 @@ public class SeekbarPreviewThumbnailHolder {
             }
         }
 
-        return Optional.ofNullable(closestFrame.get());
+        final Bitmap result = closestFrame.get();
+        synchronized (seekbarPreviewData) {
+            if (!currentUpdateRequestIdentifier.equals(requestIdentifier)) {
+                // Suppliers create an independent crop; a changed selection cannot display it.
+                if (result != null) {
+                    result.recycle();
+                }
+                return Optional.empty();
+            }
+        }
+        return Optional.ofNullable(result);
     }
 }

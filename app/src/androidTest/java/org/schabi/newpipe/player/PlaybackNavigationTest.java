@@ -3,6 +3,7 @@ package org.schabi.newpipe.player;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -16,6 +17,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.IBinder;
@@ -25,6 +27,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
@@ -232,6 +235,20 @@ public class PlaybackNavigationTest {
                     .getUrl());
             assertEquals("navigation-A", ((android.widget.TextView) activity
                     .findViewById(R.id.detail_video_title_view)).getText().toString());
+        });
+    }
+
+    @Test
+    public void metadataChangeClearsThePreviouslyDisplayedSeekbarPreview() throws Exception {
+        onMain(() -> {
+            final ImageView preview = activity.findViewById(R.id.currentSeekbarPreviewThumbnail);
+            assertNotNull(preview);
+            preview.setImageDrawable(new ColorDrawable(android.graphics.Color.RED));
+            final MainPlayerUi ui = player.UIs().get(MainPlayerUi.class).orElseThrow();
+            ui.onMetadataChanged(player.getCurrentStreamInfo().orElseThrow());
+            assertNull("previous item preview drawable survived metadata change",
+                    preview.getDrawable());
+            assertEquals(View.GONE, preview.getVisibility());
         });
     }
 
