@@ -872,7 +872,7 @@ public class MainActivity extends AppCompatActivity {
                         final boolean switchingPlayers = intent.getBooleanExtra(
                                 VideoDetailFragment.KEY_SWITCHING_PLAYERS, false);
                         NavigationHelper.openVideoDetailFragment(
-                                getApplicationContext(), getSupportFragmentManager(),
+                                this, getSupportFragmentManager(),
                                 serviceId, url, title, playQueue, switchingPlayers,
                                 intent.getBooleanExtra(
                                         VideoDetailFragment.KEY_PLAY_IMMEDIATELY, false));

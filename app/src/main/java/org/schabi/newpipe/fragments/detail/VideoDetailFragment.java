@@ -242,6 +242,9 @@ public final class VideoDetailFragment
     private final CompositeDisposable disposables = new CompositeDisposable();
     @Nullable
     private Disposable positionSubscriber = null;
+    @Nullable
+    private Disposable queueUpdateSubscriber;
+    private long queueUpdateGeneration;
 
     private BottomSheetBehavior<FrameLayout> bottomSheetBehavior;
     private BottomSheetBehavior.BottomSheetCallback bottomSheetCallback;
@@ -324,6 +327,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onPlayerDisconnected() {
+        cancelQueueUpdateSubscription();
         dismissSleepTimerDialog();
         player = null;
         pendingMainSelectionPlayer = null;
@@ -456,6 +460,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroy() {
+        cancelQueueUpdateSubscription();
         super.onDestroy();
 
         // Stop the service when user leaves the app with double back press
@@ -490,6 +495,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        cancelQueueUpdateSubscription();
         infoUpdateGeneration++;
         if (offlineSaveCheck != null) {
             offlineSaveCheck.dispose();
@@ -853,14 +859,14 @@ public final class VideoDetailFragment
                                                         final long delay) {
         final long generation = infoUpdateGeneration;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (activity == null || binding == null || generation != infoUpdateGeneration) {
+            if (activity == null || binding == null || generation != infoUpdateGeneration
+                    || currentInfo == null || currentInfo.getServiceId() != info.getServiceId()
+                    || !Objects.equals(currentInfo.getUrl(), info.getUrl())) {
                 return;
             }
-            // Data can already be drawn, don't spend time twice
-            if (info.getName().equals(binding.detailVideoTitleView.getText().toString())) {
-                return;
-            }
-            prepareAndHandleInfo(info, scrollToTop);
+            // Titles are not item identities. Use the latest metadata for this same item;
+            // an audio-track refresh may have replaced the snapshot while this task waited.
+            prepareAndHandleInfo(currentInfo, scrollToTop);
         }, delay);
     }
 
@@ -1090,9 +1096,12 @@ public final class VideoDetailFragment
         } else {
             // call `post()` to be sure `viewPager.getHitRect()`
             // is up to date and not being currently recomputed
-            binding.tabLayout.post(() -> {
+            final FragmentVideoDetailBinding expectedBinding = binding;
+            expectedBinding.tabLayout.post(() -> {
                 final var activity = getActivity();
-                if (activity != null) {
+                if (activity != null && binding == expectedBinding
+                        && pageAdapter.getCount() >= 2
+                        && expectedBinding.viewPager.getVisibility() == View.VISIBLE) {
                     final Rect pagerHitRect = new Rect();
                     binding.viewPager.getHitRect(pagerHitRect);
 
@@ -1472,6 +1481,11 @@ public final class VideoDetailFragment
                                   @Nullable final PlayQueue newPlayQueue) {
         if (!Objects.equals(url, newUrl)) {
             savedDetailsRedirected = false;
+        }
+        if (playQueue != newPlayQueue) {
+            // A new selection can replace the queue before the player sends onQueueUpdate().
+            // Release the old observer even if extraction then fails or playback never starts.
+            cancelQueueUpdateSubscription();
         }
         this.serviceId = newServiceId;
         this.url = newUrl;
@@ -1903,6 +1917,7 @@ public final class VideoDetailFragment
         if (selectionPending && (isWaitingForSelectionRequest() || !isSelectedQueueItem(queue))) {
             return;
         }
+        cancelQueueUpdateSubscription();
         playQueue = queue;
         if (DEBUG) {
             Log.d(TAG, "onQueueUpdate() called with: serviceId = ["
@@ -1912,10 +1927,13 @@ public final class VideoDetailFragment
 
         // Register broadcast receiver to listen to playQueue changes
         // and hide the overlayPlayQueueButton when the playQueue is empty / destroyed.
-        if (playQueue != null && playQueue.getBroadcastReceiver() != null) {
-            playQueue.getBroadcastReceiver().subscribe(
-                    event -> updateOverlayPlayQueueButtonVisibility()
-            );
+        if (binding != null && playQueue != null && playQueue.getBroadcastReceiver() != null) {
+            final long generation = queueUpdateGeneration;
+            queueUpdateSubscriber = playQueue.getBroadcastReceiver().subscribe(event -> {
+                if (generation == queueUpdateGeneration && binding != null && playQueue == queue) {
+                    updateOverlayPlayQueueButtonVisibility();
+                }
+            });
         }
 
         // This should be the only place where we push data to stack.
@@ -1939,6 +1957,15 @@ public final class VideoDetailFragment
             // queue with the new one that is active and have the same history.
             // Without that the cached playQueue will have an old recovery position
             stackWithQueue.setPlayQueue(queue);
+        }
+    }
+
+    private void cancelQueueUpdateSubscription() {
+        queueUpdateGeneration++;
+        final Disposable previous = queueUpdateSubscriber;
+        queueUpdateSubscriber = null;
+        if (previous != null) {
+            previous.dispose();
         }
     }
 
@@ -2026,7 +2053,8 @@ public final class VideoDetailFragment
         }
 
         updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
-        if (currentInfo != null && info.getUrl().equals(currentInfo.getUrl())) {
+        if (currentInfo != null && info.getServiceId() == currentInfo.getServiceId()
+                && info.getUrl().equals(currentInfo.getUrl())) {
             currentInfo = info;
             if (binding != null
                     && org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
