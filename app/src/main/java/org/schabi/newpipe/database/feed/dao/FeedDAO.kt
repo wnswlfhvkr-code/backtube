@@ -36,7 +36,7 @@ abstract class FeedDAO {
      */
     @Query(
         """
-        SELECT s.*, sst.progress_time
+        SELECT DISTINCT s.*, sst.progress_time
         FROM streams s
 
         LEFT JOIN stream_state sst
@@ -116,6 +116,7 @@ abstract class FeedDAO {
               ON s.uid = f.stream_id
         
               WHERE s.upload_date < :offsetDateTime
+              AND f.subscription_id = feed.subscription_id
               AND   s.upload_date <> max_upload_date))
         """
     )
@@ -173,7 +174,13 @@ abstract class FeedDAO {
     @Query("SELECT MIN(last_updated) FROM feed_last_updated")
     abstract fun oldestSubscriptionUpdateFromAll(): Flowable<List<OffsetDateTime?>>
 
-    @Query("SELECT COUNT(*) FROM feed_last_updated WHERE last_updated IS NULL")
+    @Query(
+        """
+        SELECT COUNT(*) FROM subscriptions s
+        LEFT JOIN feed_last_updated lu ON s.uid = lu.subscription_id
+        WHERE lu.last_updated IS NULL
+        """
+    )
     abstract fun notLoadedCount(): Flowable<Long>
 
     @Query(
