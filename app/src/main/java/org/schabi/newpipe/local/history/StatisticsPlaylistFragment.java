@@ -330,8 +330,7 @@ public class StatisticsPlaylistFragment
                     .addEntry(StreamDialogDefaultEntry.DELETE)
                     .setAction(
                             StreamDialogDefaultEntry.DELETE,
-                            (f, i) -> deleteEntry(
-                                    Math.max(itemListAdapter.getItemsList().indexOf(item), 0)))
+                            (f, i) -> deleteEntry(item))
                     .create()
                     .show();
         } catch (final IllegalArgumentException e) {
@@ -339,29 +338,25 @@ public class StatisticsPlaylistFragment
         }
     }
 
-    private void deleteEntry(final int index) {
-        final LocalItem infoItem = itemListAdapter.getItemsList().get(index);
-        if (infoItem instanceof StreamStatisticsEntry) {
-            final StreamStatisticsEntry entry = (StreamStatisticsEntry) infoItem;
-            final Disposable onDelete = recordManager
-                    .deleteStreamHistoryAndState(entry.getStreamId())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(
-                            () -> {
-                                if (getView() != null) {
-                                    Snackbar.make(getView(), R.string.one_item_deleted,
-                                            Snackbar.LENGTH_SHORT).show();
-                                } else {
-                                    Toast.makeText(getContext(),
-                                            R.string.one_item_deleted,
-                                            Toast.LENGTH_SHORT).show();
-                                }
-                            },
-                            throwable -> showSnackBarError(new ErrorInfo(throwable,
-                                    UserAction.DELETE_FROM_HISTORY, "Deleting item")));
+    private void deleteEntry(final StreamStatisticsEntry selected) {
+        final Disposable onDelete = recordManager
+                .deleteStreamHistoryAndState(selected.getStreamId())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                        () -> {
+                            if (getView() != null) {
+                                Snackbar.make(getView(), R.string.one_item_deleted,
+                                        Snackbar.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(getContext(),
+                                        R.string.one_item_deleted,
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        },
+                        throwable -> showSnackBarError(new ErrorInfo(throwable,
+                                UserAction.DELETE_FROM_HISTORY, "Deleting item")));
 
-            disposables.add(onDelete);
-        }
+        disposables.add(onDelete);
     }
 
     @Override

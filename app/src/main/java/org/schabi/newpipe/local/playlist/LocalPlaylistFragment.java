@@ -424,6 +424,7 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
         final Context context = requireContext();
 
         disposables.add(playlistManager.getPlaylistStreams(playlistId)
+            .take(1)
             .flatMapSingle(playlist -> Single.just(export(
 
                 shareMode,
@@ -500,6 +501,7 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
 
         disposables.add(streamsMaybe.subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
+                .doFinally(() -> isRewritingPlaylist = false)
                 .subscribe(flow -> {
                     final List<PlaylistStreamEntry> itemsToKeep = flow.first;
                     final boolean thumbnailVideoRemoved = flow.second;
@@ -520,7 +522,6 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
                     }
 
                     hideLoading();
-                    isRewritingPlaylist = false;
                 }, throwable -> showError(new ErrorInfo(throwable, UserAction.REQUESTED_BOOKMARK,
                         "Removing watched videos, partially watched=" + removePartiallyWatched))));
     }
@@ -673,6 +674,7 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
 
         disposables.add(streamsMaybe.subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
+                .doFinally(() -> isRewritingPlaylist = false)
                 .subscribe(itemsToKeep -> {
                     itemListAdapter.clearStreamItemList();
                     itemListAdapter.addItems(itemsToKeep);
@@ -681,7 +683,6 @@ public class LocalPlaylistFragment extends BaseLocalListFragment<List<PlaylistSt
                     saveImmediate();
 
                     hideLoading();
-                    isRewritingPlaylist = false;
                 }, throwable -> showError(new ErrorInfo(throwable, UserAction.REQUESTED_BOOKMARK,
                         "Removing duplicated streams"))));
     }
