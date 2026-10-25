@@ -20,6 +20,7 @@ import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
+import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Map;
@@ -89,6 +90,35 @@ public class YoutubeHttpDataSourceSetupTest {
         }
 
         verify(output, times(1)).close();
+        verify(connection).disconnect();
+    }
+
+    @Test
+    public void requestMethodFailureDisconnectsConnectionBeforeItIsReturned() throws Exception {
+        final HttpURLConnection connection = mock(HttpURLConnection.class);
+        final ProtocolException original =
+                new ProtocolException("generated request method failure");
+        doThrow(original).when(connection).setRequestMethod("POST");
+        final URL originalUrl = originalUrl();
+
+        try (MockedConstruction<URL> ignored = connectionForConstructedUrl(connection)) {
+            assertSame(original, invokeFailure(originalUrl));
+        }
+
+        verify(connection).disconnect();
+    }
+
+    @Test
+    public void streamingModeFailureDisconnectsConnectionBeforeItIsReturned() throws Exception {
+        final HttpURLConnection connection = mock(HttpURLConnection.class);
+        final IllegalStateException original = new IllegalStateException("generated mode failure");
+        doThrow(original).when(connection).setFixedLengthStreamingMode(2);
+        final URL originalUrl = originalUrl();
+
+        try (MockedConstruction<URL> ignored = connectionForConstructedUrl(connection)) {
+            assertSame(original, invokeFailure(originalUrl));
+        }
+
         verify(connection).disconnect();
     }
 
