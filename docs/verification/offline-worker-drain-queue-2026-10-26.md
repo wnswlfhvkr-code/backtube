@@ -18,6 +18,8 @@ When an offline queued mission is blocked solely by a live old worker, `Download
 - GREEN: the worker exit schedules one retry, and explicit pause cancels the queued state and pending wake.
 - Focused `OfflineQueueTest`, `OfflineCancellationOwnershipTest`, and `DownloadForcePauseTest`: PASS.
 - Final `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:runCheckstyle`: PASS, 674 JVM tests, 0 failures, 0 errors, 0 skipped.
-- This separate change was not included in the 1037 menu APK. Android runtime for this queue boundary, real provider download, the user's device, API 35, and physical phone: NOT RUN.
+- API 23 Android instrumented scheduler checks: 4/4 PASS using a freshly installed isolated debug package. Fake missions never open a URL or write a media file. They cover old-worker drain waking once, queue limit 1, an unavailable offline-policy gate, explicit pause canceling a late wake, and synthetic normal/error termination allowing the next mission. The test uses a narrow override of the offline-policy result; product code still uses `OfflineDownloads.networkAllowed`.
+- The first API 23 run failed all four cases before the scheduler assertions because the test APK's context could not open its SQLite DB. The fixture was corrected to use the isolated target debug app's context; rebuilding and rerunning passed 4/4. These initial infrastructure failures are not product failures.
+- This separate change was not included in the 1037 menu APK. Real service download callbacks, real provider download, the user's device, API 35, and physical phone: NOT RUN.
 
 The user's device may instead be blocked by a metered or unvalidated Wi-Fi network, the app's Wi-Fi-only setting, an earlier running mission, or another condition. Its setting state is still needed before attributing this code defect to the reported item.

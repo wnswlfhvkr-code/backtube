@@ -45,7 +45,11 @@ public class DownloadManager {
         return canDownloadInCurrentNetwork()
                 && (!org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
                 || ((mission.running || !hasLiveOfflineWorkers(mission))
-                && org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext)));
+                && offlineNetworkAllowed()));
+    }
+
+    boolean offlineNetworkAllowed() {
+        return org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext);
     }
 
     private static boolean hasLiveOfflineWorkers(DownloadMission mission) {
