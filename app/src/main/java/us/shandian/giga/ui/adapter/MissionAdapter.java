@@ -25,6 +25,7 @@ import android.annotation.SuppressLint;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.app.Activity;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -59,6 +60,8 @@ import com.google.android.material.snackbar.Snackbar;
 
 import org.schabi.newpipe.BuildConfig;
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.download.DownloadNetworkPolicy;
+import org.schabi.newpipe.download.MobileDataDownloadConfirmation;
 import org.schabi.newpipe.error.ErrorInfo;
 import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.UserAction;
@@ -117,6 +120,7 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     private RecoverHelper mRecover;
     private final View mView;
     private final ArrayList<Mission> mHidden;
+    private final ArrayList<DownloadMission> pendingNetworkConfirmations = new ArrayList<>();
     private Snackbar mSnackbar;
 
     private final CompositeDisposable compositeDisposable = new CompositeDisposable();
@@ -279,7 +283,9 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
             h.size.setText(sizeStr);
             return;
         } else if (!mission.running) {
-            state = mission.enqueued ? R.string.queued : R.string.paused;
+            state = mission.enqueued && mDownloadManager.isMobileApprovalRequired(mission)
+                    ? R.string.download_mobile_confirm_wait
+                    : mission.enqueued ? R.string.queued : R.string.paused;
         } else if (mission.isPsRunning()) {
             state = R.string.post_processing;
         } else if (mission.isRecovering()) {
@@ -652,10 +658,14 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
 
         if (mission != null) {
             if (id == R.id.start) {
-                h.status.setText(UNDEFINED_PROGRESS);
-                mDownloadManager.resumeMission(mission);
+                requestResume(mission, () -> {
+                    if (h.item == null || h.item.mission != mission) return;
+                    h.status.setText(UNDEFINED_PROGRESS);
+                    mDownloadManager.resumeMission(mission);
+                });
                 return true;
             } else if (id == R.id.pause) {
+                pendingNetworkConfirmations.remove(mission);
                 mDownloadManager.pauseMission(mission);
                 return true;
             } else if (id == R.id.error_message_view) {
@@ -663,19 +673,32 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
                 return true;
             } else if (id == R.id.queue) {
                 boolean flag = !h.queue.isChecked();
-                h.queue.setChecked(flag);
-                mission.setEnqueued(flag);
+                if (flag) {
+                    requestResume(mission, () -> {
+                        if (h.item == null || h.item.mission != mission) return;
+                        h.queue.setChecked(true);
+                        mDownloadManager.resumeMission(mission);
+                        updateProgress(h);
+                    });
+                } else {
+                    pendingNetworkConfirmations.remove(mission);
+                    h.queue.setChecked(false);
+                    mission.setEnqueued(false);
+                }
                 updateProgress(h);
                 return true;
             } else if (id == R.id.retry) {
                 if (mission.isPsRunning()) {
                     mission.psContinue(true);
                 } else {
-                    mDownloadManager.tryRecover(mission);
-                    if (mission.storage.isInvalid())
-                        mRecover.tryRecover(mission);
-                    else
-                        recoverMission(mission);
+                    requestResume(mission, () -> {
+                        mDownloadManager.tryRecover(mission);
+                        if (mission.storage.isInvalid()) {
+                            mRecover.tryRecover(mission);
+                        } else {
+                            recoverMission(mission);
+                        }
+                    });
                 }
                 return true;
             } else if (id == R.id.cancel) {
@@ -808,6 +831,7 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     }
 
     public void onDestroy() {
+        pendingNetworkConfirmations.clear();
         compositeDisposable.dispose();
         mDeleter.dispose();
     }
@@ -825,15 +849,43 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     public void recoverMission(DownloadMission mission) {
         ViewHolderItem h = getViewHolder(mission);
         if (h == null) return;
+        requestResume(mission, () -> {
+            if (h.item == null || h.item.mission != mission) return;
+            mission.errObject = null;
+            mission.resetState(true, false, DownloadMission.ERROR_NOTHING);
+            h.status.setText(UNDEFINED_PROGRESS);
+            h.size.setText(Utility.formatBytes(mission.getLength()));
+            h.progress.setMarquee(true);
+            mDownloadManager.resumeMission(mission);
+        });
+    }
 
-        mission.errObject = null;
-        mission.resetState(true, false, DownloadMission.ERROR_NOTHING);
-
-        h.status.setText(UNDEFINED_PROGRESS);
-        h.size.setText(Utility.formatBytes(mission.getLength()));
-        h.progress.setMarquee(true);
-
-        mDownloadManager.resumeMission(mission);
+    private void requestResume(final DownloadMission mission, final Runnable action) {
+        if (!(mContext instanceof Activity) || pendingNetworkConfirmations.contains(mission)) {
+            return;
+        }
+        final DownloadNetworkPolicy.Type network = DownloadNetworkPolicy.current(mContext);
+        if (network == DownloadNetworkPolicy.Type.WIFI
+                || network == DownloadNetworkPolicy.Type.MOBILE
+                && mission.mobileDataApproved) {
+            if (mDownloadManager.hasPendingMission(mission)) {
+                action.run();
+            }
+            return;
+        }
+        pendingNetworkConfirmations.add(mission);
+        MobileDataDownloadConfirmation.request((Activity) mContext, approved -> {
+            if (!pendingNetworkConfirmations.remove(mission)) {
+                return;
+            }
+            if (!mDownloadManager.hasPendingMission(mission)) {
+                return;
+            }
+            if (approved) {
+                mission.setMobileDataApproved(true);
+            }
+            action.run();
+        }, () -> pendingNetworkConfirmations.remove(mission));
     }
 
     private void updater() {

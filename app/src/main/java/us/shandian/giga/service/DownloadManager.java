@@ -22,6 +22,7 @@ import us.shandian.giga.get.Mission;
 import us.shandian.giga.get.sqlite.FinishedMissionStore;
 import org.schabi.newpipe.streams.io.StoredDirectoryHelper;
 import org.schabi.newpipe.streams.io.StoredFileHelper;
+import org.schabi.newpipe.download.DownloadNetworkPolicy;
 import us.shandian.giga.util.Utility;
 
 import static org.schabi.newpipe.BuildConfig.DEBUG;
@@ -41,8 +42,20 @@ public class DownloadManager {
         return null;
     }
 
+    public synchronized boolean hasPendingMission(final DownloadMission mission) {
+        return mMissionsPending.contains(mission);
+    }
+
+    public boolean isMobileApprovalRequired(final DownloadMission mission) {
+        return currentNetworkStatus() == NetworkState.MeteredOperating
+                && !mission.mobileDataApproved;
+    }
+
     private boolean canStartMission(DownloadMission mission) {
-        return canDownloadInCurrentNetwork()
+        final NetworkState network = currentNetworkStatus();
+        return network != NetworkState.Unavailable
+                && (network != NetworkState.MeteredOperating
+                || mission.mobileDataApproved)
                 && (!org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
                 || ((mission.running || !hasLiveOfflineWorkers(mission))
                 && offlineNetworkAllowed()));
@@ -87,7 +100,6 @@ public class DownloadManager {
     private NetworkState mLastNetworkStatus = NetworkState.Unavailable;
 
     int mPrefMaxRetry;
-    boolean mPrefMeteredDownloads;
     boolean mPrefQueueLimit;
     private boolean mSelfMissionsControl;
 
@@ -334,13 +346,18 @@ public class DownloadManager {
                 awaitOfflineWorkers(mission);
                 return;
             }
-            mSelfMissionsControl = true;
-            mission.setEnqueued(true);
-            if (!canStartMission(mission)) return;
         }
+        mSelfMissionsControl = true;
+        mission.setEnqueued(true);
+        if (!canStartMission(mission)) return;
         if (!mission.running) {
             mission.start();
         }
+    }
+
+    public void approveMobileDataAndResume(final DownloadMission mission) {
+        mission.setMobileDataApproved(true);
+        resumeMission(mission);
     }
 
     /** Wait outside the service thread for interrupted workers before retrying the queue. */
@@ -393,10 +410,9 @@ public class DownloadManager {
         final boolean offline = org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission);
         if (offline) {
             cancelOfflineWorkerWaiter(mission);
-            mission.setEnqueued(false);
         }
+        mission.setEnqueued(false);
         if (mission.running) {
-            if (!offline) mission.setEnqueued(false);
             mission.pause();
         }
     }
@@ -543,6 +559,9 @@ public class DownloadManager {
                 mOfflineDrainWaiters.clear();
             }
             for (DownloadMission mission : mMissionsPending) {
+                if (!force) {
+                    mission.setEnqueued(false);
+                }
                 if (!mission.running || mission.isPsRunning() || mission.isFinished()) continue;
 
                 // pause() signals the retained workers without joining them.
@@ -557,11 +576,9 @@ public class DownloadManager {
             mSelfMissionsControl = true;
             for (DownloadMission mission : mMissionsPending) {
                 if (mission.running || mission.isCorrupt()) continue;
-                if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
-                    mission.setEnqueued(true);
-                    if (!canStartMission(mission)
-                            || (mPrefQueueLimit && getRunningMissionsCount() > 0)) continue;
-                }
+                mission.setEnqueued(true);
+                if (!canStartMission(mission)
+                        || (mPrefQueueLimit && getRunningMissionsCount() > 0)) continue;
                 mission.start();
             }
         }
@@ -649,8 +666,18 @@ public class DownloadManager {
     }
 
     private boolean canDownloadInCurrentNetwork() {
-        if (mLastNetworkStatus == NetworkState.Unavailable) return false;
-        return !(mPrefMeteredDownloads && mLastNetworkStatus == NetworkState.MeteredOperating);
+        return currentNetworkStatus() != NetworkState.Unavailable;
+    }
+
+    NetworkState currentNetworkStatus() {
+        if (offlineContext != null && offlineContext.getSystemService(
+                Context.CONNECTIVITY_SERVICE) != null) {
+            final DownloadNetworkPolicy.Type type = DownloadNetworkPolicy.current(offlineContext);
+            if (type == DownloadNetworkPolicy.Type.WIFI) return NetworkState.Operating;
+            if (type == DownloadNetworkPolicy.Type.MOBILE) return NetworkState.MeteredOperating;
+            return NetworkState.Unavailable;
+        }
+        return mLastNetworkStatus;
     }
 
     void handleConnectivityState(NetworkState currentStatus, boolean updateOnly) {
@@ -658,8 +685,7 @@ public class DownloadManager {
         if (currentStatus == NetworkState.Unavailable) {
             synchronized (this) {
                 for (DownloadMission mission : mMissionsPending) {
-                    if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
-                            && mission.running) mission.pause();
+                    if (mission.running) mission.pause();
                 }
             }
             return;
@@ -669,13 +695,11 @@ public class DownloadManager {
             return;// don't touch anything without the user interaction
         }
 
-        boolean isMetered = mPrefMeteredDownloads && mLastNetworkStatus == NetworkState.MeteredOperating;
-
         synchronized (this) {
             for (DownloadMission mission : mMissionsPending) {
                 if (mission.isCorrupt() || mission.isPsRunning()) continue;
 
-                boolean blocked = isMetered || !canStartMission(mission);
+                boolean blocked = !canStartMission(mission);
                 if (mission.running && blocked) {
                     mission.pause();
                 }

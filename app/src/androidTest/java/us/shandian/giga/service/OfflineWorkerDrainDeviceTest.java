@@ -199,6 +199,10 @@ public class OfflineWorkerDrainDeviceTest {
         @Override boolean offlineNetworkAllowed() {
             return allowed.get();
         }
+
+        @Override NetworkState currentNetworkStatus() {
+            return NetworkState.Operating;
+        }
     }
 
     private static final class FakeMission extends DownloadMission {

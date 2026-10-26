@@ -41,6 +41,7 @@ import us.shandian.giga.service.DownloadManagerService;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyChar;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -85,13 +86,7 @@ public class OfflineDownloadRetryHandoffTest {
     private void assertHandoff(final OfflineStore.State state, final String copyOwner)
             throws Exception {
         reset();
-        final Context context = mock(Context.class);
-        when(context.getApplicationContext()).thenReturn(context);
-        when(context.getFilesDir()).thenReturn(temporary.getRoot());
-        when(context.getString(anyInt())).thenReturn("Generated");
-        final android.content.res.Resources resources = mock(android.content.res.Resources.class);
-        when(context.getResources()).thenReturn(resources);
-        when(resources.getString(anyInt())).thenReturn("Generated");
+        final Context context = mockContext();
         final OfflineLibrary library = OfflineLibrary.get(context);
         final var entry = library.store().create("Generated", ORIGINAL, 0,
                 "file:///generated/unavailable.mp4", "video/mp4");
@@ -151,11 +146,15 @@ public class OfflineDownloadRetryHandoffTest {
                      mockStatic(OfflineLibraryActivity.class);
              MockedStatic<DownloadManagerService> downloads =
                      mockStatic(DownloadManagerService.class);
+             MockedStatic<DownloadNetworkPolicy> network =
+                     mockStatic(DownloadNetworkPolicy.class);
              MockedConstruction<StoredFileHelper> files = mockConstruction(StoredFileHelper.class,
                      (file, setup) -> {
                          when(file.getTag()).thenReturn("offline:" + entry.id);
                          when(file.canWrite()).thenReturn(true);
                      })) {
+            network.when(() -> DownloadNetworkPolicy.current(context))
+                    .thenReturn(DownloadNetworkPolicy.Type.WIFI);
             names.when(() -> FilenameUtils.createFilename(context, "Generated"))
                     .thenReturn("Generated");
             uris.when(() -> Uri.parse(entry.source)).thenReturn(uri);
@@ -163,7 +162,8 @@ public class OfflineDownloadRetryHandoffTest {
             toasts.when(() -> Toast.makeText(any(Context.class), any(CharSequence.class), anyInt()))
                     .thenReturn(mock(Toast.class));
             downloads.when(() -> DownloadManagerService.startMission(any(), any(), any(), anyChar(),
-                    anyInt(), any(), any(), any(), anyLong(), any())).thenAnswer(call -> {
+                    anyInt(), any(), any(), any(), anyLong(), any(), anyBoolean()))
+                    .thenAnswer(call -> {
                         dispatched.incrementAndGet();
                         return null;
                     });
@@ -230,6 +230,17 @@ public class OfflineDownloadRetryHandoffTest {
             assertEquals("giga", library.store().get(entry.id).source);
             assertEquals(OfflineStore.State.DOWNLOADING, library.store().get(entry.id).state);
         }
+    }
+
+    private Context mockContext() {
+        final Context context = mock(Context.class);
+        when(context.getApplicationContext()).thenReturn(context);
+        when(context.getFilesDir()).thenReturn(temporary.getRoot());
+        when(context.getString(anyInt())).thenReturn("Generated");
+        final android.content.res.Resources resources = mock(android.content.res.Resources.class);
+        when(context.getResources()).thenReturn(resources);
+        when(resources.getString(anyInt())).thenReturn("Generated");
+        return context;
     }
 
     private static VideoStream generatedStream() {

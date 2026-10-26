@@ -22,12 +22,11 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.ItemTouchHelper;
-import androidx.preference.PreferenceManager;
+import org.schabi.newpipe.download.MobileDataDownloadConfirmation;
 import us.shandian.giga.get.DownloadMission;
 import us.shandian.giga.service.DownloadManager;
 import us.shandian.giga.service.DownloadManagerService;
@@ -108,6 +107,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private String rendered = "";
     private DownloadManager downloadManager;
     private boolean bound;
+    private String pendingMobileConfirmationId;
     private final ServiceConnection connection = new ServiceConnection() {
         @Override public void onServiceConnected(final ComponentName name, final IBinder binder) {
             downloadManager = ((DownloadManagerService.DownloadManagerBinder) binder)
@@ -200,16 +200,6 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 confirmDelete(null);
             }
         });
-        final SwitchCompat wifiOnly = new SwitchCompat(this);
-        wifiOnly.setText(R.string.offline_wifi_only);
-        wifiOnly.setChecked(PreferenceManager.getDefaultSharedPreferences(this)
-                .getBoolean(OfflineDownloads.WIFI_ONLY, true));
-        wifiOnly.setOnCheckedChangeListener((button, checked) ->
-                PreferenceManager.getDefaultSharedPreferences(this).edit()
-                        .putBoolean(OfflineDownloads.WIFI_ONLY, checked).apply());
-        wifiOnly.setMinHeight(dp(48));
-        wifiOnly.setSwitchPadding(dp(12));
-        actions.addView(wifiOnly);
         empty = new TextView(this);
         empty.setText(R.string.offline_empty);
         empty.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -534,6 +524,8 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                     ? R.string.offline_storage_full
                     : mission.errCode != DownloadMission.ERROR_NOTHING ? R.string.offline_failed
                     : mission.running ? R.string.offline_downloading
+                    : mission.enqueued && downloadManager.isMobileApprovalRequired(mission)
+                    ? R.string.offline_mobile_confirm_wait
                     : mission.enqueued ? R.string.offline_network_wait
                     : R.string.offline_interrupted);
         }
@@ -590,9 +582,30 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
                 confirmDelete(entry);
             } else if (mission != null && downloadManager != null) {
                 if (id == R.id.offline_pause) {
+                    pendingMobileConfirmationId = null;
                     downloadManager.pauseMission(mission);
                 } else {
-                    downloadManager.resumeMission(mission);
+                    if (entry.id.equals(pendingMobileConfirmationId)) {
+                        return true;
+                    }
+                    pendingMobileConfirmationId = entry.id;
+                    MobileDataDownloadConfirmation.request(this, approved -> {
+                        if (!entry.id.equals(pendingMobileConfirmationId)) {
+                            return;
+                        }
+                        pendingMobileConfirmationId = null;
+                        if (isFinishing() || isDestroyed() || downloadManager == null
+                                || downloadManager.getOfflineMission(entry.id) != mission) {
+                            return;
+                        }
+                        if (approved) {
+                            downloadManager.approveMobileDataAndResume(mission);
+                        } else {
+                            downloadManager.resumeMission(mission);
+                        }
+                        rendered = "";
+                        refresh();
+                    }, () -> pendingMobileConfirmationId = null);
                 }
                 rendered = "";
                 refresh();

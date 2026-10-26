@@ -28,6 +28,75 @@ import static org.mockito.Mockito.mockStatic;
 public class OfflineQueueTest {
     @Rule public final TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void mobileQueueStartsOnlyMissionWhoseRequestWasApproved() throws Exception {
+        final DownloadMission unapproved = mission();
+        final DownloadMission approved = mission();
+        unapproved.storage = mock(StoredFileHelper.class);
+        approved.storage = mock(StoredFileHelper.class);
+        approved.mobileDataApproved = true;
+        doAnswer(invocation -> {
+            approved.running = false;
+            return null;
+        }).when(approved).pause();
+        final DownloadManager manager = manager(mock(Context.class), unapproved, approved);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.MeteredOperating);
+
+        manager.activateOfflineQueue();
+        assertFalse(unapproved.running);
+        assertTrue(approved.running);
+        unapproved.mobileDataApproved = true;
+        manager.pauseMission(approved);
+        manager.runMissions();
+        assertTrue(unapproved.running);
+    }
+
+    @Test public void wifiToMobilePausesUnapprovedRunningMission() throws Exception {
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        mission.running = true;
+        doAnswer(invocation -> {
+            mission.running = false;
+            return null;
+        }).when(mission).pause();
+        final DownloadManager manager = manager(mock(Context.class), mission);
+        manager.activateOfflineQueue();
+        manager.handleConnectivityState(DownloadManager.NetworkState.MeteredOperating, false);
+        assertFalse(mission.running);
+        assertTrue(mission.enqueued);
+        manager.pauseMission(mission);
+        assertFalse(mission.enqueued);
+    }
+
+    @Test public void offlineMissionOnMobileWaitsUntilItsOwnApproval() throws Exception {
+        final Context context = mock(Context.class);
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        org.mockito.Mockito.when(mission.storage.getTag()).thenReturn("offline:generated");
+        final DownloadManager manager = manager(context, mission);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.MeteredOperating);
+        try (MockedStatic<OfflineDownloads> policy = mockStatic(OfflineDownloads.class,
+                CALLS_REAL_METHODS)) {
+            policy.when(() -> OfflineDownloads.networkAllowed(context)).thenReturn(true);
+            manager.activateOfflineQueue();
+            assertFalse(mission.running);
+            manager.approveMobileDataAndResume(mission);
+            assertTrue(mission.mobileDataApproved);
+            assertTrue(mission.running);
+        }
+    }
+
+    @Test public void manualPauseAllKeepsQueuedMissionStoppedOnReconnect() throws Exception {
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        final DownloadManager manager = manager(mock(Context.class), mission);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.Unavailable);
+        manager.activateOfflineQueue();
+        manager.pauseAllMissions(false);
+        assertFalse(mission.enqueued);
+        manager.handleConnectivityState(DownloadManager.NetworkState.Operating, false);
+        assertFalse(mission.running);
+    }
+
     @Test public void duplicateOfflineMissionCannotAllocateMetadataOrScheduleAgain()
             throws Exception {
         final Context context = mock(Context.class);
@@ -370,8 +439,13 @@ public class OfflineQueueTest {
             assertFalse(watcher.isAlive());
             assertFalse(mission.enqueued);
             assertFalse(mission.running);
-            org.mockito.Mockito.verify(handler, org.mockito.Mockito.never())
-                    .post(org.mockito.ArgumentMatchers.any(Runnable.class));
+            final var callbacks = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+            org.mockito.Mockito.verify(handler, org.mockito.Mockito.atMostOnce())
+                    .post(callbacks.capture());
+            for (final Runnable callback : callbacks.getAllValues()) {
+                callback.run();
+            }
+            org.mockito.Mockito.verify(mission, org.mockito.Mockito.never()).start();
         } finally {
             release.countDown();
             worker.join(2000);
@@ -409,6 +483,10 @@ public class OfflineQueueTest {
             mission.enqueued = invocation.getArgument(0);
             return null;
         }).when(mission).setEnqueued(anyBoolean());
+        doAnswer(invocation -> {
+            mission.mobileDataApproved = invocation.getArgument(0);
+            return null;
+        }).when(mission).setMobileDataApproved(anyBoolean());
         return mission;
     }
 }

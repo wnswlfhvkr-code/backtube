@@ -8,6 +8,7 @@ import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.MockedStatic;
 import org.schabi.newpipe.databinding.DownloadDialogBinding;
 import org.schabi.newpipe.offline.OfflineLibrary;
 import org.schabi.newpipe.offline.OfflineStore;
@@ -21,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,7 +68,12 @@ public class OfflineDownloadAllocationTest {
         final var proceed = DownloadDialog.class.getDeclaredMethod("continueSelectedDownload",
                 StoredFileHelper.class);
         proceed.setAccessible(true);
-        proceed.invoke(dialog, storage);
+        try (MockedStatic<DownloadNetworkPolicy> network =
+                     mockStatic(DownloadNetworkPolicy.class)) {
+            network.when(() -> DownloadNetworkPolicy.current(context))
+                    .thenReturn(DownloadNetworkPolicy.Type.WIFI);
+            proceed.invoke(dialog, storage);
+        }
         assertEquals("selecting an existing save must preserve complete bytes",
                 3, store.file(saved).length());
         verify(storage, never()).canWrite();
