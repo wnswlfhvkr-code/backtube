@@ -854,6 +854,14 @@ public final class VideoDetailFragment
         startLoading(false, true);
     }
 
+    /**
+     * Keeps delayed actions from a previous detail selection off the current screen.
+     * @return the current detail selection identity
+     */
+    public String getDetailSelectionKey() {
+        return infoUpdateGeneration + ":" + serviceId + ":" + url;
+    }
+
     private void prepareAndHandleInfoIfNeededAfterDelay(final StreamInfo info,
                                                         final boolean scrollToTop,
                                                         final long delay) {

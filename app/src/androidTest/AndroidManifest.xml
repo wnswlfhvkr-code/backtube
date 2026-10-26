@@ -3,7 +3,7 @@
     <application>
         <provider
             android:name="org.schabi.newpipe.local.subscription.workers.NullSubscriptionStreamProvider"
-            android:authorities="org.schabi.newpipe.test.nullsubscriptionstream"
+            android:authorities="${applicationId}.nullsubscriptionstream"
             android:exported="true" />
         <!-- Runs in the test APK's UID, independently of the instrumented playback service. -->
         <activity

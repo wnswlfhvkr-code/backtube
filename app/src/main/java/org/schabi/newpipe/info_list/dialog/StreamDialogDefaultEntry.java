@@ -134,6 +134,8 @@ public enum StreamDialogDefaultEntry {
                     })
     ),
 
+    OFFLINE_SAVE(R.string.offline_save, OfflineSaveMenuAction::open),
+
     OPEN_IN_BROWSER(R.string.open_in_browser, (fragment, item) ->
             ShareUtils.openUrlInBrowser(fragment.requireContext(), item.getUrl())),
 

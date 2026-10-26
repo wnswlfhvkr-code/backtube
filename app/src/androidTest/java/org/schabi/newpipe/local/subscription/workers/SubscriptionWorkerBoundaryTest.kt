@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.Configuration
 import androidx.work.ListenableWorker
 import androidx.work.testing.SynchronousExecutor
@@ -50,7 +51,7 @@ class SubscriptionWorkerBoundaryTest {
 
     @Test
     fun initialForegroundCanBeRequestedTwiceBeforeImportStarts() = runBlocking {
-        val worker = importWorker(NULL_STREAM_URI)
+        val worker = importWorker(nullStreamUri)
         assertNotNull(worker.getForegroundInfo().notification)
         assertNotNull(worker.getForegroundInfo().notification)
         val subscriptionsField = SubscriptionImportWorker::class.java
@@ -67,7 +68,7 @@ class SubscriptionWorkerBoundaryTest {
 
     @Test
     fun nullImportStreamFailsWithoutAddingRows() = runBlocking {
-        assertEquals(ListenableWorker.Result.failure(), importWorker(NULL_STREAM_URI).doWork())
+        assertEquals(ListenableWorker.Result.failure(), importWorker(nullStreamUri).doWork())
         assertTrue(database.subscriptionDAO().getAll().blockingFirst().isEmpty())
     }
 
@@ -85,7 +86,7 @@ class SubscriptionWorkerBoundaryTest {
     @Test
     fun nullExportStreamFailsRatherThanReportingSuccess() = runBlocking {
         val worker = TestListenableWorkerBuilder.from(context, SubscriptionExportWorker::class.java)
-            .setInputData(workDataOf("exportPath" to NULL_STREAM_URI)).build()
+            .setInputData(workDataOf("exportPath" to nullStreamUri)).build()
         assertEquals(ListenableWorker.Result.failure(), worker.doWork())
         assertTrue(database.subscriptionDAO().getAll().blockingFirst().isEmpty())
     }
@@ -105,7 +106,6 @@ class SubscriptionWorkerBoundaryTest {
     private fun importWorker(uri: String) = TestListenableWorkerBuilder.from(context, SubscriptionImportWorker::class.java)
         .setInputData(SubscriptionImportInput.PreviousExportMode(uri).toData()).build()
 
-    companion object {
-        private const val NULL_STREAM_URI = "content://org.schabi.newpipe.test.nullsubscriptionstream/null"
-    }
+    private val nullStreamUri: String
+        get() = "content://${InstrumentationRegistry.getInstrumentation().context.packageName}.nullsubscriptionstream/null"
 }
