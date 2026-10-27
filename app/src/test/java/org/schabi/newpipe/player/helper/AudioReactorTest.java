@@ -10,6 +10,8 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.when;
@@ -160,6 +162,15 @@ public class AudioReactorTest {
     }
 
     @Test
+    public void emptyMediaSessionPreparationDoesNotMarkSelectedItemCompleted() throws Exception {
+        final Player controller = controller();
+        when(player.getMediaItemCount()).thenReturn(0);
+        controller.onPlaybackStateChanged(com.google.android.exoplayer2.Player.STATE_ENDED);
+        verify(controller, never()).saveStreamProgressStateCompleted();
+        assertEquals(Player.STATE_PAUSED, reportedState);
+    }
+
+    @Test
     public void deniedInternalPlayIntentIsPausedBeforeReportingPlaying() throws Exception {
         final Player controller = controller();
         set(controller, "isPrepared", true);
@@ -251,6 +262,7 @@ public class AudioReactorTest {
         // This focus fixture models an already loaded source, not an empty media session.
         when(player.getMediaItemCount()).thenReturn(1);
         doNothing().when(controller).saveStreamProgressState();
+        doNothing().when(controller).saveStreamProgressStateCompleted();
         doNothing().when(controller).triggerProgressUpdate();
         doAnswer(invocation -> {
             reportedState = invocation.getArgument(0);

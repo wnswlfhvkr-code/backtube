@@ -1365,6 +1365,12 @@ public final class Player implements PlaybackListener, Listener {
                 changeState(getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED);
                 break;
             case com.google.android.exoplayer2.Player.STATE_ENDED: // 4
+                if (simpleExoPlayer.getMediaItemCount() == 0) {
+                    // A media-session play command can prepare the empty timeline left by
+                    // stop(). No stream ended, so keep its queue position and history intact.
+                    isPrepared = false;
+                    break;
+                }
                 sleepTimer.onItemEnded();
                 changeState(STATE_COMPLETED);
                 saveStreamProgressStateCompleted();
