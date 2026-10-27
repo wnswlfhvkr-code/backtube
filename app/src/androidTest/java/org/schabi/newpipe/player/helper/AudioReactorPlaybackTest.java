@@ -205,7 +205,18 @@ public class AudioReactorPlaybackTest {
         controller.getTransportControls().stop();
         await("media-session stop did not leave playback idle", player::isStopped);
         controller.getTransportControls().play();
-        await("explicit retry did not reload generated local audio", player::isPlaying);
+        try {
+            await("explicit retry did not reload generated local audio", player::isPlaying);
+        } catch (final AssertionError failure) {
+            final String[] state = new String[1];
+            runOnMain(() -> state[0] = "exoState=" + player.getExoPlayer().getPlaybackState()
+                    + ", playWhenReady=" + player.getPlayWhenReady()
+                    + ", mediaItems=" + player.getExoPlayer().getMediaItemCount()
+                    + ", queue=" + (player.getPlayQueue() == null ? "missing" : "present")
+                    + ", cached=" + (InfoCache.getInstance().getFromKey(1, fixtureUrl,
+                    InfoCache.Type.STREAM) != null) + ", file=" + localAudio.exists());
+            throw new AssertionError(failure.getMessage() + "; " + state[0], failure);
+        }
     }
 
     @Test
