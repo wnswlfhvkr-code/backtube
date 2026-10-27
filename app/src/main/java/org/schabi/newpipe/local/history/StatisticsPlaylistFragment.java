@@ -9,7 +9,6 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,6 +25,7 @@ import org.schabi.newpipe.database.stream.model.StreamEntity;
 import org.schabi.newpipe.databinding.PlaylistControlBinding;
 import org.schabi.newpipe.databinding.StatisticPlaylistControlBinding;
 import org.schabi.newpipe.error.ErrorInfo;
+import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.fragments.list.playlist.PlaylistControlViewHolder;
@@ -319,6 +319,7 @@ public class StatisticsPlaylistFragment
 
     private void showInfoItemDialog(final StreamStatisticsEntry item) {
         final Context context = getContext();
+        final View dialogView = getView();
         final StreamInfoItem infoItem = item.toStreamInfoItem();
 
         try {
@@ -330,8 +331,11 @@ public class StatisticsPlaylistFragment
                     .addEntry(StreamDialogDefaultEntry.DELETE)
                     .setAction(
                             StreamDialogDefaultEntry.DELETE,
-                            (f, i) -> deleteEntry(
-                                    Math.max(itemListAdapter.getItemsList().indexOf(item), 0)))
+                            (f, i) -> {
+                                if (isCurrentDeleteView(dialogView)) {
+                                    deleteEntry(item);
+                                }
+                            })
                     .create()
                     .show();
         } catch (final IllegalArgumentException e) {
@@ -339,29 +343,39 @@ public class StatisticsPlaylistFragment
         }
     }
 
-    private void deleteEntry(final int index) {
-        final LocalItem infoItem = itemListAdapter.getItemsList().get(index);
-        if (infoItem instanceof StreamStatisticsEntry) {
-            final StreamStatisticsEntry entry = (StreamStatisticsEntry) infoItem;
-            final Disposable onDelete = recordManager
-                    .deleteStreamHistoryAndState(entry.getStreamId())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(
-                            () -> {
-                                if (getView() != null) {
-                                    Snackbar.make(getView(), R.string.one_item_deleted,
-                                            Snackbar.LENGTH_SHORT).show();
-                                } else {
-                                    Toast.makeText(getContext(),
-                                            R.string.one_item_deleted,
-                                            Toast.LENGTH_SHORT).show();
-                                }
-                            },
-                            throwable -> showSnackBarError(new ErrorInfo(throwable,
-                                    UserAction.DELETE_FROM_HISTORY, "Deleting item")));
-
-            disposables.add(onDelete);
+    private void deleteEntry(final StreamStatisticsEntry selected) {
+        final View requestView = getView();
+        final Context context = getContext();
+        if (requestView == null || context == null) {
+            // The dialog action can outlive the Fragment view that opened it.
+            return;
         }
+        final Context applicationContext = context.getApplicationContext();
+        final Disposable onDelete = recordManager
+                .deleteStreamHistoryAndState(selected.getStreamId())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                        () -> {
+                            if (isCurrentDeleteView(requestView)) {
+                                Snackbar.make(requestView, R.string.one_item_deleted,
+                                        Snackbar.LENGTH_SHORT).show();
+                            }
+                        },
+                        throwable -> {
+                            final ErrorInfo error = new ErrorInfo(throwable,
+                                    UserAction.DELETE_FROM_HISTORY, "Deleting item");
+                            if (isCurrentDeleteView(requestView)) {
+                                showSnackBarError(error);
+                            } else {
+                                ErrorUtil.createNotification(applicationContext, error);
+                            }
+                        });
+
+        disposables.add(onDelete);
+    }
+
+    private boolean isCurrentDeleteView(@Nullable final View requestView) {
+        return requestView != null && getView() == requestView && getContext() != null;
     }
 
     @Override

@@ -1,0 +1,40 @@
+{
+  "input": {
+    "library_file_id": "libfile_21cff49cecf081918af2c69b90501de3",
+    "file_id": "file_00000000787c823098bba78845fa1b03",
+    "version_id": null,
+    "sha256": "0960cfa1c636cf460d73f254b7d7d20b0d48af7461d263b257f2fe3204a6308e",
+    "hash_matches": true,
+    "crc_valid": true
+  },
+  "baseline": {
+    "baseline_head": "e7cf13eb22043d67e465af7ca804f763e280b62b",
+    "source_java_kotlin_total": 663,
+    "source_set_java_kotlin": 661,
+    "values_iw_is_symlink": true,
+    "holder_blocking_get_occurrences": 2,
+    "holder_sha256": "285de4c8d2c3992ac28994b07bf523ef2f062021d10ca273da30f4de846e439d",
+    "runtime_baseline": "NOT RUN; no candidate patch yet; no emulator started",
+    "environment_commands_work": true
+  },
+  "manifest_check": {
+    "manifest_rows": 4637,
+    "original_zip_files": 4638,
+    "hash_mismatches": [],
+    "original_files_missing_from_review_manifest": [
+      "app/src/main/res/values-iw"
+    ],
+    "review_depth_counts": {
+      "inventory-only": 3315,
+      "config-or-script-scan": 78,
+      "targeted-deep": 23,
+      "deep-reviewed-prior": 10,
+      "reference-scan": 1211
+    },
+    "all_manifest_hashes_match_original": true,
+    "missing_entry_explanation": "app/src/main/res/values-iw is a Git symlink to a resource directory, not missing Java/Kotlin source"
+  },
+  "state": "WAITING_FOR_CANDIDATE_PATCH",
+  "product_changes_applied": false,
+  "tests_added_or_run": false
+}

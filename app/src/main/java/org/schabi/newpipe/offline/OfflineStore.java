@@ -96,6 +96,10 @@ public final class OfflineStore {
             try (InputStream input = new FileInputStream(metadata)) {
                 properties.load(input);
                 final String id = properties.getProperty("id");
+                final String state = properties.getProperty("state");
+                if (id == null || state == null) {
+                    throw new IllegalArgumentException("Missing offline identity or state");
+                }
                 UUID.fromString(id);
                 if (!metadata.getName().equals(id + ".properties")) {
                     throw new IllegalArgumentException("Invalid offline identity");
@@ -105,7 +109,7 @@ public final class OfflineStore {
                         Integer.parseInt(properties.getProperty("service", "0")),
                         properties.getProperty("source", ""),
                         properties.getProperty("mime", "application/octet-stream"),
-                        State.valueOf(properties.getProperty("state")),
+                        State.valueOf(state),
                         Long.parseLong(properties.getProperty("bytes", "0")),
                         Long.parseLong(properties.getProperty("expires", "0")));
                 entries.put(id, entry);
@@ -583,13 +587,15 @@ public final class OfflineStore {
             properties.store(output, "backtube saved media");
             output.getFD().sync();
         }
-        if (!pending.renameTo(new File(directory, entry.id + ".properties"))) {
-            throw new IOException("Cannot persist offline state");
-        }
         if (!entries.containsKey(entry.id)) {
             final List<String> order = new ArrayList<>(entries.keySet());
             order.add(entry.id);
+            // Publish metadata only after the new entry is in the durable order.
+            // A missing metadata ID in the order is ignored during restoration.
             persistOrder(order);
+        }
+        if (!pending.renameTo(new File(directory, entry.id + ".properties"))) {
+            throw new IOException("Cannot persist offline state");
         }
         entries.put(entry.id, entry);
     }

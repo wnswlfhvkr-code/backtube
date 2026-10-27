@@ -213,6 +213,24 @@ public final class VideoDetailFragment
     protected boolean autoPlayEnabled = true;
     @State
     boolean playOnSelection = false;
+    @State
+    boolean selectionPending = false;
+    @State
+    boolean selectionRequestSent = false;
+    @Nullable
+    private Player pendingMainSelectionPlayer;
+    @State
+    int selectedServiceId = Constants.NO_SERVICE_ID;
+    @State
+    @Nullable
+    String selectedUrl;
+    @State
+    @Nullable
+    String selectedCanonicalUrl;
+    @State
+    @Nullable
+    PlayQueue pendingSelectionQueue;
+    private long infoUpdateGeneration;
     private boolean forceFullscreen = false;
 
     @Nullable
@@ -224,6 +242,9 @@ public final class VideoDetailFragment
     private final CompositeDisposable disposables = new CompositeDisposable();
     @Nullable
     private Disposable positionSubscriber = null;
+    @Nullable
+    private Disposable queueUpdateSubscriber;
+    private long queueUpdateGeneration;
 
     private BottomSheetBehavior<FrameLayout> bottomSheetBehavior;
     private BottomSheetBehavior.BottomSheetCallback bottomSheetCallback;
@@ -306,8 +327,10 @@ public final class VideoDetailFragment
 
     @Override
     public void onPlayerDisconnected() {
+        cancelQueueUpdateSubscription();
         dismissSleepTimerDialog();
         player = null;
+        pendingMainSelectionPlayer = null;
         updateSleepTimerUpdates();
         // the binding could be null at this point, if the app is finishing
         if (binding != null) {
@@ -350,6 +373,9 @@ public final class VideoDetailFragment
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (selectionPending && pendingSelectionQueue != null) {
+            playQueue = pendingSelectionQueue;
+        }
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
         showComments = prefs.getBoolean(getString(R.string.show_comments_key), true);
@@ -434,6 +460,7 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroy() {
+        cancelQueueUpdateSubscription();
         super.onDestroy();
 
         // Stop the service when user leaves the app with double back press
@@ -468,6 +495,8 @@ public final class VideoDetailFragment
 
     @Override
     public void onDestroyView() {
+        cancelQueueUpdateSubscription();
+        infoUpdateGeneration++;
         if (offlineSaveCheck != null) {
             offlineSaveCheck.dispose();
             offlineSaveCheck = null;
@@ -806,6 +835,14 @@ public final class VideoDetailFragment
                                    @NonNull final String newTitle,
                                    @Nullable final PlayQueue newQueue,
                                    final boolean playImmediately) {
+        infoUpdateGeneration++;
+        selectionPending = newUrl != null;
+        selectionRequestSent = false;
+        pendingMainSelectionPlayer = null;
+        selectedServiceId = newServiceId;
+        selectedUrl = newUrl;
+        selectedCanonicalUrl = null;
+        pendingSelectionQueue = newQueue;
         playOnSelection = playImmediately;
         if (isPlayerAvailable() && newQueue != null && playQueue != null
                 && playQueue.getItem() != null && !playQueue.getItem().getUrl().equals(newUrl)) {
@@ -817,18 +854,27 @@ public final class VideoDetailFragment
         startLoading(false, true);
     }
 
+    /**
+     * Keeps delayed actions from a previous detail selection off the current screen.
+     * @return the current detail selection identity
+     */
+    public String getDetailSelectionKey() {
+        return infoUpdateGeneration + ":" + serviceId + ":" + url;
+    }
+
     private void prepareAndHandleInfoIfNeededAfterDelay(final StreamInfo info,
                                                         final boolean scrollToTop,
                                                         final long delay) {
+        final long generation = infoUpdateGeneration;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (activity == null || binding == null) {
+            if (activity == null || binding == null || generation != infoUpdateGeneration
+                    || currentInfo == null || currentInfo.getServiceId() != info.getServiceId()
+                    || !Objects.equals(currentInfo.getUrl(), info.getUrl())) {
                 return;
             }
-            // Data can already be drawn, don't spend time twice
-            if (info.getName().equals(binding.detailVideoTitleView.getText().toString())) {
-                return;
-            }
-            prepareAndHandleInfo(info, scrollToTop);
+            // Titles are not item identities. Use the latest metadata for this same item;
+            // an audio-track refresh may have replaced the snapshot while this task waited.
+            prepareAndHandleInfo(currentInfo, scrollToTop);
         }, delay);
     }
 
@@ -1058,9 +1104,12 @@ public final class VideoDetailFragment
         } else {
             // call `post()` to be sure `viewPager.getHitRect()`
             // is up to date and not being currently recomputed
-            binding.tabLayout.post(() -> {
+            final FragmentVideoDetailBinding expectedBinding = binding;
+            expectedBinding.tabLayout.post(() -> {
                 final var activity = getActivity();
-                if (activity != null) {
+                if (activity != null && binding == expectedBinding
+                        && pageAdapter.getCount() >= 2
+                        && expectedBinding.viewPager.getVisibility() == View.VISIBLE) {
                     final Rect pagerHitRect = new Rect();
                     binding.viewPager.getHitRect(pagerHitRect);
 
@@ -1139,10 +1188,13 @@ public final class VideoDetailFragment
         if (append) { //resumePlayback: false
             NavigationHelper.enqueueOnPlayer(activity, queue, PlayerType.POPUP);
         } else {
-            replaceQueueIfUserConfirms(() -> NavigationHelper
-                    .playOnPopupPlayer(activity, queue, true, !playOnSelection
+            replaceQueueIfUserConfirms(() -> {
+                selectionRequestSent = true;
+                pendingMainSelectionPlayer = null;
+                NavigationHelper.playOnPopupPlayer(activity, queue, true, !playOnSelection
                             && player != null && player.getPlayQueue() != null
-                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null));
+                            && player.getPlayQueue().equalStreamsAndIndex(queue) ? player : null);
+            });
         }
     }
 
@@ -1215,6 +1267,12 @@ public final class VideoDetailFragment
 
         final PlayQueue queue = setupPlayQueueForIntent(false);
         tryAddVideoPlayerView();
+        if (selectionPending && selectionRequestSent
+                && pendingMainSelectionPlayer != null && pendingMainSelectionPlayer == player) {
+            // Service connection and extraction can both open the same pending selection.
+            // Re-sending its fresh seek while the local timeline loads can end it immediately.
+            return;
+        }
 
         final Context context = requireContext();
         final Intent playerIntent =
@@ -1225,6 +1283,8 @@ public final class VideoDetailFragment
                         .putExtra(Player.FRESH_SELECTION, playOnSelection
                                 || player.getPlayQueue() == null
                                 || !player.getPlayQueue().equalStreamsAndIndex(queue));
+        selectionRequestSent = true;
+        pendingMainSelectionPlayer = player;
         ContextCompat.startForegroundService(activity, playerIntent);
         playOnSelection = false;
     }
@@ -1239,6 +1299,17 @@ public final class VideoDetailFragment
     private void hideMainPlayerOnLoadingNewStream() {
         final var root = getRoot();
         if (!isPlayerServiceAvailable() || root.isEmpty() || !player.videoPlayerSelected()) {
+            return;
+        }
+        if (selectionPending && selectionRequestSent && pendingMainSelectionPlayer == player) {
+            // A second extraction result can arrive while the same explicit request is loading.
+            // openMainPlayer() will not send that request twice, so do not stop its engine here.
+            return;
+        }
+        if (playQueue != null && player.getPlayQueue() != null
+                && playQueue.equalStreamsAndIndex(player.getPlayQueue())) {
+            // Recreation may replace this fragment after its MAIN request was sent. The new
+            // fragment has no request marker, but the service is already loading its queue.
             return;
         }
 
@@ -1425,6 +1496,11 @@ public final class VideoDetailFragment
         if (!Objects.equals(url, newUrl)) {
             savedDetailsRedirected = false;
         }
+        if (playQueue != newPlayQueue) {
+            // A new selection can replace the queue before the player sends onQueueUpdate().
+            // Release the old observer even if extraction then fails or playback never starts.
+            cancelQueueUpdateSubscription();
+        }
         this.serviceId = newServiceId;
         this.url = newUrl;
         this.title = newTitle;
@@ -1561,6 +1637,12 @@ public final class VideoDetailFragment
     public void handleResult(@NonNull final StreamInfo info) {
         super.handleResult(info);
 
+        if (selectionPending && info.getServiceId() == selectedServiceId
+                && (Objects.equals(selectedUrl, info.getOriginalUrl())
+                || Objects.equals(selectedUrl, info.getUrl()))) {
+            // Only this selection's extractor result may establish its canonical URL.
+            selectedCanonicalUrl = info.getUrl();
+        }
         currentInfo = info;
         setInitialData(info.getServiceId(), info.getOriginalUrl(), info.getName(), playQueue);
 
@@ -1846,6 +1928,10 @@ public final class VideoDetailFragment
 
     @Override
     public void onQueueUpdate(final PlayQueue queue) {
+        if (selectionPending && (isWaitingForSelectionRequest() || !isSelectedQueueItem(queue))) {
+            return;
+        }
+        cancelQueueUpdateSubscription();
         playQueue = queue;
         if (DEBUG) {
             Log.d(TAG, "onQueueUpdate() called with: serviceId = ["
@@ -1855,10 +1941,13 @@ public final class VideoDetailFragment
 
         // Register broadcast receiver to listen to playQueue changes
         // and hide the overlayPlayQueueButton when the playQueue is empty / destroyed.
-        if (playQueue != null && playQueue.getBroadcastReceiver() != null) {
-            playQueue.getBroadcastReceiver().subscribe(
-                    event -> updateOverlayPlayQueueButtonVisibility()
-            );
+        if (binding != null && playQueue != null && playQueue.getBroadcastReceiver() != null) {
+            final long generation = queueUpdateGeneration;
+            queueUpdateSubscriber = playQueue.getBroadcastReceiver().subscribe(event -> {
+                if (generation == queueUpdateGeneration && binding != null && playQueue == queue) {
+                    updateOverlayPlayQueueButtonVisibility();
+                }
+            });
         }
 
         // This should be the only place where we push data to stack.
@@ -1885,11 +1974,28 @@ public final class VideoDetailFragment
         }
     }
 
+    private void cancelQueueUpdateSubscription() {
+        queueUpdateGeneration++;
+        final Disposable previous = queueUpdateSubscriber;
+        queueUpdateSubscriber = null;
+        if (previous != null) {
+            previous.dispose();
+        }
+    }
+
     @Override
     public void onPlaybackUpdate(final int state,
                                  final int repeatMode,
                                  final boolean shuffled,
                                  final PlaybackParameters parameters) {
+        if (selectionPending && selectionRequestSent && player != null
+                && player.hasPlaybackFailure() && isSelectedQueueItem(player.getPlayQueue())) {
+            // A failed A is still an applied selection. Do not reject the user's later Next
+            // just because this failed source cannot publish a successful StreamInfo for A.
+            selectionPending = false;
+            pendingSelectionQueue = null;
+            pendingMainSelectionPlayer = null;
+        }
         setOverlayPlayPauseImage(player != null && player.isPlaying());
 
         switch (state) {
@@ -1924,6 +2030,17 @@ public final class VideoDetailFragment
 
     @Override
     public void onMetadataUpdate(final StreamInfo info, final PlayQueue queue) {
+        if (selectionPending) {
+            // Initial service callbacks still describe the previous session. Do not let those
+            // replace the selection while extraction or the explicit player intent is pending.
+            if (isWaitingForSelectionRequest() || !isSelectedQueueItem(queue)
+                    || !isSelectedItem(info.getServiceId(), info.getUrl())) {
+                return;
+            }
+            selectionPending = false;
+            pendingSelectionQueue = null;
+            pendingMainSelectionPlayer = null;
+        }
         if (org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())
                 && !org.schabi.newpipe.offline.OfflineLibrary.isVideoQueue(queue)) {
             if (queue.equalStreams(playQueue)) {
@@ -1950,7 +2067,8 @@ public final class VideoDetailFragment
         }
 
         updateOverlayData(info.getName(), info.getUploaderName(), info.getThumbnails());
-        if (currentInfo != null && info.getUrl().equals(currentInfo.getUrl())) {
+        if (currentInfo != null && info.getServiceId() == currentInfo.getServiceId()
+                && info.getUrl().equals(currentInfo.getUrl())) {
             currentInfo = info;
             if (binding != null
                     && org.schabi.newpipe.offline.OfflineStore.isLocalUrl(info.getUrl())) {
@@ -1968,6 +2086,22 @@ public final class VideoDetailFragment
         // next/previous video you see visual glitches
         // (when non-vertical video goes after vertical video)
         prepareAndHandleInfoIfNeededAfterDelay(info, true, 200);
+    }
+
+    private boolean isSelectedQueueItem(@Nullable final PlayQueue queue) {
+        final PlayQueueItem item = queue == null ? null : queue.getItem();
+        return item != null && isSelectedItem(item.getServiceId(), item.getUrl());
+    }
+
+    private boolean isWaitingForSelectionRequest() {
+        // Browsing the already-playing item without autoplay needs no new player intent.
+        return !selectionRequestSent && (autoPlayEnabled || playOnSelection);
+    }
+
+    private boolean isSelectedItem(final int itemServiceId, final String itemUrl) {
+        return itemServiceId == selectedServiceId
+                && (Objects.equals(itemUrl, selectedUrl)
+                || Objects.equals(itemUrl, selectedCanonicalUrl));
     }
 
     private void refreshRelatedItems(final StreamInfo info) {
@@ -2319,6 +2453,11 @@ public final class VideoDetailFragment
      * */
     private void cleanUp() {
         // New beginning
+        infoUpdateGeneration++;
+        selectionPending = false;
+        selectionRequestSent = false;
+        pendingMainSelectionPlayer = null;
+        pendingSelectionQueue = null;
         stack.clear();
         if (currentWorker != null) {
             currentWorker.dispose();

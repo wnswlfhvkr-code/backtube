@@ -1,0 +1,180 @@
+{
+  "status": "APK1035 validation record for web review; no new optimization, build, test or release in this preservation task",
+  "build_source": "486fe10f24c2ed1a1e38d3b8769fd924cc25cac5",
+  "apk": {
+    "file_name": "backtube-first-selection-486fe10-1035-20261024.apk",
+    "package": "org.schabi.newpipe.continuous.testofflinelibrary20261011",
+    "version_code": 1035,
+    "version_name": "0.29.1-backtube-first-selection-20261024",
+    "size_bytes": 11548214,
+    "sha256": "36a8c8984eb4809f93b818cb86d7693dc87e2a532be25d989fbd8bab2c6e0151",
+    "certificate_sha256": "4fc26294d54b6c9adb276b0b3aab38592077fe28c9f3c64d93da5d9ff6bb5bbc",
+    "signature_valid": true,
+    "zipalign_valid": true,
+    "update_basic_conditions": {
+      "same_package": true,
+      "version_code_increases": true,
+      "requested_version_exact": true,
+      "same_valid_signer": true,
+      "minimum_sdk_not_raised": true,
+      "zipalign_valid": true,
+      "previous_apk_matches_recorded_sha": true,
+      "permissions_unchanged": true
+    },
+    "signer_type": "existing Android debug certificate"
+  },
+  "source_archive": {
+    "file_name": "backtube-source-486fe10-1035.tar.gz",
+    "sha256": "8b4301287ade52bfcade0e808c59aa9ca21e04a91780f16f46b305607d8bc10e",
+    "size_bytes": 12333635,
+    "file_count": 4634,
+    "license_present": true,
+    "forbidden_file_indicators": 0,
+    "raw_secret_pattern_markers": 1,
+    "reviewed_static_parser_markers": 1,
+    "unresolved_markers": 0
+  },
+  "tests": {
+    "jvm": {
+      "app": {
+        "tests": 560,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "shared": {
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "lint": {
+      "Warning": 346
+    },
+    "checkstyle": "PASS",
+    "android23_focused": {
+      "product_source": "486fe10f24c2ed1a1e38d3b8769fd924cc25cac5",
+      "focused_android_api": 23,
+      "unique_tests": 57,
+      "pass": 56,
+      "fail": 0,
+      "not_run": 1,
+      "not_run_tests": [
+        {
+          "class": "org.schabi.newpipe.player.PlaybackNavigationTest",
+          "test": "explicitFullscreenPreservesPauseAcrossLockedOrientationRecreation",
+          "code": -4,
+          "phase": "resumed-final-portable-navigation"
+        }
+      ],
+      "resolved_test_failure": {
+        "test": "pauseAfterMetadataRequestStartedCannotResumeFromLateResult",
+        "initial_phase": "resumed-final-portable-recovery",
+        "final_phase": "resumed-final-user-pause-position",
+        "reason": "record actual user pause position; retain exact no-drift assertion and explicit resume bounds",
+        "product_code_changed_for_this": false
+      },
+      "physical_phone": false,
+      "h264_coverage": "NOT RUN: API23 system decoder SIGILL; explicit VP8/Vorbis fixture used",
+      "api35": "NOT RUN: startup ANR, zero tests"
+    },
+    "force_stop_scenarios": {
+      "product_source": "486fe10f24c2ed1a1e38d3b8769fd924cc25cac5",
+      "android_api": 23,
+      "scenarios": 13,
+      "instrumentation_invocations": 26,
+      "all_passed": true,
+      "groups": [
+        {
+          "label": "resumed-final-matrix",
+          "scenarios": 9,
+          "seed_and_verify_invocations": 18,
+          "pass": true
+        },
+        {
+          "label": "resumed-final-auto-next",
+          "scenarios": 3,
+          "seed_and_verify_invocations": 6,
+          "pass": true
+        },
+        {
+          "label": "resumed-final-auto-next-source-failure",
+          "scenarios": 1,
+          "seed_and_verify_invocations": 2,
+          "pass": true
+        }
+      ],
+      "media": "generated local media; online entry uses cached synthetic metadata",
+      "real_provider_downloads": false,
+      "physical_phone": false
+    },
+    "update_1033_to_1035": {
+      "physical_phone": false,
+      "baseline_reseeded_after_cloud_vm_loss": true,
+      "new_runtime_permissions": false,
+      "raw_output_saved": false,
+      "generated_fixture_ready_on_1033": true,
+      "update_install_seconds": 124.37,
+      "install_1035_update": true,
+      "saved_metadata_unchanged": true,
+      "saved_media_sha_unchanged": true,
+      "actual_version_code": 1035,
+      "candidate_shelf_launch": true,
+      "passed": true
+    },
+    "candidate_ui": {
+      "artifact_version": 1035,
+      "cloud": true,
+      "physical_phone": false,
+      "generated_media_only": true,
+      "safe_error": "ParseError",
+      "automated_ui_tree_result": "FAIL: post-playback XML dump unavailable; original ParseError retained",
+      "visual_review_passed": true,
+      "visual_review_pending": false,
+      "selected_title_visible": true,
+      "video_frame_visible": true,
+      "moving_frames_observed": true,
+      "playback_times_observed": [
+        "00:05",
+        "00:09"
+      ],
+      "duration_visible": "00:30",
+      "observed_title": "Generated candidate long video",
+      "observed_saved_video_label": "Play saved video",
+      "pixel_review_files": [
+        "candidate-long-video.png",
+        "candidate-replay-video-1.png",
+        "candidate-replay-video-2.png"
+      ],
+      "review_method": "direct pixel inspection of owned generated-media screenshots"
+    },
+    "installed_apk_readback": {
+      "version_code": 1035,
+      "installed_apk_sha256": "36a8c8984eb4809f93b818cb86d7693dc87e2a532be25d989fbd8bab2c6e0151",
+      "delivered_apk_sha256": "36a8c8984eb4809f93b818cb86d7693dc87e2a532be25d989fbd8bab2c6e0151",
+      "exact_match": true,
+      "owned_cloud_vm_only": true,
+      "raw_apk_output_saved": false
+    }
+  },
+  "packaging": {
+    "full_gpl_license_packaged": true,
+    "component_notices_packaged": true,
+    "targeted_secret_indicators": 0
+  },
+  "not_run": [
+    "physical phone",
+    "real provider extraction/download",
+    "entire Android instrumentation suite",
+    "new remote CI",
+    "API35 runtime: startup ANR, zero tests",
+    "API23 H264: system software decoder SIGILL; generated VP8/Vorbis used",
+    "one system rotation-lock prerequisite test"
+  ],
+  "github": {
+    "purpose": "source preservation on separate branch; main merge and release are out of scope"
+  },
+  "windows_or_user_pc_used": false,
+  "credentials_issued_or_permissions_expanded": false
+}

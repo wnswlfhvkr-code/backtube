@@ -23,6 +23,7 @@ import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
+import org.schabi.newpipe.offline.OfflineStore;
 import org.schabi.newpipe.player.helper.PlayerHolder;
 import org.schabi.newpipe.util.StreamTypeUtil;
 import org.schabi.newpipe.util.external_communication.KoreUtils;
@@ -312,7 +313,9 @@ public final class InfoItemDialog {
          */
         public Builder addDefaultBeginningEntries() {
             addEnqueueEntriesIfNeeded();
-            addStartHereEntries();
+            if (!isOnlineVideo()) {
+                addStartHereEntries();
+            }
             return this;
         }
 
@@ -321,16 +324,27 @@ public final class InfoItemDialog {
          * @return the current {@link Builder} instance
          */
         public Builder addDefaultEndEntries() {
+            if (isOnlineVideo()) {
+                addEntry(StreamDialogDefaultEntry.OFFLINE_SAVE);
+            }
             addAllEntries(
                     StreamDialogDefaultEntry.DOWNLOAD,
                     StreamDialogDefaultEntry.APPEND_PLAYLIST,
-                    StreamDialogDefaultEntry.SHARE,
-                    StreamDialogDefaultEntry.OPEN_IN_BROWSER
+                    StreamDialogDefaultEntry.SHARE
             );
+            if (!isOnlineVideo()) {
+                addEntry(StreamDialogDefaultEntry.OPEN_IN_BROWSER);
+            }
             addPlayWithKodiEntryIfNeeded();
             addMarkAsWatchedEntryIfNeeded();
             addEntry(StreamDialogDefaultEntry.SHOW_CHANNEL_DETAILS);
             return this;
+        }
+
+        private boolean isOnlineVideo() {
+            return (infoItem.getStreamType() == StreamType.VIDEO_STREAM
+                    || infoItem.getStreamType() == StreamType.POST_LIVE_STREAM)
+                    && !OfflineStore.isLocalUrl(infoItem.getUrl());
         }
 
         /**

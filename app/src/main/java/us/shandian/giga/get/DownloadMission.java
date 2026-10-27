@@ -141,6 +141,8 @@ public class DownloadMission extends Mission {
     private transient int finishCount;
     public transient volatile boolean running;
     public boolean enqueued;
+    /** Approval applies to this serialized request only; older missions default to false. */
+    public boolean mobileDataApproved;
 
     public int errCode = ERROR_NOTHING;
     public Exception errObject = null;
@@ -331,10 +333,11 @@ public class DownloadMission extends Mission {
         }
 
         if (err instanceof IOException) {
-            if (err.getMessage().contains("Permission denied")) {
+            final String message = err.getMessage();
+            if (message != null && message.contains("Permission denied")) {
                 code = ERROR_PERMISSION_DENIED;
                 err = null;
-            } else if (err.getMessage().contains("ENOSPC")) {
+            } else if (message != null && message.contains("ENOSPC")) {
                 code = ERROR_INSUFFICIENT_STORAGE;
                 err = null;
             } else if (!storage.canWrite()) {
@@ -679,6 +682,11 @@ public class DownloadMission extends Mission {
      */
     public void setEnqueued(boolean queue) {
         enqueued = queue;
+        writeThisToFileAsync();
+    }
+
+    public void setMobileDataApproved(final boolean approved) {
+        mobileDataApproved = approved;
         writeThisToFileAsync();
     }
 

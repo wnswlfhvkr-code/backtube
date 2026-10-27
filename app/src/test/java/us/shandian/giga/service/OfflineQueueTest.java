@@ -28,6 +28,75 @@ import static org.mockito.Mockito.mockStatic;
 public class OfflineQueueTest {
     @Rule public final TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void mobileQueueStartsOnlyMissionWhoseRequestWasApproved() throws Exception {
+        final DownloadMission unapproved = mission();
+        final DownloadMission approved = mission();
+        unapproved.storage = mock(StoredFileHelper.class);
+        approved.storage = mock(StoredFileHelper.class);
+        approved.mobileDataApproved = true;
+        doAnswer(invocation -> {
+            approved.running = false;
+            return null;
+        }).when(approved).pause();
+        final DownloadManager manager = manager(mock(Context.class), unapproved, approved);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.MeteredOperating);
+
+        manager.activateOfflineQueue();
+        assertFalse(unapproved.running);
+        assertTrue(approved.running);
+        unapproved.mobileDataApproved = true;
+        manager.pauseMission(approved);
+        manager.runMissions();
+        assertTrue(unapproved.running);
+    }
+
+    @Test public void wifiToMobilePausesUnapprovedRunningMission() throws Exception {
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        mission.running = true;
+        doAnswer(invocation -> {
+            mission.running = false;
+            return null;
+        }).when(mission).pause();
+        final DownloadManager manager = manager(mock(Context.class), mission);
+        manager.activateOfflineQueue();
+        manager.handleConnectivityState(DownloadManager.NetworkState.MeteredOperating, false);
+        assertFalse(mission.running);
+        assertTrue(mission.enqueued);
+        manager.pauseMission(mission);
+        assertFalse(mission.enqueued);
+    }
+
+    @Test public void offlineMissionOnMobileWaitsUntilItsOwnApproval() throws Exception {
+        final Context context = mock(Context.class);
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        org.mockito.Mockito.when(mission.storage.getTag()).thenReturn("offline:generated");
+        final DownloadManager manager = manager(context, mission);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.MeteredOperating);
+        try (MockedStatic<OfflineDownloads> policy = mockStatic(OfflineDownloads.class,
+                CALLS_REAL_METHODS)) {
+            policy.when(() -> OfflineDownloads.networkAllowed(context)).thenReturn(true);
+            manager.activateOfflineQueue();
+            assertFalse(mission.running);
+            manager.approveMobileDataAndResume(mission);
+            assertTrue(mission.mobileDataApproved);
+            assertTrue(mission.running);
+        }
+    }
+
+    @Test public void manualPauseAllKeepsQueuedMissionStoppedOnReconnect() throws Exception {
+        final DownloadMission mission = mission();
+        mission.storage = mock(StoredFileHelper.class);
+        final DownloadManager manager = manager(mock(Context.class), mission);
+        set(manager, "mLastNetworkStatus", DownloadManager.NetworkState.Unavailable);
+        manager.activateOfflineQueue();
+        manager.pauseAllMissions(false);
+        assertFalse(mission.enqueued);
+        manager.handleConnectivityState(DownloadManager.NetworkState.Operating, false);
+        assertFalse(mission.running);
+    }
+
     @Test public void duplicateOfflineMissionCannotAllocateMetadataOrScheduleAgain()
             throws Exception {
         final Context context = mock(Context.class);
@@ -270,6 +339,119 @@ public class OfflineQueueTest {
         }
     }
 
+    @Test public void pausedWorkerDrainWakesAllowedOfflineQueue() throws Exception {
+        final DownloadMission mission = mission();
+        final Context context = mock(Context.class);
+        final DownloadManager manager = manager(context, mission);
+        final android.os.Handler handler = mock(android.os.Handler.class);
+        final var scheduled = new java.util.concurrent.CountDownLatch(1);
+        final var wake = new java.util.concurrent.atomic.AtomicReference<Runnable>();
+        org.mockito.Mockito.when(handler.post(org.mockito.ArgumentMatchers.any(Runnable.class)))
+                .thenAnswer(call -> {
+                    wake.set(call.getArgument(0));
+                    scheduled.countDown();
+                    return true;
+                });
+        set(manager, "mHandler", handler);
+        set(manager, "mOfflineDrainWaiters", new java.util.IdentityHashMap<>());
+        final var entered = new java.util.concurrent.CountDownLatch(1);
+        final var release = new java.util.concurrent.CountDownLatch(1);
+        final Thread worker = new Thread(() -> {
+            entered.countDown();
+            boolean done = false;
+            while (!done) {
+                try {
+                    release.await();
+                    done = true;
+                } catch (final InterruptedException ignored) {
+                    // Simulate a paused worker completing its cleanup after reconnection.
+                }
+            }
+        });
+        mission.init = worker;
+        worker.start();
+        assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+        try (MockedStatic<OfflineDownloads> policy = mockStatic(OfflineDownloads.class)) {
+            policy.when(() -> OfflineDownloads.isManaged(mission)).thenReturn(true);
+            policy.when(() -> OfflineDownloads.networkAllowed(context)).thenReturn(true);
+            manager.activateOfflineQueue();
+            manager.handleConnectivityState(DownloadManager.NetworkState.Operating, false);
+            assertFalse(mission.running);
+            release.countDown();
+            worker.join(2000);
+            assertFalse(worker.isAlive());
+            assertTrue(scheduled.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            wake.get().run();
+            assertTrue("allowed queued mission must wake after old worker drains", mission.running);
+        } finally {
+            release.countDown();
+            worker.join(2000);
+        }
+    }
+
+    @Test public void explicitPauseCancelsQueuedOfflineMission() throws Exception {
+        final DownloadMission mission = mission();
+        final Context context = mock(Context.class);
+        final DownloadManager manager = manager(context, mission);
+        try (MockedStatic<OfflineDownloads> policy = mockStatic(OfflineDownloads.class)) {
+            policy.when(() -> OfflineDownloads.isManaged(mission)).thenReturn(true);
+            manager.pauseMission(mission);
+            assertFalse("user pause must clear the queued state", mission.enqueued);
+            assertFalse(mission.running);
+        }
+    }
+
+    @Test public void explicitPauseCancelsPendingWorkerDrainWake() throws Exception {
+        final DownloadMission mission = mission();
+        final Context context = mock(Context.class);
+        final DownloadManager manager = manager(context, mission);
+        final android.os.Handler handler = mock(android.os.Handler.class);
+        set(manager, "mHandler", handler);
+        final var entered = new java.util.concurrent.CountDownLatch(1);
+        final var release = new java.util.concurrent.CountDownLatch(1);
+        final Thread worker = new Thread(() -> {
+            entered.countDown();
+            try {
+                release.await();
+            } catch (final InterruptedException ignored) {
+                // The test releases the generated old worker independently.
+            }
+        });
+        mission.init = worker;
+        worker.start();
+        assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+        try (MockedStatic<OfflineDownloads> policy = mockStatic(OfflineDownloads.class)) {
+            policy.when(() -> OfflineDownloads.isManaged(mission)).thenReturn(true);
+            policy.when(() -> OfflineDownloads.networkAllowed(context)).thenReturn(true);
+            manager.activateOfflineQueue();
+            assertFalse(mission.running);
+            final Field waiters = DownloadManager.class.getDeclaredField("mOfflineDrainWaiters");
+            waiters.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            final var pending = (java.util.IdentityHashMap<DownloadMission, Thread>)
+                    waiters.get(manager);
+            final Thread watcher = pending.get(mission);
+            org.junit.Assert.assertNotNull(watcher);
+            manager.pauseMission(mission);
+            release.countDown();
+            worker.join(2000);
+            watcher.join(2000);
+            assertFalse(watcher.isAlive());
+            assertFalse(mission.enqueued);
+            assertFalse(mission.running);
+            final var callbacks = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+            org.mockito.Mockito.verify(handler, org.mockito.Mockito.atMostOnce())
+                    .post(callbacks.capture());
+            for (final Runnable callback : callbacks.getAllValues()) {
+                callback.run();
+            }
+            org.mockito.Mockito.verify(mission, org.mockito.Mockito.never()).start();
+        } finally {
+            release.countDown();
+            worker.join(2000);
+        }
+    }
+
     private DownloadManager manager(final Context context, final DownloadMission... missions)
             throws Exception {
         // Exercise real scheduling while isolating Android storage and transport discovery.
@@ -301,6 +483,10 @@ public class OfflineQueueTest {
             mission.enqueued = invocation.getArgument(0);
             return null;
         }).when(mission).setEnqueued(anyBoolean());
+        doAnswer(invocation -> {
+            mission.mobileDataApproved = invocation.getArgument(0);
+            return null;
+        }).when(mission).setMobileDataApproved(anyBoolean());
         return mission;
     }
 }

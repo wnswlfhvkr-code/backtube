@@ -134,8 +134,9 @@ public class DownloadRunnable extends Thread {
                     // for youtube streams. The url has expired, recover
                     f.close();
 
-                    if (mId == 1) {
-                        // only the first thread will execute the recovery procedure
+                    if (mId == 0) {
+                        // DownloadMission passes zero-based worker IDs. Only the first
+                        // worker starts recovery, including a single ranged worker.
                         mMission.doRecover(ERROR_HTTP_FORBIDDEN);
                     }
                     return;

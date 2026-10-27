@@ -122,6 +122,8 @@ public class DownloadDialog extends DialogFragment
     private boolean askForSavePath;
     @State
     boolean saveOffline;
+    private boolean mobileDataApproved;
+    private boolean networkConfirmationPending;
 
     private AudioTrackAdapter audioTrackAdapter;
     private StreamItemAdapter<AudioStream, Stream> audioStreamsAdapter;
@@ -436,8 +438,22 @@ public class DownloadDialog extends DialogFragment
 
         toolbar.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == R.id.okay) {
-                saveOffline = isOfflineSave();
-                prepareSelectedDownload();
+                if (isOfflineSave() && rejectCompletedOfflineSelection()) {
+                    return true;
+                }
+                if (networkConfirmationPending) {
+                    return true;
+                }
+                networkConfirmationPending = true;
+                MobileDataDownloadConfirmation.request(requireActivity(), approved -> {
+                    networkConfirmationPending = false;
+                    if (!isAdded() || dialogBinding == null) {
+                        return;
+                    }
+                    mobileDataApproved = approved;
+                    saveOffline = isOfflineSave();
+                    prepareSelectedDownload();
+                }, () -> networkConfirmationPending = false);
                 return true;
             }
             return false;
@@ -453,6 +469,8 @@ public class DownloadDialog extends DialogFragment
     @Override
     public void onDestroyView() {
         dialogBinding = null;
+        networkConfirmationPending = false;
+        mobileDataApproved = false;
         super.onDestroyView();
     }
 
@@ -1189,7 +1207,31 @@ public class DownloadDialog extends DialogFragment
         askDialog.show();
     }
 
+    private boolean deferForNetworkApproval(@NonNull final StoredFileHelper storage) {
+        final DownloadNetworkPolicy.Type network = DownloadNetworkPolicy.current(context);
+        if (network != DownloadNetworkPolicy.Type.WIFI
+                && !(network == DownloadNetworkPolicy.Type.MOBILE && mobileDataApproved)) {
+            if (networkConfirmationPending) {
+                return true;
+            }
+            networkConfirmationPending = true;
+            MobileDataDownloadConfirmation.request(requireActivity(), approved -> {
+                networkConfirmationPending = false;
+                if (!isAdded() || dialogBinding == null) {
+                    return;
+                }
+                mobileDataApproved = approved;
+                continueSelectedDownload(storage);
+            }, () -> networkConfirmationPending = false);
+            return true;
+        }
+        return false;
+    }
+
     private void continueSelectedDownload(@NonNull final StoredFileHelper storage) {
+        if (deferForNetworkApproval(storage)) {
+            return;
+        }
         org.schabi.newpipe.offline.OfflineStore offlineStore = null;
         String offlineId = null;
         if (storage.getTag() != null && storage.getTag().startsWith("offline:")) {
@@ -1199,7 +1241,7 @@ public class DownloadDialog extends DialogFragment
                 final var owner = downloadManager == null ? null
                         : downloadManager.getOfflineMission(offlineId);
                 if (owner != null) {
-                    downloadManager.resumeMission(owner);
+                    resumeOfflineOwner(owner);
                     return;
                 }
                 if (!offlineStore.claimDownload(offlineId)) {
@@ -1210,7 +1252,7 @@ public class DownloadDialog extends DialogFragment
                         : downloadManager.getOfflineMission(offlineId);
                 if (accepted != null) {
                     offlineStore.releaseDownloadClaim(offlineId);
-                    downloadManager.resumeMission(accepted);
+                    resumeOfflineOwner(accepted);
                     return;
                 }
             } catch (final IOException error) {
@@ -1321,7 +1363,8 @@ public class DownloadDialog extends DialogFragment
             }
 
             DownloadManagerService.startMission(context, urls, storage, kind, threads,
-                    currentInfo, psName, psArgs, nearLength, new ArrayList<>(recoveryInfo));
+                    currentInfo, psName, psArgs, nearLength, new ArrayList<>(recoveryInfo),
+                    mobileDataApproved);
             dispatched = true;
 
             Toast.makeText(context, getString(R.string.download_has_started),
@@ -1332,6 +1375,14 @@ public class DownloadDialog extends DialogFragment
             if (!dispatched && offlineStore != null && offlineId != null) {
                 offlineStore.releaseDownloadClaim(offlineId);
             }
+        }
+    }
+
+    private void resumeOfflineOwner(final us.shandian.giga.get.DownloadMission mission) {
+        if (mobileDataApproved) {
+            downloadManager.approveMobileDataAndResume(mission);
+        } else {
+            downloadManager.resumeMission(mission);
         }
     }
 }

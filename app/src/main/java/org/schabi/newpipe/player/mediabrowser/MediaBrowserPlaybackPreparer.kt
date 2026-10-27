@@ -75,7 +75,8 @@ class MediaBrowserPlaybackPreparer(
         }
 
         disposable?.dispose()
-        disposable = extractPlayQueueFromMediaId(mediaId)
+        // Include synchronous ID parsing in the cancellable subscription error path.
+        disposable = Single.defer { extractPlayQueueFromMediaId(mediaId) }
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(

@@ -117,6 +117,10 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
     @State
     String searchString;
 
+    // Editor text may be a draft for a different query than the visible results and nextPage.
+    @State
+    String searchEditString;
+
     /**
      * No content filter should add like contentFilter = all
      * be aware of this when implementing an extractor.
@@ -401,9 +405,9 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
 
     @Override
     public void onSaveInstanceState(@NonNull final Bundle bundle) {
-        searchString = searchEditText != null
+        searchEditString = searchEditText != null
                 ? getSearchEditString().trim()
-                : searchString;
+                : searchEditString;
         super.onSaveInstanceState(bundle);
     }
 
@@ -509,7 +513,7 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
                     + ", lastSearchedQuery → "
                     + lastSearchedString);
         }
-        searchEditText.setText(searchString);
+        searchEditText.setText(searchEditString == null ? searchString : searchEditString);
 
         if (TextUtils.isEmpty(searchString)
                 || isSearchEditBlank()) {
@@ -618,6 +622,7 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
                 }
 
                 final String newText = getSearchEditString().trim();
+                searchEditString = newText;
                 suggestionPublisher.onNext(newText);
             }
         };
@@ -766,7 +771,8 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
 
         suggestionDisposable = suggestionPublisher
                 .debounce(SUGGESTIONS_DEBOUNCE, TimeUnit.MILLISECONDS)
-                .startWithItem(searchString == null ? "" : searchString)
+                .startWithItem(searchEditString == null
+                        ? (searchString == null ? "" : searchString) : searchEditString)
                 .switchMap(query -> {
                     // Only show remote suggestions if they are enabled in settings and
                     // the query length is at least THRESHOLD_NETWORK_SUGGESTION
@@ -836,6 +842,13 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
             return;
         }
 
+        // The submitted request, including a URL route, supersedes earlier result/routing work.
+        disposables.clear();
+        if (searchDisposable != null) {
+            searchDisposable.dispose();
+            searchDisposable = null;
+        }
+
         // Check if theSearchString is a URL which can be opened by NewPipe directly
         // and open it if possible.
         try {
@@ -864,6 +877,10 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
                 searchBinding.searchMetaInfoSeparator, disposables);
         hideKeyboardSearch();
 
+        // startLoading clears prior subscriptions; register this search's history afterwards.
+        suggestionPublisher.onNext(theSearchString);
+        startLoading(false);
+
         // store search query if search history is enabled
         disposables.add(historyRecordManager.onSearched(serviceId, theSearchString)
                 .observeOn(AndroidSchedulers.mainThread())
@@ -874,9 +891,6 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
                                 theSearchString, serviceId))
                 ));
 
-        // load search results
-        suggestionPublisher.onNext(theSearchString);
-        startLoading(false);
     }
 
     @Override

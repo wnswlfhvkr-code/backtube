@@ -51,7 +51,8 @@ public class OfflineVideoDownloadTest {
     @SuppressWarnings("unchecked")
     private static void assertDispatch(final boolean videoSelected) throws Exception {
         final DownloadDialog dialog = mock(DownloadDialog.class, CALLS_REAL_METHODS);
-        set(dialog, "context", mock(Context.class));
+        final Context context = mock(Context.class);
+        set(dialog, "context", context);
         doNothing().when(dialog).dismiss();
         doReturn("Started").when(dialog).getString(R.string.download_has_started);
         final DownloadDialogBinding binding = mock(DownloadDialogBinding.class);
@@ -95,7 +96,11 @@ public class OfflineVideoDownloadTest {
                         dispatched.add(call.getArguments());
                     }
                     return null;
-                }); MockedStatic<Toast> toasts = mockStatic(Toast.class)) {
+                }); MockedStatic<Toast> toasts = mockStatic(Toast.class);
+             MockedStatic<DownloadNetworkPolicy> network =
+                     mockStatic(DownloadNetworkPolicy.class)) {
+            network.when(() -> DownloadNetworkPolicy.current(context))
+                    .thenReturn(DownloadNetworkPolicy.Type.WIFI);
             toasts.when(() -> Toast.makeText(org.mockito.ArgumentMatchers.any(Context.class),
                     org.mockito.ArgumentMatchers.anyString(),
                     org.mockito.ArgumentMatchers.anyInt()))

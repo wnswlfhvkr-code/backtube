@@ -142,16 +142,6 @@ public class InfoListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     + "showFooter = " + showFooter);
         }
         notifyItemRangeInserted(offsetStart, data.size());
-
-        if (showFooter) {
-            final int footerNow = sizeConsideringHeaderOffset();
-            notifyItemMoved(offsetStart, footerNow);
-
-            if (DEBUG) {
-                Log.d(TAG, "addInfoItemList() footer from " + offsetStart
-                        + " to " + footerNow);
-            }
-        }
     }
 
     public void clearStreamItemList() {
@@ -338,6 +328,30 @@ public class InfoListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     // If header is present, offset the items by -1
                     infoItemList.get(hasHeader() ? position - 1 : position), recordManager);
         }
+    }
+
+    @Override
+    public void onViewDetachedFromWindow(@NonNull final RecyclerView.ViewHolder holder) {
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).onHolderDetached();
+        }
+        super.onViewDetachedFromWindow(holder);
+    }
+
+    @Override
+    public void onViewAttachedToWindow(@NonNull final RecyclerView.ViewHolder holder) {
+        super.onViewAttachedToWindow(holder);
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).onHolderAttached();
+        }
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull final RecyclerView.ViewHolder holder) {
+        if (holder instanceof StreamMiniInfoItemHolder) {
+            ((StreamMiniInfoItemHolder) holder).cancelPendingStateLoad();
+        }
+        super.onViewRecycled(holder);
     }
 
     public GridLayoutManager.SpanSizeLookup getSpanSizeLookup(final int spanCount) {

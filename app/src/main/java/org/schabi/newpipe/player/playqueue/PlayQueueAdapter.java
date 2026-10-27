@@ -15,7 +15,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.schabi.newpipe.R;
-import org.schabi.newpipe.player.playqueue.PlayQueueEvent.AppendEvent;
 import org.schabi.newpipe.player.playqueue.PlayQueueEvent.ErrorEvent;
 import org.schabi.newpipe.player.playqueue.PlayQueueEvent.MoveEvent;
 import org.schabi.newpipe.player.playqueue.PlayQueueEvent.RemoveEvent;
@@ -90,8 +89,9 @@ public class PlayQueueAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
                 notifyItemChanged(selectEvent.getNewIndex());
                 break;
             case APPEND:
-                final AppendEvent appendEvent = (AppendEvent) message;
-                notifyItemRangeInserted(playQueue.size(), appendEvent.getAmount());
+                // Events contain an amount but no insertion index. Multiple queue edits
+                // may have completed before this main-thread callback observes them.
+                notifyDataSetChanged();
                 break;
             case ERROR:
                 final ErrorEvent errorEvent = (ErrorEvent) message;

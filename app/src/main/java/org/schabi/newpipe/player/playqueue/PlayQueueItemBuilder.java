@@ -1,7 +1,6 @@
 package org.schabi.newpipe.player.playqueue;
 
 import android.content.Context;
-import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -21,13 +20,12 @@ public class PlayQueueItemBuilder {
     }
 
     public void buildStreamInfoItem(final PlayQueueItemHolder holder, final PlayQueueItem item) {
-        if (!TextUtils.isEmpty(item.getTitle())) {
-            holder.itemVideoTitleView.setText(item.getTitle());
-        }
+        holder.itemVideoTitleView.setText(item.getTitle());
         holder.itemAdditionalDetailsView.setText(Localization.concatenateStrings(item.getUploader(),
                 ServiceHelper.getNameOfServiceById(item.getServiceId())));
 
         if (item.getDuration() > 0) {
+            holder.itemDurationView.setVisibility(View.VISIBLE);
             holder.itemDurationView.setText(Localization.getDurationString(item.getDuration()));
         } else {
             holder.itemDurationView.setVisibility(View.GONE);

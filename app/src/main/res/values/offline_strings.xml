@@ -36,9 +36,13 @@
     <string name="offline_delete_title">Delete saved copy?</string>
     <string name="offline_delete_message">Only offline copies are removed. An already open copy is removed when playback releases it.</string>
     <string name="offline_media_only">Choose audio or video for offline playback.</string>
-    <string name="offline_wifi_only">Save over unmetered Wi-Fi only</string>
+    <string name="mobile_data_download_confirm">You are connected to mobile data. Continue downloading?</string>
+    <string name="download_network_unavailable">Connect to Wi-Fi or mobile data before downloading.</string>
+    <string name="download_network_unsupported">The active network could not be identified. Connect to Wi-Fi or mobile data and try again.</string>
+    <string name="offline_mobile_confirm_wait">Mobile data confirmation required · open this item and tap Retry</string>
+    <string name="download_mobile_confirm_wait">Mobile data confirmation required · open this item and tap Start</string>
     <string name="offline_downloading">Downloading / processing…</string>
-    <string name="offline_network_wait">Waiting for allowed network / download queue</string>
+    <string name="offline_network_wait">Waiting in download queue</string>
     <string name="offline_recovery_wait">Reconnecting download · Reopen the content if recovery is unavailable</string>
     <string name="offline_storage_full">Offline storage is full (500 MB limit), or the device has no free space. Delete unwanted saved items, then retry. Existing saves are kept.</string>
     <string name="offline_saved_complete">Saved offline</string>

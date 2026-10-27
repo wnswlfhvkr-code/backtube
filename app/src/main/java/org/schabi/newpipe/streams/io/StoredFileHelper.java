@@ -26,6 +26,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Objects;
 
 import us.shandian.giga.io.FileStream;
 import us.shandian.giga.io.FileStreamSAF;
@@ -403,11 +404,12 @@ public class StoredFileHelper implements Serializable {
         // note: do not compare tags, files can have the same parent folder
         //if (stringMismatch(this.tag, storage.tag)) return false;
 
-        if (stringMismatch(getLowerCase(this.sourceTree), getLowerCase(this.sourceTree))) {
-            return false;
-        }
-
         if (this.isInvalid() || storage.isInvalid()) {
+            // A name and MIME type identify an invalid placeholder only within its parent.
+            if (stringMismatch(getLowerCase(this.sourceTree),
+                    getLowerCase(storage.sourceTree))) {
+                return false;
+            }
             if (this.srcName == null || storage.srcName == null || this.srcType == null
                     || storage.srcType == null) {
                 return false;
@@ -425,7 +427,10 @@ public class StoredFileHelper implements Serializable {
             return this.ioPath.equals(storage.ioPath);
         }
 
-        return DocumentsContract.getDocumentId(this.docFile.getUri())
+        // Document IDs are scoped to a provider, while parent aliases may differ.
+        return Objects.equals(this.docFile.getUri().getAuthority(),
+                storage.docFile.getUri().getAuthority())
+                && DocumentsContract.getDocumentId(this.docFile.getUri())
                 .equalsIgnoreCase(DocumentsContract.getDocumentId(storage.docFile.getUri()));
     }
 

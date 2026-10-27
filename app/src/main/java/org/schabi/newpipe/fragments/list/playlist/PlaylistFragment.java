@@ -277,7 +277,7 @@ public class PlaylistFragment extends BaseListInfoFragment<StreamInfoItem, Playl
     @Override
     public void handleNextItems(final ListExtractor.InfoItemsPage result) {
         super.handleNextItems(result);
-        setStreamCountAndOverallDuration(result.getItems(), !result.hasNextPage());
+        setStreamCountAndOverallDuration(!hasMoreItems());
     }
 
     @Override
@@ -326,7 +326,7 @@ public class PlaylistFragment extends BaseListInfoFragment<StreamInfoItem, Playl
         }
 
         streamCount = result.getStreamCount();
-        setStreamCountAndOverallDuration(result.getRelatedItems(), !result.hasNextPage());
+        setStreamCountAndOverallDuration(!hasMoreItems());
 
         final Description description = result.getDescription();
         if (description != null && description != Description.EMPTY_DESCRIPTION
@@ -380,7 +380,7 @@ public class PlaylistFragment extends BaseListInfoFragment<StreamInfoItem, Playl
         return new PlaylistPlayQueue(
                 currentInfo.getServiceId(),
                 currentInfo.getUrl(),
-                currentInfo.getNextPage(),
+                currentNextPage,
                 infoItems,
                 index
         );
@@ -491,11 +491,13 @@ public class PlaylistFragment extends BaseListInfoFragment<StreamInfoItem, Playl
         playlistBookmarkButton.setTitle(titleRes);
     }
 
-    private void setStreamCountAndOverallDuration(final List<StreamInfoItem> list,
-                                                  final boolean isDurationComplete) {
+    private void setStreamCountAndOverallDuration(final boolean isDurationComplete) {
         if (activity != null && headerBinding != null) {
-            playlistOverallDurationSeconds += list.stream()
-                    .mapToLong(x -> x.getDuration())
+            // The adapter includes loaded/restored pages; recompute after refreshes as well.
+            playlistOverallDurationSeconds = infoListAdapter.getItemsList().stream()
+                    .filter(StreamInfoItem.class::isInstance)
+                    .map(StreamInfoItem.class::cast)
+                    .mapToLong(StreamInfoItem::getDuration)
                     .sum();
             headerBinding.playlistStreamCount.setText(
                 Localization.concatenateStrings(

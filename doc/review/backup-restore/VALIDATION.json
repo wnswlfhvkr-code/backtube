@@ -1,0 +1,254 @@
+{
+  "base": "5f2d1c154d52d9706d7c28049024e710763fec51",
+  "request": "Minimum safe backup restore corrections on APK1036 source",
+  "inputs": [
+    {
+      "library_file_id": "libfile_30ad936b3a788191abc73f16d739dec2",
+      "sha256": "a030fc26391a50936b205be8793adb3032873f81fa566e5d5c30f684ba821048",
+      "bytes": 26697,
+      "hash_match": true,
+      "crc_valid": true,
+      "version_id": null
+    },
+    {
+      "library_file_id": "libfile_5c4cf5d041048191b01a6146a1871ba5",
+      "sha256": "0413f2815581cc91ee92cf85dc9a0da4b71767546b95c974d26bb3c5b7bf2f9f",
+      "bytes": 12158,
+      "hash_match": true,
+      "crc_valid": true,
+      "version_id": null
+    }
+  ],
+  "zip_checker_red": {
+    "class": "org.schabi.newpipe.util.ZipHelperValidationTest",
+    "tests": "7",
+    "failures": "6",
+    "failed_tests": [
+      "readFailureIsRejected",
+      "excessiveEntryCountIsRejected",
+      "canceledValidationIsRejected",
+      "corruptPayloadIsRejected",
+      "ordinaryTextIsRejected",
+      "excessiveInflatedSizeIsRejected"
+    ]
+  },
+  "r1_diagnostic_baseline": {
+    "class": "org.schabi.newpipe.settings.RestoreCopyRiskTest",
+    "tests": "1",
+    "failures": "0",
+    "failed_tests": []
+  },
+  "r1_after_successful_preflight_diagnostic": "PASS: second-read/copy IOException changes temporary target bytes; risk reproduced, NOT fixed",
+  "initial_android_fixture_failure": "restore window missing; not a product RED",
+  "corrected_android_baseline": {
+    "result": "EXPECTED RED",
+    "reason": "missing DB offered preference import"
+  },
+  "first_green_device_attempt": {
+    "PASS": 5,
+    "fixture_precondition_failures": 4,
+    "cause": "Android read(byte[]) bypassed delayed read(byte[],off,len); test wrapper now intercepts all read overloads; no product change"
+  },
+  "android_restore": {
+    "result": "PASS",
+    "tests": 9,
+    "seconds": 106.42,
+    "cases": [
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "missingDatabaseDoesNotOfferSettingsOrFinish"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "supersededReadCannotImportAfterNewInvalidSelection"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "crcFailurePreservesDatabaseAndPreferences"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "timeoutCannotImportFromAnUninterruptibleLateRead"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "closedDatabaseBackupImportsNormally"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "ordinaryTextPreservesDatabaseAndPreferences"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "removedViewCannotContinueImportAfterLateRead"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "readFailurePreservesDatabaseAndPreferences"
+      },
+      {
+        "class": "org.schabi.newpipe.settings.RestoreImportDeviceTest",
+        "test": "cancelDoesNotBlockMainOrContinueFromLateRead"
+      }
+    ]
+  },
+  "android_related": {
+    "result": "PASS",
+    "tests": 20,
+    "seconds": 127.94,
+    "cases": [
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "actualWindowDetachDefersExternalUpdateUntilReattach"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "emptyErrorAndPreferenceOffClearState"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "bindAttachDoesNotDuplicateAndDetachedUpdateDoesNotQuery"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "differentServiceUpdateIsIgnoredAndCurrentDurationIsRead"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "alreadyQueuedOldResultCannotOverwriteNewBinding"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "oldPropertyAndProgressAnimationsCannotHideReboundRow"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "rapidRebindAndSameItemUpdatesAreLatestWins"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "updatePreservesVisibleProgressUntilItsResult"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "bindReturnsBeforeDatabaseCompletion"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "recyclingActualRecyclerViewRowsRejectsLateResult"
+      },
+      {
+        "class": "org.schabi.newpipe.info_list.holder.StreamProgressBindingTest",
+        "test": "zeroDurationAndLiveDisplayRulesRemainUnchanged"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialExtractorFailureRetainsSelectionUntilRetry"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialAudioOnlyFailureDoesNotStartRelatedRecommendation"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "initialAudioOnlyFailureRetainsSelectionUntilRetry"
+      },
+      {
+        "class": "org.schabi.newpipe.player.InitialSourceFailureTest",
+        "test": "freshReselectionAfterInitialFailureReloadsSelectedSource"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "audioOnlySaveRetainsAudioPlayerAndAudioDecoder"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "singleSavedVideoRendersFramesAndAudioWithoutNetwork"
+      },
+      {
+        "class": "org.schabi.newpipe.player.OfflineVideoPlaybackTest",
+        "test": "selectedAudioThenVideoRendersVideoOnAutomaticTransition"
+      },
+      {
+        "class": "org.schabi.newpipe.download.OfflineDuplicateDeviceTest",
+        "test": "savedAudioAllowsVideoSelectorButAudioConfirmationOnlyShowsToast"
+      },
+      {
+        "class": "org.schabi.newpipe.download.OfflineDuplicateDeviceTest",
+        "test": "completedVideoRapidTapsShowShortToastWithoutSelectorOrNewSave"
+      }
+    ]
+  },
+  "jvm_lint": {
+    "app": {
+      "tests": 568,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lint": {
+      "Warning": 346
+    }
+  },
+  "checkstyle": "PASS",
+  "android_compile": "PASS",
+  "independent_review": "No concrete R2 blocker; limitations retained",
+  "preserved_scope": {
+    "base": "5f2d1c154d52d9706d7c28049024e710763fec51",
+    "1036_holder_player_offline_manager_build_paths_unchanged": true
+  },
+  "r1_status": "UNRESOLVED: no demonstrated global database maintenance/drain gate for retained DAO and background work. No live replacement implementation changed.",
+  "limitations": [
+    "ZipInputStream local-entry/payload checks do not validate central directory or all trailing truncation",
+    "SQLite header/integrity/schema not validated by R2",
+    "Timeout/disposal blocks continuation but cannot terminate an uninterruptible provider read/close",
+    "Archive reopened for extraction; second-read/destination IO failure can still partially overwrite target",
+    "No live Room concurrency corruption test or exclusive quiescence boundary established"
+  ],
+  "NOT_RUN": [
+    "physical phone",
+    "API35",
+    "entire Android suite",
+    "real provider backup restore",
+    "corrupt SQLite restore/integrity validation",
+    "live Room concurrent-writer restore",
+    "whole 663-file deep audit",
+    "new remote CI"
+  ],
+  "new_APK": "NOT BUILT; existing APK1036 unchanged; R1 not solved",
+  "main_merge": false,
+  "release": false,
+  "Windows": false,
+  "build_preparation_failures": [
+    {
+      "phase": "restore-green-and-compile",
+      "failed_tasks": [
+        ":app:runCheckstyle"
+      ]
+    },
+    {
+      "phase": "restore-green-and-compile2",
+      "failed_tasks": [
+        ":app:runCheckstyle"
+      ]
+    },
+    {
+      "phase": "restore-ui-baseline-build",
+      "failed_tasks": [
+        ":app:runCheckstyle"
+      ]
+    },
+    {
+      "phase": "restore-ui-baseline-build2",
+      "failed_tasks": [
+        ":app:compileDebugAndroidTestJavaWithJavac"
+      ]
+    }
+  ]
+}

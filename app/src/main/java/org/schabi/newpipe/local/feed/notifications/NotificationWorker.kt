@@ -14,8 +14,8 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.rxjava3.RxWorker
-import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Single
+import io.reactivex.rxjava3.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 import org.schabi.newpipe.App
 import org.schabi.newpipe.R
@@ -24,6 +24,7 @@ import org.schabi.newpipe.error.ErrorUtil
 import org.schabi.newpipe.error.UserAction
 import org.schabi.newpipe.local.feed.service.FeedLoadManager
 import org.schabi.newpipe.local.feed.service.FeedLoadService
+import org.schabi.newpipe.local.feed.service.FeedUpdateInfo
 
 /*
  * Worker which checks for new streams of subscribed channels
@@ -53,14 +54,12 @@ class NotificationWorker(
                     }
                 }
             }
-            .observeOn(AndroidSchedulers.mainThread()) // Picasso requires calls from main thread
-            .map { feedUpdateInfoList ->
-                // display notifications for each feedUpdateInfo (i.e. channel)
-                feedUpdateInfoList.forEach { feedUpdateInfo ->
-                    notificationHelper.displayNewStreamsNotifications(feedUpdateInfo)
+            .let { updates ->
+                renderFeedNotifications(updates) { update ->
+                    notificationHelper.displayNewStreamsNotifications(update)
                 }
-                return@map Result.success()
             }
+            .map { Result.success() }
             .doOnError { throwable ->
                 Log.e(TAG, "Error while displaying streams notifications", throwable)
                 ErrorUtil.createNotification(
@@ -171,3 +170,11 @@ class NotificationWorker(
         }
     }
 }
+
+/** Avatar preparation in [NotificationHelper] uses blocking Coil and must not run on main. */
+internal fun renderFeedNotifications(
+    updates: Single<List<FeedUpdateInfo>>,
+    display: (FeedUpdateInfo) -> Unit
+): Single<List<FeedUpdateInfo>> = updates
+    .observeOn(Schedulers.io())
+    .doOnSuccess { list -> list.forEach(display) }

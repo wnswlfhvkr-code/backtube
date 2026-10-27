@@ -372,7 +372,7 @@ public class StoredDirectoryHelper {
 
             while (cursor.moveToNext()) {
                 if (cursor.isNull(name)
-                        || !cursor.getString(name).toLowerCase().startsWith(lowerFilename)) {
+                        || !cursor.getString(name).toLowerCase().equals(lowerFilename)) {
                     continue;
                 }
 

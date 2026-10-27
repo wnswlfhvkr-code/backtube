@@ -282,13 +282,16 @@ public abstract class PlayQueue implements Serializable {
     public synchronized void append(@NonNull final List<PlayQueueItem> items) {
         final List<PlayQueueItem> itemList = new ArrayList<>(items);
 
+        final int lastIndex = streams.size() - 1;
+        // Replace only a pending recommendation, using the removal path so backup,
+        // history, and media-source listeners observe the same queue membership.
+        if (!itemList.isEmpty() && lastIndex > getIndex()
+                && streams.get(lastIndex).isAutoQueued() && !itemList.get(0).isAutoQueued()) {
+            remove(lastIndex);
+        }
         if (isShuffled()) {
             backup.addAll(itemList);
             Collections.shuffle(itemList);
-        }
-        if (!streams.isEmpty() && streams.get(streams.size() - 1).isAutoQueued()
-                && !itemList.get(0).isAutoQueued()) {
-            streams.remove(streams.size() - 1);
         }
         streams.addAll(itemList);
 

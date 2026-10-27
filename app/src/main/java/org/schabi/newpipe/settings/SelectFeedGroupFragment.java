@@ -27,12 +27,14 @@ import org.schabi.newpipe.database.feed.model.FeedGroupEntity;
 import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.util.ThemeHelper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.disposables.SerialDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class SelectFeedGroupFragment extends DialogFragment {
@@ -43,6 +45,8 @@ public class SelectFeedGroupFragment extends DialogFragment {
     private ProgressBar progressBar;
     private TextView emptyView;
     private RecyclerView recyclerView;
+    private final SerialDisposable selectionRequest = new SerialDisposable();
+    private long selectionGeneration;
 
     private List<FeedGroupEntity> feedGroups = new Vector<>();
 
@@ -67,6 +71,8 @@ public class SelectFeedGroupFragment extends DialogFragment {
     @Override
     public View onCreateView(@NonNull final LayoutInflater inflater, final ViewGroup container,
                              final Bundle savedInstanceState) {
+        cancelSelectionRequest();
+        final long generation = selectionGeneration;
         final View v = inflater.inflate(R.layout.select_feed_group_fragment, container, false);
         recyclerView = v.findViewById(R.id.items_list);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -84,9 +90,27 @@ public class SelectFeedGroupFragment extends DialogFragment {
         database.feedGroupDAO().getAll().toObservable()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(getFeedGroupObserver());
+                .subscribe(getFeedGroupObserver(generation));
 
         return v;
+    }
+
+    private void cancelSelectionRequest() {
+        selectionGeneration++;
+        selectionRequest.set(null);
+    }
+
+    @Override
+    public void onDestroyView() {
+        cancelSelectionRequest();
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
+        }
+        recyclerView = null;
+        progressBar = null;
+        emptyView = null;
+        feedGroups = List.of();
+        super.onDestroyView();
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -101,9 +125,8 @@ public class SelectFeedGroupFragment extends DialogFragment {
         }
     }
 
-    private void clickedItem(final int position) {
+    private void clickedItem(final FeedGroupEntity entry) {
         if (onSelectedListener != null) {
-            final FeedGroupEntity entry = feedGroups.get(position);
             onSelectedListener
                     .onFeedGroupSelected(entry.getUid(), entry.getName(),
                             entry.getIcon().getDrawableResource());
@@ -116,28 +139,39 @@ public class SelectFeedGroupFragment extends DialogFragment {
     //////////////////////////////////////////////////////////////////////////*/
 
     private void displayFeedGroups(final List<FeedGroupEntity> newFeedGroups) {
-        this.feedGroups = newFeedGroups;
+        feedGroups = new ArrayList<>(newFeedGroups);
         progressBar.setVisibility(View.GONE);
-        if (newFeedGroups.isEmpty()) {
-            emptyView.setVisibility(View.VISIBLE);
-            return;
+        emptyView.setVisibility(feedGroups.isEmpty() ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(feedGroups.isEmpty() ? View.GONE : View.VISIBLE);
+        final RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
         }
-        recyclerView.setVisibility(View.VISIBLE);
-
     }
 
-    private Observer<List<FeedGroupEntity>> getFeedGroupObserver() {
+    private Observer<List<FeedGroupEntity>> getFeedGroupObserver(final long generation) {
         return new Observer<List<FeedGroupEntity>>() {
             @Override
-            public void onSubscribe(@NonNull final Disposable disposable) { }
+            public void onSubscribe(@NonNull final Disposable disposable) {
+                if (generation == selectionGeneration) {
+                    selectionRequest.set(disposable);
+                } else {
+                    disposable.dispose();
+                }
+            }
 
             @Override
             public void onNext(@NonNull final List<FeedGroupEntity> newGroups) {
-                displayFeedGroups(newGroups);
+                if (generation == selectionGeneration && recyclerView != null) {
+                    displayFeedGroups(newGroups);
+                }
             }
 
             @Override
             public void onError(@NonNull final Throwable exception) {
+                if (generation != selectionGeneration || recyclerView == null) {
+                    return;
+                }
                 ErrorUtil.showUiErrorSnackbar(SelectFeedGroupFragment.this,
                         "Loading Feed Groups", exception);
             }
@@ -174,7 +208,13 @@ public class SelectFeedGroupFragment extends DialogFragment {
         public void onBindViewHolder(final SelectFeedGroupItemHolder holder, final int position) {
             final FeedGroupEntity entry = feedGroups.get(position);
             holder.titleView.setText(entry.getName());
-            holder.view.setOnClickListener(view -> clickedItem(position));
+            final List<FeedGroupEntity> boundItems = feedGroups;
+            final long generation = selectionGeneration;
+            holder.view.setOnClickListener(view -> {
+                if (generation == selectionGeneration && boundItems == feedGroups) {
+                    clickedItem(entry);
+                }
+            });
             holder.thumbnailView.setImageResource(entry.getIcon().getDrawableResource());
         }
 

@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
@@ -75,6 +76,50 @@ public class OfflineStoreTest {
         assertTrue(new File(root, "shelf-order.new").delete());
         store = new OfflineStore(root, 100);
         assertEquals(first.id, store.list().get(0).id);
+    }
+
+    @Test public void missingRequiredMetadataDoesNotDeleteSavedBytes() throws Exception {
+        for (final String missing : new String[]{"id", "state"}) {
+            final File directory = temporary.newFolder();
+            final OfflineStore isolated = new OfflineStore(directory, 100);
+            final OfflineStore.Entry entry = isolated.create("Saved", "source:" + missing,
+                    0, "content://test/recording", "audio/wav");
+            isolated.copy(entry.id, new ByteArrayInputStream(new byte[]{1, 2, 3}));
+            final File metadata = new File(directory, entry.id + ".properties");
+            final Properties properties = new Properties();
+            try (InputStream input = new FileInputStream(metadata)) {
+                properties.load(input);
+            }
+            properties.remove(missing);
+            try (FileOutputStream output = new FileOutputStream(metadata)) {
+                properties.store(output, "test fixture");
+            }
+            final byte[] before = Files.readAllBytes(metadata.toPath());
+            assertThrows(IOException.class, () -> new OfflineStore(directory, 100));
+            assertTrue(java.util.Arrays.equals(before, Files.readAllBytes(metadata.toPath())));
+            assertTrue(java.util.Arrays.equals(new byte[]{1, 2, 3},
+                    Files.readAllBytes(isolated.file(entry).toPath())));
+        }
+    }
+
+    @Test public void failedFirstOrderWriteDoesNotPublishMetadataBeforeRetry() throws Exception {
+        final File directory = temporary.newFolder();
+        final OfflineStore isolated = new OfflineStore(directory, 100);
+        final File blocker = new File(directory, "shelf-order.new");
+        assertTrue(blocker.mkdir());
+        assertThrows(IOException.class, () -> isolated.create("Saved", "source:one",
+                0, "content://test/recording", "audio/wav"));
+        final File[] published = directory.listFiles((parent, name) ->
+                name.endsWith(".properties"));
+        assertNotNull(published);
+        assertEquals(0, published.length);
+        assertTrue(blocker.delete());
+        final OfflineStore reopened = new OfflineStore(directory, 100);
+        assertTrue(reopened.list().isEmpty());
+        final OfflineStore.Entry retry = reopened.create("Saved", "source:one",
+                0, "content://test/recording", "audio/wav");
+        assertEquals(retry.id, new OfflineStore(directory, 100).list().get(0).id);
+        assertEquals(1, new OfflineStore(directory, 100).list().size());
     }
 
     @Test public void normalizedOrderIgnoresDuplicateAndUnknownIds() throws Exception {

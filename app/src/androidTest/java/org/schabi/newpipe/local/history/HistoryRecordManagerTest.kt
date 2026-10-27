@@ -13,6 +13,10 @@ import org.junit.Test
 import org.schabi.newpipe.NewPipeDatabase
 import org.schabi.newpipe.database.AppDatabase
 import org.schabi.newpipe.database.history.model.SearchHistoryEntry
+import org.schabi.newpipe.database.history.model.StreamHistoryEntity
+import org.schabi.newpipe.database.stream.model.StreamEntity
+import org.schabi.newpipe.database.stream.model.StreamStateEntity
+import org.schabi.newpipe.extractor.stream.StreamType
 import org.schabi.newpipe.testUtil.TestDatabase
 import org.schabi.newpipe.testUtil.TrampolineSchedulerRule
 
@@ -33,6 +37,67 @@ class HistoryRecordManagerTest {
     @After
     fun cleanUp() {
         NewPipeDatabase.close()
+    }
+
+    private fun insertWatchedStream(label: String): Long {
+        val id = database.streamDAO().insert(
+            StreamEntity(
+                serviceId = 0,
+                url = "https://example.test/$label",
+                title = label,
+                streamType = StreamType.VIDEO_STREAM,
+                duration = 120,
+                uploader = "tester"
+            )
+        )
+        database.streamHistoryDAO().insert(StreamHistoryEntity(id, time, 1))
+        database.streamStateDAO().insert(StreamStateEntity(id, 6000))
+        return id
+    }
+
+    @Test
+    fun deletingHistoryRollsBackStateWhenHistoryDeleteFails() {
+        val selected = insertWatchedStream("selected")
+        val other = insertWatchedStream("other")
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER block_selected_history BEFORE DELETE ON stream_history " +
+                "WHEN OLD.stream_id = $selected BEGIN SELECT RAISE(ABORT, 'test failure'); END"
+        )
+
+        manager.deleteStreamHistoryAndState(selected).test().await().assertError(Throwable::class.java)
+
+        assertThat(database.streamStateDAO().getState(selected).blockingFirst()).hasSize(1)
+        assertThat(database.streamHistoryDAO().getLatestEntry(selected)).isNotNull
+        assertThat(database.streamStateDAO().getState(other).blockingFirst()).hasSize(1)
+        assertThat(database.streamHistoryDAO().getLatestEntry(other)).isNotNull
+    }
+
+    @Test
+    fun deletingHistoryPreservesBothRowsWhenStateDeleteFails() {
+        val selected = insertWatchedStream("state-failure")
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER block_state_delete BEFORE DELETE ON stream_state " +
+                "WHEN OLD.stream_id = $selected BEGIN SELECT RAISE(ABORT, 'test failure'); END"
+        )
+
+        manager.deleteStreamHistoryAndState(selected).test().await().assertError(Throwable::class.java)
+
+        assertThat(database.streamStateDAO().getState(selected).blockingFirst()).hasSize(1)
+        assertThat(database.streamHistoryDAO().getLatestEntry(selected)).isNotNull
+    }
+
+    @Test
+    fun deletingHistoryOnlyRemovesSelectedIdAndAllowsMissingId() {
+        val selected = insertWatchedStream("selected")
+        val other = insertWatchedStream("other")
+
+        manager.deleteStreamHistoryAndState(selected).test().await().assertComplete()
+        manager.deleteStreamHistoryAndState(selected).test().await().assertComplete()
+
+        assertThat(database.streamStateDAO().getState(selected).blockingFirst()).isEmpty()
+        assertThat(database.streamHistoryDAO().getLatestEntry(selected)).isNull()
+        assertThat(database.streamStateDAO().getState(other).blockingFirst()).hasSize(1)
+        assertThat(database.streamHistoryDAO().getLatestEntry(other)).isNotNull
     }
 
     @Test

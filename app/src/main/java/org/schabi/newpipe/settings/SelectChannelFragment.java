@@ -27,12 +27,14 @@ import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.util.ThemeHelper;
 import org.schabi.newpipe.util.image.CoilHelper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.disposables.SerialDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class SelectChannelFragment extends DialogFragment {
@@ -43,6 +45,8 @@ public class SelectChannelFragment extends DialogFragment {
     private ProgressBar progressBar;
     private TextView emptyView;
     private RecyclerView recyclerView;
+    private final SerialDisposable selectionRequest = new SerialDisposable();
+    private long selectionGeneration;
 
     private List<SubscriptionEntity> subscriptions = new Vector<>();
 
@@ -67,6 +71,8 @@ public class SelectChannelFragment extends DialogFragment {
     @Override
     public View onCreateView(@NonNull final LayoutInflater inflater, final ViewGroup container,
                              final Bundle savedInstanceState) {
+        cancelSelectionRequest();
+        final long generation = selectionGeneration;
         final View v = inflater.inflate(R.layout.select_channel_fragment, container, false);
         recyclerView = v.findViewById(R.id.items_list);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -84,9 +90,27 @@ public class SelectChannelFragment extends DialogFragment {
         subscriptionManager.subscriptions().toObservable()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(getSubscriptionObserver());
+                .subscribe(getSubscriptionObserver(generation));
 
         return v;
+    }
+
+    private void cancelSelectionRequest() {
+        selectionGeneration++;
+        selectionRequest.set(null);
+    }
+
+    @Override
+    public void onDestroyView() {
+        cancelSelectionRequest();
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
+        }
+        recyclerView = null;
+        progressBar = null;
+        emptyView = null;
+        subscriptions = List.of();
+        super.onDestroyView();
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -101,9 +125,8 @@ public class SelectChannelFragment extends DialogFragment {
         }
     }
 
-    private void clickedItem(final int position) {
+    private void clickedItem(final SubscriptionEntity entry) {
         if (onSelectedListener != null) {
-            final SubscriptionEntity entry = subscriptions.get(position);
             onSelectedListener
                     .onChannelSelected(entry.getServiceId(), entry.getUrl(), entry.getName());
         }
@@ -115,28 +138,39 @@ public class SelectChannelFragment extends DialogFragment {
     //////////////////////////////////////////////////////////////////////////*/
 
     private void displayChannels(final List<SubscriptionEntity> newSubscriptions) {
-        this.subscriptions = newSubscriptions;
+        subscriptions = new ArrayList<>(newSubscriptions);
         progressBar.setVisibility(View.GONE);
-        if (newSubscriptions.isEmpty()) {
-            emptyView.setVisibility(View.VISIBLE);
-            return;
+        emptyView.setVisibility(subscriptions.isEmpty() ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(subscriptions.isEmpty() ? View.GONE : View.VISIBLE);
+        final RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
         }
-        recyclerView.setVisibility(View.VISIBLE);
-
     }
 
-    private Observer<List<SubscriptionEntity>> getSubscriptionObserver() {
+    private Observer<List<SubscriptionEntity>> getSubscriptionObserver(final long generation) {
         return new Observer<List<SubscriptionEntity>>() {
             @Override
-            public void onSubscribe(@NonNull final Disposable disposable) { }
+            public void onSubscribe(@NonNull final Disposable disposable) {
+                if (generation == selectionGeneration) {
+                    selectionRequest.set(disposable);
+                } else {
+                    disposable.dispose();
+                }
+            }
 
             @Override
             public void onNext(@NonNull final List<SubscriptionEntity> newSubscriptions) {
-                displayChannels(newSubscriptions);
+                if (generation == selectionGeneration && recyclerView != null) {
+                    displayChannels(newSubscriptions);
+                }
             }
 
             @Override
             public void onError(@NonNull final Throwable exception) {
+                if (generation != selectionGeneration || recyclerView == null) {
+                    return;
+                }
                 ErrorUtil.showUiErrorSnackbar(SelectChannelFragment.this,
                         "Loading subscription", exception);
             }
@@ -173,7 +207,13 @@ public class SelectChannelFragment extends DialogFragment {
         public void onBindViewHolder(final SelectChannelItemHolder holder, final int position) {
             final SubscriptionEntity entry = subscriptions.get(position);
             holder.titleView.setText(entry.getName());
-            holder.view.setOnClickListener(view -> clickedItem(position));
+            final List<SubscriptionEntity> boundItems = subscriptions;
+            final long generation = selectionGeneration;
+            holder.view.setOnClickListener(view -> {
+                if (generation == selectionGeneration && boundItems == subscriptions) {
+                    clickedItem(entry);
+                }
+            });
             CoilHelper.INSTANCE.loadAvatar(holder.thumbnailView, entry.getAvatarUrl());
         }
 

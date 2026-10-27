@@ -649,6 +649,8 @@ public final class Player implements PlaybackListener, Listener {
         final boolean samePlayQueue = playQueue != null && playQueue.equalStreamsAndIndex(newQueue);
 
         final boolean freshSelection = intent.getBooleanExtra(FRESH_SELECTION, false);
+        final boolean replaceFailedSource = freshSelection && samePlayQueue
+                && (recoveryFailed || currentMetadata instanceof ExceptionTag);
         if (freshSelection) {
             cancelPlaybackRecovery();
             playbackRecovery.reset();
@@ -668,6 +670,12 @@ public final class Player implements PlaybackListener, Listener {
                 newQueue.setRecovery(newQueue.getIndex(),
                         start == PlayQueueItem.RECOVERY_UNSET ? 0 : start);
             }
+        }
+
+        if (replaceFailedSource) {
+            // A fresh retry must resolve A again, not prepare its old failed silence source.
+            initPlayback(newQueue, playWhenReady);
+            return;
         }
 
         // seek to timestamp if stream is already playing
@@ -1357,6 +1365,12 @@ public final class Player implements PlaybackListener, Listener {
                 changeState(getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED);
                 break;
             case com.google.android.exoplayer2.Player.STATE_ENDED: // 4
+                if (simpleExoPlayer.getMediaItemCount() == 0) {
+                    // A media-session play command can prepare the empty timeline left by
+                    // stop(). No stream ended, so keep its queue position and history intact.
+                    isPrepared = false;
+                    break;
+                }
                 sleepTimer.onItemEnded();
                 changeState(STATE_COMPLETED);
                 saveStreamProgressStateCompleted();
@@ -1400,10 +1414,12 @@ public final class Player implements PlaybackListener, Listener {
         if (exoPlayerIsNull()) {
             return;
         }
+        // Replacing the source can synchronously report the old engine index. Keep the
+        // queue protected until replacement finishes; synchronization selects its item next.
+        simpleExoPlayer.setMediaSource(mediaSource, false);
         if (currentState == STATE_BLOCKED) {
             changeState(STATE_BUFFERING);
         }
-        simpleExoPlayer.setMediaSource(mediaSource, false);
         simpleExoPlayer.prepare();
     }
 
@@ -1682,8 +1698,10 @@ public final class Player implements PlaybackListener, Listener {
 
             if (currentMetadata.getErrors().stream()
                     .anyMatch(AudioOnlyUnavailableException.class::isInstance)) {
-                Toast.makeText(context, R.string.data_saver_audio_unavailable,
-                        Toast.LENGTH_LONG).show();
+                // This is a failed source, not a completed item. Its two-second silence must
+                // never advance an explicit selection to an already queued recommendation.
+                finishPlaybackRecovery(R.string.data_saver_audio_unavailable);
+                return;
             } else if (currentMetadata instanceof ExceptionTag
                     && (recoveryRefreshingSource || currentMetadata.getErrors().stream().anyMatch(
                             FailedMediaSource.FailedMediaSourceException.class::isInstance))) {
@@ -1744,6 +1762,13 @@ public final class Player implements PlaybackListener, Listener {
                     + "discontinuityReason = [" + discontinuityReason + "]");
         }
         if (playQueue == null) {
+            return;
+        }
+
+        if (recoveryCanceled && discontinuityReason == DISCONTINUITY_REASON_REMOVE
+                && simpleExoPlayer.getMediaItemCount() == 0 && !playQueue.isEmpty()) {
+            // MediaSessionConnector clears ExoPlayer's timeline after stop(). That removal
+            // is not a selection of window zero or completion of the queued stream.
             return;
         }
 
@@ -2012,6 +2037,10 @@ public final class Player implements PlaybackListener, Listener {
     }
 
     private void finishPlaybackRecovery() {
+        finishPlaybackRecovery(R.string.playback_recovery_failed);
+    }
+
+    private void finishPlaybackRecovery(@androidx.annotation.StringRes final int message) {
         cancelPlaybackRecovery();
         if (exoPlayerIsNull()) {
             return;
@@ -2032,13 +2061,18 @@ public final class Player implements PlaybackListener, Listener {
                 // Stop below; an unreadable store cannot select another saved file safely.
             }
         }
+        final boolean firstFailure = !recoveryFailed;
+        recoveryFailed = true;
         pause();
         simpleExoPlayer.stop();
         changeState(STATE_PAUSED);
-        if (!recoveryFailed) {
-            recoveryFailed = true;
-            Toast.makeText(context, R.string.playback_recovery_failed, Toast.LENGTH_LONG).show();
+        if (firstFailure) {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show();
         }
+    }
+
+    public boolean hasPlaybackFailure() {
+        return recoveryFailed;
     }
 
     private void createErrorNotification(@NonNull final PlaybackException error) {
@@ -2218,7 +2252,12 @@ public final class Player implements PlaybackListener, Listener {
         recoveryCanceled = false;
         recoveryRefreshingSource = false;
 
-        if (currentState == STATE_COMPLETED) {
+        // A media-session stop clears ExoPlayer's items. Its following play command may
+        // prepare that empty timeline first, reporting ENDED even though the queue's selected
+        // item has not finished. Keep that selection and restore its source below.
+        final boolean missingSelectedSource = simpleExoPlayer.getMediaItemCount() == 0
+                && !playQueue.isEmpty();
+        if (currentState == STATE_COMPLETED && !missingSelectedSource) {
             if (playQueue.getIndex() == 0) {
                 seekToDefault();
             } else {
@@ -2226,7 +2265,7 @@ public final class Player implements PlaybackListener, Listener {
             }
         }
 
-        if (isStopped()) {
+        if (isStopped() || missingSelectedSource) {
             playQueue.setRecovery(playQueue.getIndex(), retryPosition);
             reloadPlayQueueManager();
         }

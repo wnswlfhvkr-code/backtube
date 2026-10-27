@@ -59,7 +59,7 @@ public interface PlaybackResolver extends Resolver<StreamInfo, MediaSource> {
                                                   final Stream stream,
                                                   final boolean resolutionOrBitrateUnknown) {
         // stream info service id
-        final StringBuilder cacheKey = new StringBuilder(info.getServiceId());
+        final StringBuilder cacheKey = new StringBuilder().append(info.getServiceId());
 
         // stream info id
         cacheKey.append(" ");

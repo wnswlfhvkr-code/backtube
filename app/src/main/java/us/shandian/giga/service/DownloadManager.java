@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 
 import us.shandian.giga.get.DownloadMission;
@@ -21,6 +22,7 @@ import us.shandian.giga.get.Mission;
 import us.shandian.giga.get.sqlite.FinishedMissionStore;
 import org.schabi.newpipe.streams.io.StoredDirectoryHelper;
 import org.schabi.newpipe.streams.io.StoredFileHelper;
+import org.schabi.newpipe.download.DownloadNetworkPolicy;
 import us.shandian.giga.util.Utility;
 
 import static org.schabi.newpipe.BuildConfig.DEBUG;
@@ -40,11 +42,27 @@ public class DownloadManager {
         return null;
     }
 
+    public synchronized boolean hasPendingMission(final DownloadMission mission) {
+        return mMissionsPending.contains(mission);
+    }
+
+    public boolean isMobileApprovalRequired(final DownloadMission mission) {
+        return currentNetworkStatus() == NetworkState.MeteredOperating
+                && !mission.mobileDataApproved;
+    }
+
     private boolean canStartMission(DownloadMission mission) {
-        return canDownloadInCurrentNetwork()
+        final NetworkState network = currentNetworkStatus();
+        return network != NetworkState.Unavailable
+                && (network != NetworkState.MeteredOperating
+                || mission.mobileDataApproved)
                 && (!org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
                 || ((mission.running || !hasLiveOfflineWorkers(mission))
-                && org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext)));
+                && offlineNetworkAllowed()));
+    }
+
+    boolean offlineNetworkAllowed() {
+        return org.schabi.newpipe.offline.OfflineDownloads.networkAllowed(offlineContext);
     }
 
     private static boolean hasLiveOfflineWorkers(DownloadMission mission) {
@@ -72,6 +90,8 @@ public class DownloadManager {
     private final FinishedMissionStore mFinishedMissionStore;
 
     private final ArrayList<DownloadMission> mMissionsPending = new ArrayList<>();
+    private IdentityHashMap<DownloadMission, Thread> mOfflineDrainWaiters =
+            new IdentityHashMap<>();
     private final ArrayList<FinishedMission> mMissionsFinished;
 
     private final Handler mHandler;
@@ -80,7 +100,6 @@ public class DownloadManager {
     private NetworkState mLastNetworkStatus = NetworkState.Unavailable;
 
     int mPrefMaxRetry;
-    boolean mPrefMeteredDownloads;
     boolean mPrefQueueLimit;
     private boolean mSelfMissionsControl;
 
@@ -323,19 +342,77 @@ public class DownloadManager {
 
     public void resumeMission(DownloadMission mission) {
         if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
-            if (!mission.running && hasLiveOfflineWorkers(mission)) return;
-            mSelfMissionsControl = true;
-            mission.setEnqueued(true);
-            if (!canStartMission(mission)) return;
+            if (!mission.running && hasLiveOfflineWorkers(mission)) {
+                awaitOfflineWorkers(mission);
+                return;
+            }
         }
+        mSelfMissionsControl = true;
+        mission.setEnqueued(true);
+        if (!canStartMission(mission)) return;
         if (!mission.running) {
             mission.start();
         }
     }
 
+    public void approveMobileDataAndResume(final DownloadMission mission) {
+        mission.setMobileDataApproved(true);
+        resumeMission(mission);
+    }
+
+    /** Wait outside the service thread for interrupted workers before retrying the queue. */
+    private synchronized void awaitOfflineWorkers(final DownloadMission mission) {
+        if (mOfflineDrainWaiters == null) mOfflineDrainWaiters = new IdentityHashMap<>();
+        if (mOfflineDrainWaiters.containsKey(mission)) return;
+        final Thread initializer = mission.init;
+        final Thread[] workers = mission.threads == null ? new Thread[0] : mission.threads.clone();
+        final Thread waiter = new Thread(() -> {
+            try {
+                if (initializer != null && initializer != Thread.currentThread()) {
+                    initializer.join();
+                }
+                for (final Thread worker : workers) {
+                    if (worker != null && worker != Thread.currentThread()) worker.join();
+                }
+            } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            final Thread owner = Thread.currentThread();
+            final Runnable retry = () -> {
+                synchronized (DownloadManager.this) {
+                    if (mOfflineDrainWaiters.get(mission) != owner) return;
+                    mOfflineDrainWaiters.remove(mission);
+                    if (mSelfMissionsControl && mission.enqueued
+                            && mMissionsPending.contains(mission)) runMissions();
+                }
+            };
+            if (mHandler == null || !mHandler.post(retry)) {
+                synchronized (DownloadManager.this) {
+                    if (mOfflineDrainWaiters.get(mission) == owner) {
+                        mOfflineDrainWaiters.remove(mission);
+                    }
+                }
+            }
+        }, "offline-worker-drain");
+        waiter.setDaemon(true);
+        mOfflineDrainWaiters.put(mission, waiter);
+        waiter.start();
+    }
+
+    private synchronized void cancelOfflineWorkerWaiter(final DownloadMission mission) {
+        if (mOfflineDrainWaiters == null) return;
+        final Thread waiter = mOfflineDrainWaiters.remove(mission);
+        if (waiter != null) waiter.interrupt();
+    }
+
     public void pauseMission(DownloadMission mission) {
+        final boolean offline = org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission);
+        if (offline) {
+            cancelOfflineWorkerWaiter(mission);
+        }
+        mission.setEnqueued(false);
         if (mission.running) {
-            mission.setEnqueued(false);
             mission.pause();
         }
     }
@@ -353,6 +430,7 @@ public class DownloadManager {
                 return;
             }
             if (mission instanceof DownloadMission) {
+                cancelOfflineWorkerWaiter((DownloadMission) mission);
                 mMissionsPending.remove(mission);
             } else if (mission instanceof FinishedMission) {
                 mMissionsFinished.remove(mission);
@@ -371,6 +449,7 @@ public class DownloadManager {
             if (mission == null) return;
 
             if (mission instanceof DownloadMission) {
+                cancelOfflineWorkerWaiter((DownloadMission) mission);
                 mMissionsPending.remove(mission);
             } else if (mission instanceof FinishedMission) {
                 mMissionsFinished.remove(mission);
@@ -475,15 +554,18 @@ public class DownloadManager {
 
     public void pauseAllMissions(boolean force) {
         synchronized (this) {
+            if (mOfflineDrainWaiters != null) {
+                for (final Thread waiter : mOfflineDrainWaiters.values()) waiter.interrupt();
+                mOfflineDrainWaiters.clear();
+            }
             for (DownloadMission mission : mMissionsPending) {
+                if (!force) {
+                    mission.setEnqueued(false);
+                }
                 if (!mission.running || mission.isPsRunning() || mission.isFinished()) continue;
 
-                if (force) {
-                    // avoid waiting for threads
-                    mission.init = null;
-                    mission.threads = new Thread[0];
-                }
-
+                // pause() signals the retained workers without joining them.
+                // Clearing their references first would skip those interrupts.
                 mission.pause();
             }
         }
@@ -494,11 +576,9 @@ public class DownloadManager {
             mSelfMissionsControl = true;
             for (DownloadMission mission : mMissionsPending) {
                 if (mission.running || mission.isCorrupt()) continue;
-                if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)) {
-                    mission.setEnqueued(true);
-                    if (!canStartMission(mission)
-                            || (mPrefQueueLimit && getRunningMissionsCount() > 0)) continue;
-                }
+                mission.setEnqueued(true);
+                if (!canStartMission(mission)
+                        || (mPrefQueueLimit && getRunningMissionsCount() > 0)) continue;
                 mission.start();
             }
         }
@@ -586,8 +666,18 @@ public class DownloadManager {
     }
 
     private boolean canDownloadInCurrentNetwork() {
-        if (mLastNetworkStatus == NetworkState.Unavailable) return false;
-        return !(mPrefMeteredDownloads && mLastNetworkStatus == NetworkState.MeteredOperating);
+        return currentNetworkStatus() != NetworkState.Unavailable;
+    }
+
+    NetworkState currentNetworkStatus() {
+        if (offlineContext != null && offlineContext.getSystemService(
+                Context.CONNECTIVITY_SERVICE) != null) {
+            final DownloadNetworkPolicy.Type type = DownloadNetworkPolicy.current(offlineContext);
+            if (type == DownloadNetworkPolicy.Type.WIFI) return NetworkState.Operating;
+            if (type == DownloadNetworkPolicy.Type.MOBILE) return NetworkState.MeteredOperating;
+            return NetworkState.Unavailable;
+        }
+        return mLastNetworkStatus;
     }
 
     void handleConnectivityState(NetworkState currentStatus, boolean updateOnly) {
@@ -595,8 +685,7 @@ public class DownloadManager {
         if (currentStatus == NetworkState.Unavailable) {
             synchronized (this) {
                 for (DownloadMission mission : mMissionsPending) {
-                    if (org.schabi.newpipe.offline.OfflineDownloads.isManaged(mission)
-                            && mission.running) mission.pause();
+                    if (mission.running) mission.pause();
                 }
             }
             return;
@@ -606,13 +695,11 @@ public class DownloadManager {
             return;// don't touch anything without the user interaction
         }
 
-        boolean isMetered = mPrefMeteredDownloads && mLastNetworkStatus == NetworkState.MeteredOperating;
-
         synchronized (this) {
             for (DownloadMission mission : mMissionsPending) {
                 if (mission.isCorrupt() || mission.isPsRunning()) continue;
 
-                boolean blocked = isMetered || !canStartMission(mission);
+                boolean blocked = !canStartMission(mission);
                 if (mission.running && blocked) {
                     mission.pause();
                 }

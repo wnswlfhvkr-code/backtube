@@ -234,12 +234,42 @@ public class ActiveSessionResumeTest {
                 "recoveryRefreshingSource", "recoveryReloading")) {
             set(flag, true);
         }
-        dispatch();
+        dispatchWithNewEngine();
+        assertTrue("failed source must allocate the incoming queue", get("playQueue") == requested);
+        assertEquals(0, position);
+        clearInvocations(player);
         player.onPlayerError(temporaryError());
         scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
         final PlayQueue active = (PlayQueue) get("playQueue");
         assertEquals(0, active.getItem().getRecoveryPosition());
         verify(player, times(1)).reloadPlayQueueManager();
+    }
+
+    private void dispatchWithNewEngine() throws Exception {
+        final SharedPreferences prefs = mock(SharedPreferences.class);
+        when(prefs.getBoolean(any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(true);
+        when(player.getPrefs()).thenReturn(prefs);
+        when(player.getContext()).thenReturn(mock(Context.class));
+        doNothing().when((PlayerUiList) get("UIs")).call(any());
+        try (MockedConstruction<ExoPlayer.Builder> builders = mockConstruction(
+                ExoPlayer.Builder.class,
+                org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Mockito.RETURNS_SELF),
+                (builder, ignored) -> when(builder.build()).thenAnswer(call -> {
+                    // A newly allocated engine cannot retain the previous engine's 45s position.
+                    position = 0;
+                    return exo;
+                }));
+             MockedConstruction<AudioReactor> audio = mockConstruction(AudioReactor.class);
+             MockedStatic<PlayerHelper> helpers = mockStatic(PlayerHelper.class);
+             MockedStatic<PreferenceManager> settings = mockStatic(PreferenceManager.class);
+             MockedStatic<ContextCompat> contexts = mockStatic(ContextCompat.class)) {
+            helpers.when(() -> PlayerHelper.retrievePlaybackParametersFromPrefs(player))
+                    .thenReturn(new com.google.android.exoplayer2.PlaybackParameters(1));
+            settings.when(() -> PreferenceManager.getDefaultSharedPreferences(any()))
+                    .thenReturn(prefs);
+            player.handleIntent(intent);
+            assertEquals("failed source engine was not replaced", 1, builders.constructed().size());
+        }
     }
 
     @Test

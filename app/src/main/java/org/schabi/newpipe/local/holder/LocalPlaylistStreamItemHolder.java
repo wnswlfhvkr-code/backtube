@@ -80,6 +80,7 @@ public class LocalPlaylistStreamItemHolder extends LocalItemHolder {
             }
         } else {
             itemDurationView.setVisibility(View.GONE);
+            itemProgressView.setVisibility(View.GONE);
         }
 
         // Default thumbnail is shown on error, while loading and if the url is empty

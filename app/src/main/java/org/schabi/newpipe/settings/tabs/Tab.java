@@ -600,7 +600,7 @@ public abstract class Tab {
             playlistServiceId = jsonObject.getInt(JSON_PLAYLIST_SERVICE_ID_KEY, -1);
             playlistUrl = jsonObject.getString(JSON_PLAYLIST_URL_KEY, NO_URL);
             playlistName = jsonObject.getString(JSON_PLAYLIST_NAME_KEY, NO_NAME);
-            playlistId = jsonObject.getInt(JSON_PLAYLIST_ID_KEY, -1);
+            playlistId = jsonObject.getLong(JSON_PLAYLIST_ID_KEY, -1);
             playlistType = LocalItemType.valueOf(
                     jsonObject.getString(JSON_PLAYLIST_TYPE_KEY,
                             LocalItemType.PLAYLIST_LOCAL_ITEM.toString())

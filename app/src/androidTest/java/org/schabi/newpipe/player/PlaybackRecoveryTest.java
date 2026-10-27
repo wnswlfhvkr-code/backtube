@@ -356,6 +356,7 @@ public class PlaybackRecoveryTest {
     @Test
     public void pauseAfterMetadataRequestStartedCannotResumeFromLateResult() throws Exception {
         final int before = loads.get();
+        final long[] pausedPosition = {0};
         onMain(() -> {
             delayedMetadata = io.reactivex.rxjava3.subjects.SingleSubject.create();
             player.play();
@@ -364,6 +365,10 @@ public class PlaybackRecoveryTest {
         await(() -> loads.get() > before && delayedMetadata.hasObservers());
         onMain(() -> {
             player.pause();
+            // Preserve the position at the user's pause. The preceding real play/stop
+            // can settle at a later position than setup's initial 42-second seek.
+            pausedPosition[0] = player.getExoPlayer().getCurrentPosition();
+            assertTrue(pausedPosition[0] >= 42000 && pausedPosition[0] < 45000);
             delayedMetadata.onSuccess(firstInfo);
         });
         Thread.sleep(500);
@@ -371,15 +376,15 @@ public class PlaybackRecoveryTest {
             assertEquals(com.google.android.exoplayer2.Player.STATE_IDLE,
                     player.getExoPlayer().getPlaybackState());
             assertFalse(player.getPlayWhenReady());
-            assertEquals(42000, player.getExoPlayer().getCurrentPosition());
+            assertEquals(pausedPosition[0], player.getExoPlayer().getCurrentPosition());
             delayedMetadata = null;
             player.play();
         });
         await(player::isPlaying);
         onMain(() -> {
             assertEquals(0, player.getPlayQueue().getIndex());
-            assertTrue(player.getExoPlayer().getCurrentPosition() >= 42000);
-            assertTrue(player.getExoPlayer().getCurrentPosition() < 45000);
+            assertTrue(player.getExoPlayer().getCurrentPosition() >= pausedPosition[0]);
+            assertTrue(player.getExoPlayer().getCurrentPosition() < pausedPosition[0] + 3000);
         });
     }
 

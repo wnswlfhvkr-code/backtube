@@ -558,8 +558,21 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         while (redirectCount++ <= MAX_REDIRECTS) {
             final HttpURLConnection httpURLConnection = makeConnection(url, httpMethod, httpBody,
                     position, length, allowGzip, false, dataSpecToUse.httpRequestHeaders);
-            final int httpURLConnectionResponseCode = httpURLConnection.getResponseCode();
-            final String location = httpURLConnection.getHeaderField("Location");
+            final int httpURLConnectionResponseCode;
+            final String location;
+            try {
+                httpURLConnectionResponseCode = httpURLConnection.getResponseCode();
+                location = httpURLConnection.getHeaderField("Location");
+            } catch (final IOException | RuntimeException error) {
+                try {
+                    httpURLConnection.disconnect();
+                } catch (final RuntimeException cleanupError) {
+                    if (cleanupError != error) {
+                        error.addSuppressed(cleanupError);
+                    }
+                }
+                throw error;
+            }
             if ((httpMethod == DataSpec.HTTP_METHOD_GET || httpMethod == DataSpec.HTTP_METHOD_HEAD)
                     && (httpURLConnectionResponseCode == HttpURLConnection.HTTP_MULT_CHOICE
                     || httpURLConnectionResponseCode == HttpURLConnection.HTTP_MOVED_PERM
@@ -640,68 +653,79 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         }
 
         final HttpURLConnection httpURLConnection = openConnection(new URL(requestUrl));
-        httpURLConnection.setConnectTimeout(connectTimeoutMillis);
-        httpURLConnection.setReadTimeout(readTimeoutMillis);
+        try {
+            httpURLConnection.setConnectTimeout(connectTimeoutMillis);
+            httpURLConnection.setReadTimeout(readTimeoutMillis);
 
-        final Map<String, String> requestHeaders = new HashMap<>();
-        if (defaultRequestProperties != null) {
-            requestHeaders.putAll(defaultRequestProperties.getSnapshot());
-        }
-        requestHeaders.putAll(requestProperties.getSnapshot());
-        requestHeaders.putAll(requestParameters);
-
-        for (final Map.Entry<String, String> property : requestHeaders.entrySet()) {
-            httpURLConnection.setRequestProperty(property.getKey(), property.getValue());
-        }
-
-        if (!rangeParameterEnabled) {
-            final String rangeHeader = buildRangeRequestHeader(position, length);
-            if (rangeHeader != null) {
-                httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
+            final Map<String, String> requestHeaders = new HashMap<>();
+            if (defaultRequestProperties != null) {
+                requestHeaders.putAll(defaultRequestProperties.getSnapshot());
             }
+            requestHeaders.putAll(requestProperties.getSnapshot());
+            requestHeaders.putAll(requestParameters);
+
+            for (final Map.Entry<String, String> property : requestHeaders.entrySet()) {
+                httpURLConnection.setRequestProperty(property.getKey(), property.getValue());
+            }
+
+            if (!rangeParameterEnabled) {
+                final String rangeHeader = buildRangeRequestHeader(position, length);
+                if (rangeHeader != null) {
+                    httpURLConnection.setRequestProperty(HttpHeaders.RANGE, rangeHeader);
+                }
+            }
+
+            if (isWebStreamingUrl(requestUrl)
+                    || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
+                httpURLConnection.setRequestProperty(HttpHeaders.ORIGIN, YOUTUBE_BASE_URL);
+                httpURLConnection.setRequestProperty(HttpHeaders.REFERER, YOUTUBE_BASE_URL);
+                httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
+                httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_MODE, "cors");
+                httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_SITE, "cross-site");
+            }
+
+            httpURLConnection.setRequestProperty(HttpHeaders.TE, "trailers");
+
+            if (isAndroidStreamingUrl(requestUrl)) {
+                // Improvement which may be done: find the content country used to request YouTube
+                // contents to add it in the user agent instead of using the default
+                httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
+                        getAndroidUserAgent(null));
+            } else if (isIosStreamingUrl(requestUrl)) {
+                httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
+                        getIosUserAgent(null));
+            } else if (isVisionOsStreamingUrl(requestUrl)) {
+                httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
+                        getVisionOsUserAgent(null));
+            } else {
+                // non-mobile user agent
+                httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
+                        DownloaderImpl.USER_AGENT);
+            }
+
+            httpURLConnection.setRequestProperty(HttpHeaders.ACCEPT_ENCODING,
+                    allowGzip ? "gzip" : "identity");
+            httpURLConnection.setInstanceFollowRedirects(followRedirects);
+            // Most clients use POST requests to fetch contents
+            httpURLConnection.setRequestMethod("POST");
+            httpURLConnection.setDoOutput(true);
+            httpURLConnection.setFixedLengthStreamingMode(POST_BODY.length);
+            httpURLConnection.connect();
+            try (OutputStream output = httpURLConnection.getOutputStream()) {
+                output.write(POST_BODY);
+            }
+            return httpURLConnection;
+        } catch (final IOException | RuntimeException error) {
+            // The caller cannot close this connection until setup returns it.
+            try {
+                httpURLConnection.disconnect();
+            } catch (final RuntimeException cleanupError) {
+                if (cleanupError != error) {
+                    error.addSuppressed(cleanupError);
+                }
+            }
+            throw error;
         }
-
-        if (isWebStreamingUrl(requestUrl)
-                || isWebEmbeddedPlayerStreamingUrl(requestUrl)) {
-            httpURLConnection.setRequestProperty(HttpHeaders.ORIGIN, YOUTUBE_BASE_URL);
-            httpURLConnection.setRequestProperty(HttpHeaders.REFERER, YOUTUBE_BASE_URL);
-            httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_DEST, "empty");
-            httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_MODE, "cors");
-            httpURLConnection.setRequestProperty(HttpHeaders.SEC_FETCH_SITE, "cross-site");
-        }
-
-        httpURLConnection.setRequestProperty(HttpHeaders.TE, "trailers");
-
-        if (isAndroidStreamingUrl(requestUrl)) {
-            // Improvement which may be done: find the content country used to request YouTube
-            // contents to add it in the user agent instead of using the default
-            httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
-                    getAndroidUserAgent(null));
-        } else if (isIosStreamingUrl(requestUrl)) {
-            httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
-                    getIosUserAgent(null));
-        } else if (isVisionOsStreamingUrl(requestUrl)) {
-            httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT,
-                    getVisionOsUserAgent(null));
-        } else {
-            // non-mobile user agent
-            httpURLConnection.setRequestProperty(HttpHeaders.USER_AGENT, DownloaderImpl.USER_AGENT);
-        }
-
-        httpURLConnection.setRequestProperty(HttpHeaders.ACCEPT_ENCODING,
-                allowGzip ? "gzip" : "identity");
-        httpURLConnection.setInstanceFollowRedirects(followRedirects);
-        // Most clients use POST requests to fetch contents
-        httpURLConnection.setRequestMethod("POST");
-        httpURLConnection.setDoOutput(true);
-        httpURLConnection.setFixedLengthStreamingMode(POST_BODY.length);
-        httpURLConnection.connect();
-
-        final OutputStream os = httpURLConnection.getOutputStream();
-        os.write(POST_BODY);
-        os.close();
-
-        return httpURLConnection;
     }
 
     /**

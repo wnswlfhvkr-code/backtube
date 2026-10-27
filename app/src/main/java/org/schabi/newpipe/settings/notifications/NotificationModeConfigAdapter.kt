@@ -41,12 +41,16 @@ class NotificationModeConfigAdapter(
     ) : RecyclerView.ViewHolder(itemBinding.root) {
         init {
             itemView.setOnClickListener {
+                val position = bindingAdapterPosition
+                if (position == RecyclerView.NO_POSITION) {
+                    return@setOnClickListener
+                }
                 val mode = if (itemBinding.root.isChecked) {
                     NotificationMode.DISABLED
                 } else {
                     NotificationMode.ENABLED
                 }
-                listener.onModeChange(bindingAdapterPosition, mode)
+                listener.onModeChange(position, mode)
             }
         }
 

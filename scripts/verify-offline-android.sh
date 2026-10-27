@@ -18,6 +18,14 @@ class_name=org.schabi.newpipe.player.PersonalPlaybackTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 api_level=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+# This app declines SystemUI's media-resumption browser root. On API 35 the emulator may
+# nevertheless probe it and send STOP during an unrelated saved-session assertion. Disable only
+# that unsupported SystemUI probe in the test emulator; connected tests still exercise
+# media-session stop/play explicitly.
+if (( api_level >= 33 )); then
+    adb shell settings put secure qs_media_resumption 0
+    test "$(adb shell settings get secure qs_media_resumption | tr -d '\r')" = 0
+fi
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
@@ -84,5 +92,38 @@ run_phase popup-policy -e class "$navigation_class#popupExpansionKeepsPortraitPo
 for orientation in portrait landscape portrait-locked; do
     adb pull "/sdcard/Android/data/$app_id/files/personal-playback-test/popup-expanded-${orientation}.png" \
         "$output_dir/popup-expanded-${orientation}.png"
+done
+# Explicit selection must win on the first playback in a genuinely new process. The online
+# entry path uses cached synthetic metadata and owned WAV media, never a provider download.
+first_selection_class=org.schabi.newpipe.player.FirstPlaybackSelectionTest
+for path in online video audio; do
+    for prior in none saved restored; do
+        for phase in seed verify; do
+            adb shell am force-stop "$app_id"
+            run_phase "first-selection-$path-$prior-$phase" \
+                -e first_selection_path "$path" -e first_selection_prior "$prior" \
+                -e first_selection_phase "$phase" \
+                -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
+        done
+    done
+done
+# Related B must not displace the explicit first A, but must start after A really completes.
+for prior in none saved restored; do
+    for phase in seed verify; do
+        adb shell am force-stop "$app_id"
+        run_phase "first-selection-auto-next-$prior-$phase" \
+            -e first_selection_path online -e first_selection_prior "$prior" \
+            -e first_selection_phase "$phase" -e first_selection_auto_next true \
+            -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
+    done
+done
+# A failed initial source must retain A for retry instead of starting its related B.
+for phase in seed verify; do
+    adb shell am force-stop "$app_id"
+    run_phase "first-selection-source-failure-$phase" \
+        -e first_selection_path online -e first_selection_prior none \
+        -e first_selection_phase "$phase" -e first_selection_auto_next true \
+        -e first_selection_source_failure true \
+        -e class "$first_selection_class#firstSelectionAcrossProcessRestart"
 done
 # Leave networking disabled for the subsequent local connected suite.

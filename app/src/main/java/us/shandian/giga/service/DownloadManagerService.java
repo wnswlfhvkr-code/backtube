@@ -39,6 +39,7 @@ import androidx.core.content.IntentCompat;
 import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.download.DownloadNetworkPolicy;
 import org.schabi.newpipe.download.DownloadActivity;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.player.helper.LockManager;
@@ -81,6 +82,8 @@ public class DownloadManagerService extends Service {
     private static final String EXTRA_STORAGE_TAG = "DownloadManagerService.extra.storageTag";
     private static final String EXTRA_RECOVERY_INFO = "DownloadManagerService.extra.recoveryInfo";
     private static final String EXTRA_STREAM_INFO = "DownloadManagerService.extra.streamInfo";
+    private static final String EXTRA_MOBILE_DATA_APPROVED =
+            "DownloadManagerService.extra.mobileDataApproved";
 
     private static final String ACTION_RESET_DOWNLOAD_FINISHED = APPLICATION_ID + ".reset_download_finished";
     private static final String ACTION_OPEN_DOWNLOADS_FINISHED = APPLICATION_ID + ".open_downloads_finished";
@@ -187,7 +190,6 @@ public class DownloadManagerService extends Service {
 
         mPrefs.registerOnSharedPreferenceChangeListener(mPrefChangeListener);
 
-        handlePreferenceChange(mPrefs, getString(R.string.downloads_cross_network));
         handlePreferenceChange(mPrefs, getString(R.string.downloads_maximum_retry));
         handlePreferenceChange(mPrefs, getString(R.string.downloads_queue_limit));
 
@@ -300,8 +302,12 @@ public class DownloadManagerService extends Service {
                 break;
         }
 
-        if (msg.what != MESSAGE_ERROR)
-            mFailedDownloads.remove(mFailedDownloads.indexOfValue(mission));
+        if (msg.what != MESSAGE_ERROR) {
+            final int failedIndex = mFailedDownloads.indexOfValue(mission);
+            if (failedIndex >= 0) {
+                mFailedDownloads.removeAt(failedIndex);
+            }
+        }
 
         for (Callback observer : mEchoObservers)
             observer.handleMessage(msg);
@@ -310,23 +316,10 @@ public class DownloadManagerService extends Service {
     }
 
     private void handleConnectivityState(boolean updateOnly) {
-        NetworkInfo info = mConnectivityManager.getActiveNetworkInfo();
-        NetworkState status;
-
-        if (info == null) {
-            status = NetworkState.Unavailable;
-            Log.i(TAG, "Active network [connectivity is unavailable]");
-        } else {
-            boolean connected = info.isConnected();
-            boolean metered = mConnectivityManager.isActiveNetworkMetered();
-
-            if (connected)
-                status = metered ? NetworkState.MeteredOperating : NetworkState.Operating;
-            else
-                status = NetworkState.Unavailable;
-
-            Log.i(TAG, "Active network [connected=" + connected + " metered=" + metered + "] " + info.toString());
-        }
+        final DownloadNetworkPolicy.Type type = DownloadNetworkPolicy.current(this);
+        final NetworkState status = type == DownloadNetworkPolicy.Type.WIFI
+                ? NetworkState.Operating : type == DownloadNetworkPolicy.Type.MOBILE
+                ? NetworkState.MeteredOperating : NetworkState.Unavailable;
 
         if (mManager == null) return;// avoid race-conditions while the service is starting
         mManager.handleConnectivityState(status, updateOnly);
@@ -341,10 +334,6 @@ public class DownloadManagerService extends Service {
                 mManager.mPrefMaxRetry = 0;
             }
             mManager.updateMaximumAttempts();
-        } else if (getString(R.string.downloads_cross_network).equals(key)) {
-            mManager.mPrefMeteredDownloads = prefs.getBoolean(key, false);
-        } else if (org.schabi.newpipe.offline.OfflineDownloads.WIFI_ONLY.equals(key)) {
-            handleConnectivityState(false);
         } else if (getString(R.string.downloads_queue_limit).equals(key)) {
             mManager.mPrefQueueLimit = prefs.getBoolean(key, true);
         } else if (getString(R.string.download_path_video_key).equals(key)) {
@@ -386,6 +375,15 @@ public class DownloadManagerService extends Service {
                                     char kind, int threads, StreamInfo streamInfo, String psName,
                                     String[] psArgs, long nearLength,
                                     ArrayList<MissionRecoveryInfo> recoveryInfo) {
+        startMission(context, urls, storage, kind, threads, streamInfo, psName, psArgs,
+                nearLength, recoveryInfo, false);
+    }
+
+    public static void startMission(Context context, String[] urls, StoredFileHelper storage,
+                                    char kind, int threads, StreamInfo streamInfo, String psName,
+                                    String[] psArgs, long nearLength,
+                                    ArrayList<MissionRecoveryInfo> recoveryInfo,
+                                    boolean mobileDataApproved) {
         final Intent intent = new Intent(context, DownloadManagerService.class)
                 .setAction(Intent.ACTION_RUN)
                 .putExtra(EXTRA_URLS, urls)
@@ -398,7 +396,8 @@ public class DownloadManagerService extends Service {
                 .putExtra(EXTRA_PARENT_PATH, storage.getParentUri())
                 .putExtra(EXTRA_PATH, storage.getUri())
                 .putExtra(EXTRA_STORAGE_TAG, storage.getTag())
-                .putExtra(EXTRA_STREAM_INFO, streamInfo);
+                .putExtra(EXTRA_STREAM_INFO, streamInfo)
+                .putExtra(EXTRA_MOBILE_DATA_APPROVED, mobileDataApproved);
 
         context.startService(intent);
     }
@@ -432,6 +431,7 @@ public class DownloadManagerService extends Service {
             ps = Postprocessing.getAlgorithm(psName, psArgs, streamInfo);
 
         final DownloadMission mission = new DownloadMission(urls, storage, kind, ps);
+        mission.mobileDataApproved = intent.getBooleanExtra(EXTRA_MOBILE_DATA_APPROVED, false);
         mission.threadCount = threads;
         mission.source = streamInfo.getUrl();
         mission.nearLength = nearLength;

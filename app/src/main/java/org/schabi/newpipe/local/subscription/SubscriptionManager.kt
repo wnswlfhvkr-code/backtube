@@ -5,6 +5,8 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Flowable
 import io.reactivex.rxjava3.schedulers.Schedulers
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import org.schabi.newpipe.NewPipeDatabase
 import org.schabi.newpipe.database.feed.model.FeedGroupEntity
 import org.schabi.newpipe.database.stream.model.StreamEntity
@@ -23,6 +25,13 @@ class SubscriptionManager(context: Context) {
     private val database = NewPipeDatabase.getInstance(context)
     private val subscriptionTable = database.subscriptionDAO()
     private val feedDatabaseManager = FeedDatabaseManager(context)
+
+    companion object {
+        // Channel and settings screens own different managers but can update the same channel.
+        // Retain one sequence per touched channel for this process so delayed work cannot revive
+        // an older request after a newer one completes.
+        private val notificationModeRequests = ConcurrentHashMap<Pair<Int, String>, AtomicLong>()
+    }
 
     fun subscriptionTable(): SubscriptionDAO = subscriptionTable
     fun subscriptions() = subscriptionTable.getAll()
@@ -79,15 +88,31 @@ class SubscriptionManager(context: Context) {
         }
 
     fun updateNotificationMode(serviceId: Int, url: String, @NotificationMode mode: Int): Completable {
+        // The UI can issue a newer request while an older channel fetch is still pending.
+        // Assign the order at the call site, before callers schedule subscriptions on IO.
+        val sequence = notificationModeRequests.getOrPut(serviceId to url) { AtomicLong() }
+        val requestId = synchronized(sequence) { sequence.incrementAndGet() }
         return subscriptionTable().getSubscription(serviceId, url)
             .flatMapCompletable { entity: SubscriptionEntity ->
-                Completable.fromAction {
-                    entity.notificationMode = mode
-                    subscriptionTable().update(entity)
-                }.apply {
-                    if (mode != NotificationMode.DISABLED) {
-                        // notifications have just been enabled, mark all streams as "old"
-                        andThen(rememberAllStreams(entity))
+                if (sequence.get() != requestId) {
+                    Completable.complete()
+                } else {
+                    val update = Completable.fromAction {
+                        synchronized(sequence) {
+                            if (sequence.get() == requestId) {
+                                // A feed refresh can change other columns during the baseline
+                                // fetch. Update only this column, not the stale entity snapshot.
+                                subscriptionTable().updateNotificationMode(serviceId, url, mode)
+                            }
+                        }
+                    }
+                    if (mode != NotificationMode.DISABLED &&
+                        entity.notificationMode == NotificationMode.DISABLED
+                    ) {
+                        // Publish the new mode only after existing streams have been remembered.
+                        rememberAllStreams(entity).andThen(update)
+                    } else {
+                        update
                     }
                 }
             }

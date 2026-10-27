@@ -39,7 +39,9 @@ public class DownloadRunnableFallback extends Thread {
             try {
                 if (mIs != null) mIs.close();
             } finally {
-                mConn.disconnect();
+                if (mConn != null) {
+                    mConn.disconnect();
+                }
             }
         } catch (IOException e) {
             // nothing to do

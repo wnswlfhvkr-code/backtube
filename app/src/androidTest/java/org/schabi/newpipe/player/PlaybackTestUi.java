@@ -316,19 +316,23 @@ final class PlaybackTestUi {
     private static void captureDetailTimer(final Context context,
                                           final Supplier<MainActivity> activity,
                                           final String name) throws IOException {
-        revealDetailTimer(activity);
-        captureScreen(context, name);
-        assertTrue("timer left the viewport during screenshot capture",
-                readOnMain(() -> detailTimerBounds(activity.get(), false)) != null);
+        // Rotation/layout can move the scroll position while the screenshot's settling delay
+        // runs. Require the timer in the viewport at capture time, after that delay.
+        captureScreen(context, name, () -> revealDetailTimer(activity));
     }
 
     private static Rect revealDetailTimer(final Supplier<MainActivity> activity) {
-        awaitUi(() -> detailTimerBounds(activity.get(), true) != null,
-                "detail timer was not fully visible inside the viewport");
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        final Rect settled = readOnMain(() -> detailTimerBounds(activity.get(), false));
-        assertTrue("timer moved out of view before interaction", settled != null);
-        return settled;
+        final long deadline = SystemClock.uptimeMillis() + 8000;
+        do {
+            readOnMain(() -> detailTimerBounds(activity.get(), true));
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            final Rect settled = readOnMain(() -> detailTimerBounds(activity.get(), false));
+            if (settled != null) {
+                return settled;
+            }
+            SystemClock.sleep(50);
+        } while (SystemClock.uptimeMillis() < deadline);
+        throw new AssertionError("detail timer was not visible after layout settled");
     }
 
     private static Rect detailTimerBounds(final MainActivity activity, final boolean scroll) {
@@ -408,12 +412,23 @@ final class PlaybackTestUi {
     }
 
     static void captureScreen(final Context context, final String name) throws IOException {
+        captureScreen(context, name, null);
+    }
+
+    private static void captureScreen(final Context context, final String name,
+                                      final Supplier<Rect> requiredBounds) throws IOException {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         // Surface rotation/dialog animations can outlive the activity's idle queue.
         SystemClock.sleep(800);
+        final Rect visibleBeforeCapture = requiredBounds == null ? null : requiredBounds.get();
         final Bitmap screenshot = InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation().takeScreenshot();
         assertTrue("could not capture screen", screenshot != null);
+        if (visibleBeforeCapture != null) {
+            assertTrue("timer was outside the screenshot at capture time",
+                    new Rect(0, 0, screenshot.getWidth(), screenshot.getHeight())
+                            .contains(visibleBeforeCapture));
+        }
         final File externalFiles = context.getExternalFilesDir(null);
         assertTrue("external files directory was unavailable", externalFiles != null);
         final File directory = new File(externalFiles, "personal-playback-test");

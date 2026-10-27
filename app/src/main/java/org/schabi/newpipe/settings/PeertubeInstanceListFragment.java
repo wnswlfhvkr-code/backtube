@@ -122,6 +122,9 @@ public class PeertubeInstanceListFragment extends Fragment {
     @Override
     public void onDestroyView() {
         binding = null;
+        if (disposables != null) {
+            disposables.clear();
+        }
         super.onDestroyView();
     }
 
@@ -200,21 +203,31 @@ public class PeertubeInstanceListFragment extends Fragment {
     }
 
     private void addInstance(final String url) {
+        final FragmentInstanceListBinding requestBinding = binding;
+        if (requestBinding == null) {
+            return;
+        }
         final String cleanUrl = cleanUrl(url);
         if (cleanUrl == null) {
             return;
         }
-        binding.loadingProgressBar.setVisibility(View.VISIBLE);
+        requestBinding.loadingProgressBar.setVisibility(View.VISIBLE);
         final Disposable disposable = Single.fromCallable(() -> {
             final PeertubeInstance instance = new PeertubeInstance(cleanUrl);
             instance.fetchInstanceMetaData();
             return instance;
         }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
                 .subscribe((instance) -> {
-                    binding.loadingProgressBar.setVisibility(View.GONE);
+                    if (binding != requestBinding) {
+                        return;
+                    }
+                    requestBinding.loadingProgressBar.setVisibility(View.GONE);
                     add(instance);
                 }, e -> {
-                    binding.loadingProgressBar.setVisibility(View.GONE);
+                    if (binding != requestBinding) {
+                        return;
+                    }
+                    requestBinding.loadingProgressBar.setVisibility(View.GONE);
                     Toast.makeText(getActivity(), R.string.peertube_instance_add_fail,
                             Toast.LENGTH_SHORT).show();
                 });
