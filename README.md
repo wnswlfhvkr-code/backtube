@@ -34,10 +34,10 @@
 JDK 21, Android SDK가 필요합니다. `ANDROID_HOME`에 SDK 경로를 지정한 뒤 저장소 루트에서 실행합니다.
 
 ```powershell
-.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionNameSuffix=-backtube.9' '-DversionCodeOverride=1023' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
+.\gradlew.bat :app:assembleRelease '-DpackageSuffix=.personal' '-DversionCodeOverride=1040' '-DskipFormatKtlint' '-Pandroid.overridePathCheck=true' --console=plain
 ```
 
-결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 배포에는 개인 서명키로 서명해야 합니다. 기존 개인용 설치와 같은 `org.schabi.newpipe.personal` 패키지를 유지했으며 같은 키로 서명하면 앱 삭제 없이 업데이트할 수 있습니다. 개인 키와 암호는 저장소에 포함하지 않습니다.
+현재 소스의 서명 전 결과는 `app/build/outputs/apk/release/app-release-unsigned.apk`입니다. 패키지는 `org.schabi.newpipe.personal`, 버전코드는 1040, 버전 이름은 `0.29.1`입니다. 설치 가능한 개인용 업데이트로 만들려면 기존 v9와 동일한 키로 서명해야 합니다. 개인 키와 암호는 저장소에 포함하지 않습니다. [1040 소스·검증 기록](docs/verification/backtube-1040-main-integration-2026-10-27.md)
 
 생성 WAV·합성 메타데이터를 이용해 재생 정책과 회귀 동작을 검증합니다. 실제 YouTube 네트워크 재생, 갤럭시 화면 꺼짐, 데이터 절감량은 별도 실측 대상입니다. 임시 오디오 보관은 일반 재생 버퍼와 별개이며 앱 전용 저장 공간에 보관합니다. 로컬 파일·허용된 미디어와 기존 다운로드 경로를 사용하며 새 추출기나 접근 제어 우회는 추가하지 않습니다.
 
