@@ -248,6 +248,8 @@ public class AudioReactorTest {
         set(controller, "UIs", new PlayerUiList());
         when(player.getPlaybackState())
                 .thenReturn(com.google.android.exoplayer2.Player.STATE_READY);
+        // This focus fixture models an already loaded source, not an empty media session.
+        when(player.getMediaItemCount()).thenReturn(1);
         doNothing().when(controller).saveStreamProgressState();
         doNothing().when(controller).triggerProgressUpdate();
         doAnswer(invocation -> {

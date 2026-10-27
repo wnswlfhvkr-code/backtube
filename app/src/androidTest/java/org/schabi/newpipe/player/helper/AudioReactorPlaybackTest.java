@@ -72,6 +72,7 @@ public class AudioReactorPlaybackTest {
     private MediaControllerCompat controller;
     private File localAudio;
     private String fixtureUrl;
+    private String selectedFixtureUrl;
     private boolean bound;
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -163,6 +164,9 @@ public class AudioReactorPlaybackTest {
         if (fixtureUrl != null) {
             InfoCache.getInstance().removeInfo(1, fixtureUrl, InfoCache.Type.STREAM);
         }
+        if (selectedFixtureUrl != null) {
+            InfoCache.getInstance().removeInfo(1, selectedFixtureUrl, InfoCache.Type.STREAM);
+        }
         final SharedPreferences.Editor editor = preferences().edit();
         for (final Map.Entry<String, Boolean> entry : originalPreferences.entrySet()) {
             if (entry.getValue() == null) {
@@ -217,6 +221,39 @@ public class AudioReactorPlaybackTest {
                     InfoCache.Type.STREAM) != null) + ", file=" + localAudio.exists());
             throw new AssertionError(failure.getMessage() + "; " + state[0], failure);
         }
+    }
+
+    @Test
+    public void explicitPlayAfterStopKeepsSelectedQueueItem() throws Exception {
+        selectedFixtureUrl = fixtureUrl + "-selected";
+        final StreamInfo selectedInfo = new StreamInfo(1, selectedFixtureUrl,
+                selectedFixtureUrl, StreamType.AUDIO_STREAM, selectedFixtureUrl,
+                selectedFixtureUrl, 0);
+        selectedInfo.setDuration(30);
+        selectedInfo.setAudioStreams(List.of(new AudioStream.Builder().setId(selectedFixtureUrl)
+                .setContent(Uri.fromFile(localAudio).toString(), true)
+                .setMediaFormat(MediaFormat.WAV).setAverageBitrate(128).build()));
+        selectedInfo.setRelatedItems(List.of());
+        InfoCache.getInstance().putInfo(1, selectedFixtureUrl, selectedInfo,
+                InfoCache.Type.STREAM);
+
+        runOnMain(() -> {
+            final Field field = Player.class.getDeclaredField("playQueue");
+            field.setAccessible(true);
+            final SinglePlayQueue queue = new SinglePlayQueue(List.of(
+                    new StreamInfoItem(1, fixtureUrl, "First test WAV",
+                            StreamType.AUDIO_STREAM),
+                    new StreamInfoItem(1, selectedFixtureUrl, "Selected test WAV",
+                            StreamType.AUDIO_STREAM)), 1);
+            queue.init();
+            field.set(player, queue);
+        });
+        controller.getTransportControls().stop();
+        await("media-session stop did not leave playback idle", player::isStopped);
+        controller.getTransportControls().play();
+        await("selected local audio did not resume", player::isPlaying);
+        runOnMain(() -> assertEquals("stop/play changed the selected queue item", 1,
+                player.getPlayQueue().getIndex()));
     }
 
     @Test

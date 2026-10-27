@@ -2239,7 +2239,12 @@ public final class Player implements PlaybackListener, Listener {
         recoveryCanceled = false;
         recoveryRefreshingSource = false;
 
-        if (currentState == STATE_COMPLETED) {
+        // A media-session stop clears ExoPlayer's items. Its following play command may
+        // prepare that empty timeline first, reporting ENDED even though the queue's selected
+        // item has not finished. Keep that selection and restore its source below.
+        final boolean missingSelectedSource = simpleExoPlayer.getMediaItemCount() == 0
+                && !playQueue.isEmpty();
+        if (currentState == STATE_COMPLETED && !missingSelectedSource) {
             if (playQueue.getIndex() == 0) {
                 seekToDefault();
             } else {
@@ -2247,7 +2252,7 @@ public final class Player implements PlaybackListener, Listener {
             }
         }
 
-        if (isStopped()) {
+        if (isStopped() || missingSelectedSource) {
             playQueue.setRecovery(playQueue.getIndex(), retryPosition);
             reloadPlayQueueManager();
         }
