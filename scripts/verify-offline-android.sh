@@ -18,6 +18,14 @@ class_name=org.schabi.newpipe.player.PersonalPlaybackTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 api_level=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+# This app declines SystemUI's media-resumption browser root. On API 35 the emulator may
+# nevertheless probe it and send STOP during an unrelated saved-session assertion. Disable only
+# that unsupported SystemUI probe in the test emulator; connected tests still exercise
+# media-session stop/play explicitly.
+if (( api_level >= 33 )); then
+    adb shell settings put secure qs_media_resumption 0
+    test "$(adb shell settings get secure qs_media_resumption | tr -d '\r')" = 0
+fi
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
