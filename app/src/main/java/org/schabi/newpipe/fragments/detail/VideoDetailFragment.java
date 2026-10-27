@@ -1306,6 +1306,12 @@ public final class VideoDetailFragment
             // openMainPlayer() will not send that request twice, so do not stop its engine here.
             return;
         }
+        if (playQueue != null && player.getPlayQueue() != null
+                && playQueue.equalStreamsAndIndex(player.getPlayQueue())) {
+            // Recreation may replace this fragment after its MAIN request was sent. The new
+            // fragment has no request marker, but the service is already loading its queue.
+            return;
+        }
 
         removeVideoPlayerView();
         if (isAutoplayEnabled()) {

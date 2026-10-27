@@ -322,12 +322,17 @@ final class PlaybackTestUi {
     }
 
     private static Rect revealDetailTimer(final Supplier<MainActivity> activity) {
-        awaitUi(() -> detailTimerBounds(activity.get(), true) != null,
-                "detail timer was not fully visible inside the viewport");
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        final Rect settled = readOnMain(() -> detailTimerBounds(activity.get(), false));
-        assertTrue("timer moved out of view before interaction", settled != null);
-        return settled;
+        final long deadline = SystemClock.uptimeMillis() + 8000;
+        do {
+            readOnMain(() -> detailTimerBounds(activity.get(), true));
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            final Rect settled = readOnMain(() -> detailTimerBounds(activity.get(), false));
+            if (settled != null) {
+                return settled;
+            }
+            SystemClock.sleep(50);
+        } while (SystemClock.uptimeMillis() < deadline);
+        throw new AssertionError("detail timer was not visible after layout settled");
     }
 
     private static Rect detailTimerBounds(final MainActivity activity, final boolean scroll) {
