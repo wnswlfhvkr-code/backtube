@@ -213,8 +213,11 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
                 .timeout(30, TimeUnit.SECONDS)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(valid -> {
+                    // Dialog.cancel() hides the window before its onCancel callback runs.
+                    // A completed read must not import during that callback gap.
                     if (generation != importValidationGeneration || !isAdded()
-                            || getView() == null) {
+                            || getView() == null || importValidationDialog == null
+                            || !importValidationDialog.isShowing()) {
                         return;
                     }
                     cancelImportValidation();
@@ -226,7 +229,8 @@ public class BackupRestoreSettingsFragment extends BasePreferenceFragment {
                     }
                 }, error -> {
                     if (generation == importValidationGeneration && isAdded()
-                            && getView() != null) {
+                            && getView() != null && importValidationDialog != null
+                            && importValidationDialog.isShowing()) {
                         cancelImportValidation();
                         Toast.makeText(requireContext(), R.string.no_valid_zip_file,
                                 Toast.LENGTH_SHORT).show();
