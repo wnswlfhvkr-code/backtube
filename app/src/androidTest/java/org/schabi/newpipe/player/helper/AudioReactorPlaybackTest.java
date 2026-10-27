@@ -31,6 +31,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.extractor.MediaFormat;
+import org.schabi.newpipe.extractor.stream.AudioStream;
+import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.player.PlayQueueActivity;
@@ -39,6 +42,7 @@ import org.schabi.newpipe.player.PlayerService;
 import org.schabi.newpipe.player.mediasession.MediaSessionPlayerUi;
 import org.schabi.newpipe.player.notification.NotificationConstants;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.util.InfoCache;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -67,6 +71,7 @@ public class AudioReactorPlaybackTest {
     private AudioReactor reactor;
     private MediaControllerCompat controller;
     private File localAudio;
+    private String fixtureUrl;
     private boolean bound;
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -86,7 +91,17 @@ public class AudioReactorPlaybackTest {
         setPreference(R.string.resume_on_audio_focus_gain_key, true);
         setPreference(R.string.auto_queue_key, false);
         setPreference(R.string.ignore_hardware_media_buttons_key, false);
+        setPreference(R.string.data_saver_key, false);
         localAudio = createSilentWav();
+        fixtureUrl = "focus-fixture-" + localAudio.getName();
+        final StreamInfo info = new StreamInfo(1, fixtureUrl, fixtureUrl,
+                StreamType.AUDIO_STREAM, fixtureUrl, fixtureUrl, 0);
+        info.setDuration(30);
+        info.setAudioStreams(List.of(new AudioStream.Builder().setId(fixtureUrl)
+                .setContent(Uri.fromFile(localAudio).toString(), true)
+                .setMediaFormat(MediaFormat.WAV).setAverageBitrate(128).build()));
+        info.setRelatedItems(List.of());
+        InfoCache.getInstance().putInfo(1, fixtureUrl, info, InfoCache.Type.STREAM);
         ContextCompat.startForegroundService(context, new Intent(context, PlayerService.class)
                 .putExtra(PlayerService.SHOULD_START_FOREGROUND_EXTRA, true));
         bound = context.bindService(new Intent(context, PlayerService.class)
@@ -101,7 +116,7 @@ public class AudioReactorPlaybackTest {
             final Method init = Player.class.getDeclaredMethod("initPlayer", boolean.class);
             init.setAccessible(true);
             init.invoke(player, false);
-            final StreamInfoItem item = new StreamInfoItem(0, Uri.fromFile(localAudio).toString(),
+            final StreamInfoItem item = new StreamInfoItem(1, fixtureUrl,
                     "Focus test WAV", StreamType.AUDIO_STREAM);
             final SinglePlayQueue queue = new SinglePlayQueue(List.of(item), 0);
             queue.init();
@@ -145,6 +160,9 @@ public class AudioReactorPlaybackTest {
         if (localAudio != null) {
             localAudio.delete();
         }
+        if (fixtureUrl != null) {
+            InfoCache.getInstance().removeInfo(1, fixtureUrl, InfoCache.Type.STREAM);
+        }
         final SharedPreferences.Editor editor = preferences().edit();
         for (final Map.Entry<String, Boolean> entry : originalPreferences.entrySet()) {
             if (entry.getValue() == null) {
@@ -180,6 +198,14 @@ public class AudioReactorPlaybackTest {
         } finally {
             runOnMain(activity::finish);
         }
+    }
+
+    @Test
+    public void explicitPlayAfterMediaSessionStopReloadsGeneratedSource() throws Exception {
+        controller.getTransportControls().stop();
+        await("media-session stop did not leave playback idle", player::isStopped);
+        controller.getTransportControls().play();
+        await("explicit retry did not reload generated local audio", player::isPlaying);
     }
 
     @Test
