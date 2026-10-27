@@ -16,6 +16,7 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -131,14 +132,26 @@ public class FinishedMissionMigrationDeviceTest {
                             }
                         };
                     };
-            try (FinishedMissionStore store = new FinishedMissionStore(
-                    isolatedContext(directory, trackingFactory))) {
+            final AtomicReference<SQLiteDatabase> trackedDatabase = new AtomicReference<>();
+            try (FinishedMissionStore store = new FinishedMissionStore(isolatedContext(directory)) {
+                @Override
+                public SQLiteDatabase getReadableDatabase() {
+                    return trackedDatabase.get();
+                }
+            }) {
                 store.getWritableDatabase();
-                opened.set(0);
-                closed.set(0);
-                assertTrue(store.loadFinishedMissions().isEmpty());
-                assertEquals(1, opened.get());
-                assertEquals(1, closed.get());
+                // Android 15 opens SQLiteOpenHelper databases directly from getDatabasePath;
+                // Context.openOrCreateDatabase no longer receives a custom CursorFactory.
+                // Inject a second, isolated handle so the production query still owns and closes
+                // the real framework cursor on both old and new Android versions.
+                try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
+                        new File(directory, "downloads.db").getPath(), trackingFactory,
+                        SQLiteDatabase.OPEN_READWRITE)) {
+                    trackedDatabase.set(database);
+                    assertTrue(store.loadFinishedMissions().isEmpty());
+                    assertEquals(1, opened.get());
+                    assertEquals(1, closed.get());
+                }
             }
         } finally {
             deleteFixture(directory);
@@ -153,11 +166,6 @@ public class FinishedMissionMigrationDeviceTest {
     }
 
     private static Context isolatedContext(final File directory) {
-        return isolatedContext(directory, null);
-    }
-
-    private static Context isolatedContext(final File directory,
-            final SQLiteDatabase.CursorFactory trackingFactory) {
         final Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
         return new ContextWrapper(target) {
             @Override
@@ -168,8 +176,7 @@ public class FinishedMissionMigrationDeviceTest {
             @Override
             public SQLiteDatabase openOrCreateDatabase(final String name, final int mode,
                     final SQLiteDatabase.CursorFactory factory) {
-                return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name),
-                        trackingFactory == null ? factory : trackingFactory);
+                return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name), factory);
             }
 
             @Override
@@ -177,7 +184,7 @@ public class FinishedMissionMigrationDeviceTest {
                     final SQLiteDatabase.CursorFactory factory,
                     final DatabaseErrorHandler errorHandler) {
                 return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name).getPath(),
-                        trackingFactory == null ? factory : trackingFactory, errorHandler);
+                        factory, errorHandler);
             }
         };
     }

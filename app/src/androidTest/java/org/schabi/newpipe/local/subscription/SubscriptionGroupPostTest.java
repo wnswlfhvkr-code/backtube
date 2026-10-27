@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.xwray.groupie.GroupAdapter;
 
@@ -40,6 +41,11 @@ public class SubscriptionGroupPostTest {
             instrumentation.runOnMainSync(() -> activity.getSupportFragmentManager()
                     .beginTransaction().add(root.getId(), fragment).commitNow());
             instrumentation.waitForIdleSync();
+            // This test drives the posted callback directly. Stop the live database feed from
+            // delivering a second, unrelated callback while the binding is being replaced.
+            instrumentation.runOnMainSync(() -> new ViewModelProvider(fragment)
+                    .get(SubscriptionViewModel.class).getFeedGroupsLiveData()
+                    .removeObservers(fragment.getViewLifecycleOwner()));
 
             final Field bindingField = SubscriptionFragment.class.getDeclaredField("_binding");
             bindingField.setAccessible(true);
