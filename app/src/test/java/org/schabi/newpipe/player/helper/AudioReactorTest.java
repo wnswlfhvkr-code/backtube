@@ -171,6 +171,41 @@ public class AudioReactorTest {
     }
 
     @Test
+    public void removingLastMediaSourceDoesNotDiscardSelectedQueueItem() throws Exception {
+        final Player controller = controller();
+        final PlayQueue queue = controller.getPlayQueue();
+        when(queue.getIndex()).thenReturn(1);
+        when(player.getMediaItemCount()).thenReturn(0);
+        doNothing().when(controller).saveLastSession();
+        controller.stop();
+
+        controller.onPositionDiscontinuity(
+                mock(com.google.android.exoplayer2.Player.PositionInfo.class),
+                mock(com.google.android.exoplayer2.Player.PositionInfo.class),
+                com.google.android.exoplayer2.Player.DISCONTINUITY_REASON_REMOVE);
+
+        verify(queue, never()).setIndex(0);
+        verify(controller, never()).saveStreamProgressStateCompleted();
+    }
+
+    @Test
+    public void removingOneMediaSourceFromNonemptyTimelineStillUpdatesSelection()
+            throws Exception {
+        final Player controller = controller();
+        final PlayQueue queue = controller.getPlayQueue();
+        when(queue.getIndex()).thenReturn(1);
+        doNothing().when(controller).saveLastSession();
+
+        controller.onPositionDiscontinuity(
+                mock(com.google.android.exoplayer2.Player.PositionInfo.class),
+                mock(com.google.android.exoplayer2.Player.PositionInfo.class),
+                com.google.android.exoplayer2.Player.DISCONTINUITY_REASON_REMOVE);
+
+        verify(queue).setIndex(0);
+        verify(controller).saveStreamProgressStateCompleted();
+    }
+
+    @Test
     public void deniedInternalPlayIntentIsPausedBeforeReportingPlaying() throws Exception {
         final Player controller = controller();
         set(controller, "isPrepared", true);

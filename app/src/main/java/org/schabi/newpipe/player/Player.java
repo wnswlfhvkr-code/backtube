@@ -1765,6 +1765,13 @@ public final class Player implements PlaybackListener, Listener {
             return;
         }
 
+        if (recoveryCanceled && discontinuityReason == DISCONTINUITY_REASON_REMOVE
+                && simpleExoPlayer.getMediaItemCount() == 0 && !playQueue.isEmpty()) {
+            // MediaSessionConnector clears ExoPlayer's timeline after stop(). That removal
+            // is not a selection of window zero or completion of the queued stream.
+            return;
+        }
+
         // Refresh the playback if there is a transition to the next video
         final int newIndex = newPosition.mediaItemIndex;
         if (playQueue instanceof OfflinePlayQueue queue) {

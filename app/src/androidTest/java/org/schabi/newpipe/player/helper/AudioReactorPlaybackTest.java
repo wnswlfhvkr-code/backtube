@@ -250,6 +250,8 @@ public class AudioReactorPlaybackTest {
         });
         controller.getTransportControls().stop();
         await("media-session stop did not leave playback idle", player::isStopped);
+        runOnMain(() -> assertEquals("media-session stop changed the selected queue item", 1,
+                player.getPlayQueue().getIndex()));
         controller.getTransportControls().play();
         await("selected local audio did not resume", player::isPlaying);
         runOnMain(() -> assertEquals("stop/play changed the selected queue item", 1,
