@@ -2151,6 +2151,7 @@ public final class Player implements PlaybackListener, Listener {
                 || currentItem.getServiceId() != item.getServiceId()
                 || !currentItem.getUrl().equals(item.getUrl());
         final boolean switchingItem = currentItem != null && currentItem != item;
+        final boolean stoppedBeforeSeek = isStopped();
 
         currentItem = item;
         if (switchingItem) {
@@ -2191,7 +2192,7 @@ public final class Player implements PlaybackListener, Listener {
             }
             // Selecting another item after an error only seeks the already loaded playlist.
             // A stopped ExoPlayer also needs prepare(), retaining its current play intent.
-            if (switchingItem && !recoveryFailed && !recoveryCanceled && isStopped()) {
+            if (switchingItem && !recoveryFailed && !recoveryCanceled && stoppedBeforeSeek) {
                 simpleExoPlayer.prepare();
             }
         }

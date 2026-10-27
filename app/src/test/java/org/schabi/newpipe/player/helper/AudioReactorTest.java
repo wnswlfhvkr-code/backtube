@@ -26,6 +26,7 @@ import androidx.media.AudioFocusRequestCompat;
 import androidx.media.AudioManagerCompat;
 
 import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.Timeline;
 
 import org.junit.After;
 import org.junit.Before;
@@ -34,9 +35,11 @@ import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
+import org.schabi.newpipe.player.playqueue.PlayQueueItem;
 import org.schabi.newpipe.player.ui.PlayerUiList;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Exercises the real reactor with platform boundaries replaced on the JVM. */
 public class AudioReactorTest {
@@ -203,6 +206,36 @@ public class AudioReactorTest {
 
         verify(queue).setIndex(0);
         verify(controller).saveStreamProgressStateCompleted();
+    }
+
+    @Test
+    public void selectingNextAfterFailurePreparesThePreviouslyStoppedEngine() throws Exception {
+        final Player controller = controller();
+        final PlayQueue queue = controller.getPlayQueue();
+        final PlayQueueItem previous = mock(PlayQueueItem.class);
+        final PlayQueueItem next = mock(PlayQueueItem.class);
+        final Timeline timeline = mock(Timeline.class);
+        final AtomicInteger exoState = new AtomicInteger(ExoPlayer.STATE_IDLE);
+        set(controller, "currentItem", previous);
+        when(previous.getServiceId()).thenReturn(1);
+        when(previous.getUrl()).thenReturn("previous");
+        when(next.getServiceId()).thenReturn(1);
+        when(next.getUrl()).thenReturn("next");
+        when(next.getRecoveryPosition()).thenReturn(PlayQueueItem.RECOVERY_UNSET);
+        when(queue.indexOf(next)).thenReturn(1);
+        when(queue.getIndex()).thenReturn(1);
+        when(player.getCurrentTimeline()).thenReturn(timeline);
+        when(timeline.getWindowCount()).thenReturn(2);
+        when(player.getPlaybackState()).thenAnswer(invocation -> exoState.get());
+        doAnswer(invocation -> {
+            exoState.set(ExoPlayer.STATE_BUFFERING);
+            return null;
+        }).when(player).seekToDefaultPosition(1);
+
+        controller.onPlaybackSynchronize(next, false);
+
+        verify(player).seekToDefaultPosition(1);
+        verify(player).prepare();
     }
 
     @Test
