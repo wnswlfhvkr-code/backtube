@@ -599,7 +599,7 @@
         <item>ko</item>
     </string-array>
     <string-array name="language_names">
-        <item>@string/content_language_follow_app</item>
+        <item>@string/systems_language</item>
         <item>Afrikaans</item>
         <item>Azərbaycanca</item>
         <item>Bahasa Indonesia</item>

@@ -10,6 +10,7 @@ import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.FrameLayout;
 
 import androidx.core.content.ContextCompat;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -165,6 +166,31 @@ public class PlayerUiLifetimeDeviceTest {
 
     private static void onMain(final Runnable action) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(action);
+    }
+
+    @Test
+    public void inlineVideoDownLetsSheetSeeFirstDragMove() {
+        onMain(() -> {
+            final AtomicInteger blockedParentRequests = new AtomicInteger();
+            final FrameLayout sheet = new FrameLayout(context) {
+                @Override
+                public void requestDisallowInterceptTouchEvent(final boolean disallow) {
+                    if (disallow) {
+                        blockedParentRequests.incrementAndGet();
+                    }
+                    super.requestDisallowInterceptTouchEvent(disallow);
+                }
+            };
+            sheet.addView(binding.getRoot());
+            final long time = SystemClock.uptimeMillis();
+            dispatchSingle(time, time, MotionEvent.ACTION_DOWN, 100f, 100f);
+            assertEquals(0, blockedParentRequests.get());
+            dispatchSingle(time, time + 10, MotionEvent.ACTION_MOVE, 100f, 102f);
+            assertEquals(0, blockedParentRequests.get());
+            dispatchSingle(time, time + 20, MotionEvent.ACTION_MOVE, 100f, 120f);
+            assertEquals(0, blockedParentRequests.get());
+            dispatchSingle(time, time + 40, MotionEvent.ACTION_UP, 100f, 120f);
+        });
     }
 
     @Test

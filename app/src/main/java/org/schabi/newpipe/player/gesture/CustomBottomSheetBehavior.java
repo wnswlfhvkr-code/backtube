@@ -29,6 +29,7 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
     private final Rect globalRect = new Rect();
     private final DownwardDrag downwardDrag;
     private boolean startedOnPlaybackButton;
+    private boolean startedOnPlayerVideo;
     private boolean skippingInterception = false;
     private final List<Integer> skipInterceptionOfElements = List.of(
             R.id.detail_content_root_layout, R.id.relatedItemsLayout,
@@ -44,17 +45,20 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             skippingInterception = false;
             startedOnPlaybackButton = false;
+            startedOnPlayerVideo = false;
             downwardDrag.start(event.getX(), event.getY());
         } else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL
                 || event.getActionMasked() == MotionEvent.ACTION_UP) {
-            final boolean protectedGesture = skippingInterception || startedOnPlaybackButton;
+            final boolean protectedGesture = skippingInterception || startedOnPlaybackButton
+                    || startedOnPlayerVideo;
             skippingInterception = false;
             startedOnPlaybackButton = false;
+            startedOnPlayerVideo = false;
             final boolean intercepted = super.onInterceptTouchEvent(parent, child, event);
             return !protectedGesture && intercepted;
         }
 
-        if (startedOnPlaybackButton
+        if ((startedOnPlaybackButton || startedOnPlayerVideo)
                 && !downwardDrag.move(event.getX(), event.getY())) {
             return false;
         }
@@ -104,6 +108,15 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
                         return false;
                     }
                 }
+            }
+            // Prime the sheet for a short downward flick starting on the video. Keep the
+            // existing seek bar and bottom-control exclusions above this broad video hit box.
+            final View playerVideo = child.findViewById(R.id.playerVideoGestureSurface);
+            if (playerVideo != null && playerVideo.getGlobalVisibleRect(globalRect)
+                    && globalRect.contains((int) event.getRawX(), (int) event.getRawY())) {
+                startedOnPlayerVideo = true;
+                super.onInterceptTouchEvent(parent, child, event);
+                return false;
             }
         }
 

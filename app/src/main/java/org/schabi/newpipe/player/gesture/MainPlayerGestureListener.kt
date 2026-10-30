@@ -51,8 +51,9 @@ class MainPlayerGestureListener(
                 doubleTapInThisTouch = false
                 fullscreenSwipe.down(event.x, event.y, playerUi.isFullscreen)
                 super.onTouch(v, event)
-                // Decide inside the video area before handing a non-upward gesture to the page.
-                v.parent?.requestDisallowInterceptTouchEvent(true)
+                // The sheet needs the first MOVE to catch even a short downward flick.
+                // Its behavior leaves upward video swipes with this listener.
+                v.parent?.requestDisallowInterceptTouchEvent(playerUi.isFullscreen)
                 true
             }
 
@@ -120,7 +121,9 @@ class MainPlayerGestureListener(
                 if (!fullscreenSwipe.transitioned()) {
                     super.onTouch(v, event)
                 }
-                v.parent?.requestDisallowInterceptTouchEvent(!parentMayIntercept)
+                v.parent?.requestDisallowInterceptTouchEvent(
+                    playerUi.isFullscreen && !parentMayIntercept
+                )
                 true
             }
 

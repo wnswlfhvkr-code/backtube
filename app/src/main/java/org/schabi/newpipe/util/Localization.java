@@ -417,28 +417,7 @@ public final class Localization {
         final SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
         final String defaultKey = context.getString(R.string.default_localization_key);
         final String languageCode = sp.getString(context.getString(prefKey), defaultKey);
-        final String savedAppLanguage = sp.getString(context.getString(R.string.app_language_key),
-                defaultKey);
-        final Locale configuredAppLocale = AppCompatDelegate.getApplicationLocales().get(0);
-        final Locale resourceLocale = androidx.core.os.ConfigurationCompat.getLocales(
-                context.getResources().getConfiguration()).get(0);
-
-        return resolvePreferredContentLocale(languageCode, defaultKey,
-                resolveAppLocale(configuredAppLocale, savedAppLanguage,
-                        defaultKey, resourceLocale));
-    }
-
-    static Locale resolveAppLocale(final Locale configuredAppLocale,
-                                   final String savedAppLanguage,
-                                   final String defaultKey,
-                                   final Locale resourceLocale) {
-        if (configuredAppLocale != null) {
-            return configuredAppLocale;
-        }
-        if (!defaultKey.equals(savedAppLanguage)) {
-            return Locale.forLanguageTag(savedAppLanguage);
-        }
-        return resourceLocale;
+        return resolvePreferredContentLocale(languageCode, defaultKey, Locale.getDefault());
     }
 
     // Refresh extractor requests when the app or content language changes during this process.
@@ -455,8 +434,8 @@ public final class Localization {
 
     static Locale resolvePreferredContentLocale(final String languageCode,
                                                 final String defaultKey,
-                                                final Locale appLocale) {
-        return defaultKey.equals(languageCode) ? appLocale : Locale.forLanguageTag(languageCode);
+                                                final Locale systemLocale) {
+        return defaultKey.equals(languageCode) ? systemLocale : Locale.forLanguageTag(languageCode);
     }
 
     private static double round(final double value, final int scale) {

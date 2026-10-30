@@ -10,7 +10,7 @@ import org.ocpsoft.prettytime.PrettyTime
 
 class LocalizationTest {
     @Test
-    fun `default content language follows app locale`() {
+    fun `default content language follows system locale`() {
         assertEquals(
             Locale.KOREAN,
             Localization.resolvePreferredContentLocale("system", "system", Locale.KOREAN)
@@ -18,34 +18,10 @@ class LocalizationTest {
     }
 
     @Test
-    fun `explicit content language overrides app locale`() {
+    fun `explicit content language overrides system locale`() {
         assertEquals(
             Locale.forLanguageTag("en-GB"),
             Localization.resolvePreferredContentLocale("en-GB", "system", Locale.KOREAN)
-        )
-    }
-
-    @Test
-    fun `saved app language is used before activity migration`() {
-        assertEquals(
-            Locale.KOREAN,
-            Localization.resolveAppLocale(null, "ko", "system", Locale.ENGLISH)
-        )
-    }
-
-    @Test
-    fun `current app locale overrides an old saved value`() {
-        assertEquals(
-            Locale.JAPANESE,
-            Localization.resolveAppLocale(Locale.JAPANESE, "ko", "system", Locale.ENGLISH)
-        )
-    }
-
-    @Test
-    fun `system choice follows current resource locale`() {
-        assertEquals(
-            Locale.KOREAN,
-            Localization.resolveAppLocale(null, "system", "system", Locale.KOREAN)
         )
     }
 
