@@ -14,6 +14,7 @@
 2. Add controller tests for start, release, cancel, 2.0x original speed, non-playing and engine replacement; run RED; implement controller; run GREEN.
 3. Wire MAIN long press and lifecycle cancellation, add the short indicator, and verify tap/double-tap/swipe/popup behavior with focused Android checks where available.
 4. Run the affected unit suite, debug build, lint/checkstyle, inspect the exact diff, and record PASS/FAIL/NOT RUN. Preserve the branch without main merge or release.
+5. Add tests for inline upward and fullscreen two-finger downward swipes, plus downward page scroll, horizontal motion, pinch, small movement, pointer lift, cancel, and repeated events. Implement a state machine and connect it to the existing fullscreen toggle without changing popup gestures. Review and verify the final head.
 
 ## Review focus
 

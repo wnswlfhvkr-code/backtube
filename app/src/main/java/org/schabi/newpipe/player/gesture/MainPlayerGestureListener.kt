@@ -4,6 +4,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.View.OnTouchListener
+import android.view.ViewConfiguration
 import android.widget.ProgressBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
@@ -32,34 +33,109 @@ class MainPlayerGestureListener(
     private var isMoving = false
     private var touchDownX = 0f
     private var touchDownY = 0f
+    private val fullscreenSwipe = FullscreenSwipeDetector(
+        ViewConfiguration.get(player.context).scaledTouchSlop.toFloat(),
+        72f * player.context.resources.displayMetrics.density
+    )
+    private var multiTouchInProgress = false
+    private var parentMayIntercept = false
+    private var doubleTapInThisTouch = false
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            touchDownX = event.x
-            touchDownY = event.y
-        }
-        super.onTouch(v, event)
-        // GestureDetector stops sending onScroll after recognizing a long press. Observe the raw
-        // movement too, so a held finger turning into a swipe releases the temporary speed.
-        if (event.actionMasked == MotionEvent.ACTION_MOVE && hasMovedBeyondHoldThreshold(event)) {
-            playerUi.endTemporarySpeed()
-        }
-        val touchEnded = event.actionMasked == MotionEvent.ACTION_UP ||
-            event.actionMasked == MotionEvent.ACTION_CANCEL
-        if (touchEnded || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
-            playerUi.endTemporarySpeed()
-        }
-        if (touchEnded && isMoving) {
-            isMoving = false
-            onScrollEnd(event)
-        }
         return when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+            MotionEvent.ACTION_DOWN -> {
+                touchDownX = event.x
+                touchDownY = event.y
+                multiTouchInProgress = false
+                parentMayIntercept = false
+                doubleTapInThisTouch = false
+                fullscreenSwipe.down(event.x, event.y, playerUi.isFullscreen)
+                super.onTouch(v, event)
+                // Decide inside the video area before handing a non-upward gesture to the page.
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+                true
+            }
+
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                playerUi.endTemporarySpeed()
+                multiTouchInProgress = true
+                cancelGestureDetector(v, event)
+                if (event.pointerCount == 2 && playerUi.isFullscreen && !isMoving &&
+                    !isDoubleTapping
+                ) {
+                    fullscreenSwipe.secondDown(
+                        event.getX(0),
+                        event.getY(0),
+                        event.getX(1),
+                        event.getY(1)
+                    )
+                } else {
+                    fullscreenSwipe.pointerUp()
+                }
+                if (isMoving) {
+                    isMoving = false
+                    onScrollEnd(event)
+                }
                 v.parent?.requestDisallowInterceptTouchEvent(playerUi.isFullscreen)
                 true
             }
 
+            MotionEvent.ACTION_POINTER_UP -> {
+                fullscreenSwipe.pointerUp()
+                true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (multiTouchInProgress) {
+                    if (event.pointerCount == 2 &&
+                        fullscreenSwipe.moveTwo(
+                            event.getX(0),
+                            event.getY(0),
+                            event.getX(1),
+                            event.getY(1)
+                        ) == FullscreenSwipeDetector.Result.EXIT && playerUi.isFullscreen
+                    ) {
+                        playerUi.toggleFullscreen()
+                    }
+                    return true
+                }
+
+                // GestureDetector stops sending onScroll after a long press; observe raw movement.
+                if (hasMovedBeyondHoldThreshold(event)) {
+                    playerUi.endTemporarySpeed()
+                }
+                if (isDoubleTapping || doubleTapInThisTouch) {
+                    fullscreenSwipe.pointerUp()
+                }
+                val result = fullscreenSwipe.moveOne(event.x, event.y)
+                if (result == FullscreenSwipeDetector.Result.ENTER && !playerUi.isFullscreen) {
+                    playerUi.endTemporarySpeed()
+                    cancelGestureDetector(v, event)
+                    playerUi.toggleFullscreen()
+                    return true
+                }
+                if (result == FullscreenSwipeDetector.Result.GIVE_TO_PARENT) {
+                    parentMayIntercept = true
+                }
+                if (!fullscreenSwipe.transitioned()) {
+                    super.onTouch(v, event)
+                }
+                v.parent?.requestDisallowInterceptTouchEvent(!parentMayIntercept)
+                true
+            }
+
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (!multiTouchInProgress && !fullscreenSwipe.transitioned()) {
+                    super.onTouch(v, event)
+                }
+                playerUi.endTemporarySpeed()
+                if (isMoving) {
+                    isMoving = false
+                    onScrollEnd(event)
+                }
+                fullscreenSwipe.cancel()
+                multiTouchInProgress = false
+                doubleTapInThisTouch = false
                 v.parent?.requestDisallowInterceptTouchEvent(false)
                 false
             }
@@ -68,17 +144,29 @@ class MainPlayerGestureListener(
         }
     }
 
+    private fun cancelGestureDetector(v: View, event: MotionEvent) {
+        val cancel = MotionEvent.obtain(event)
+        cancel.action = MotionEvent.ACTION_CANCEL
+        super.onTouch(v, cancel)
+        cancel.recycle()
+    }
+
     private fun hasMovedBeyondHoldThreshold(event: MotionEvent): Boolean = abs(event.x - touchDownX) > MOVEMENT_THRESHOLD ||
         abs(event.y - touchDownY) > MOVEMENT_THRESHOLD
 
     override fun onLongPress(e: MotionEvent) {
-        if (!isMoving && !isDoubleTapping && !playerUi.isSomePopupMenuVisible) {
+        if (!isMoving && !isDoubleTapping && !multiTouchInProgress &&
+            !fullscreenSwipe.transitioned() && !parentMayIntercept &&
+            !playerUi.isSomePopupMenuVisible
+        ) {
             playerUi.startTemporarySpeed()
         }
     }
 
     override fun onDoubleTap(e: MotionEvent): Boolean {
         playerUi.endTemporarySpeed()
+        doubleTapInThisTouch = true
+        fullscreenSwipe.pointerUp()
         return super.onDoubleTap(e)
     }
 
@@ -200,7 +288,9 @@ class MainPlayerGestureListener(
         distanceX: Float,
         distanceY: Float
     ): Boolean {
-        if (initialEvent == null || !playerUi.isFullscreen) {
+        if (initialEvent == null || !playerUi.isFullscreen || multiTouchInProgress ||
+            fullscreenSwipe.transitioned()
+        ) {
             return false
         }
 

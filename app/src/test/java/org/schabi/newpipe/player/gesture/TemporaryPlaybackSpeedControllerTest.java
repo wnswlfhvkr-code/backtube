@@ -38,6 +38,16 @@ public class TemporaryPlaybackSpeedControllerTest {
     }
 
     @Test
+    public void restoresSpeedAboveTwoWithoutClamping() {
+        playback.parameters = new PlaybackParameters(2.5f, 1.3f);
+        assertTrue(controller.begin());
+        assertEquals(2.0f, playback.parameters.speed, 0.001f);
+        controller.end();
+        assertEquals(2.5f, playback.parameters.speed, 0.001f);
+        assertEquals(1.3f, playback.parameters.pitch, 0.001f);
+    }
+
+    @Test
     public void doesNotStartWhileNotPlayingVideo() {
         playback.playable = false;
         assertFalse(controller.begin());
