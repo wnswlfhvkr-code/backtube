@@ -30,26 +30,56 @@ class MainPlayerGestureListener(
     private val playerUi: MainPlayerUi
 ) : BasePlayerGestureListener(playerUi), OnTouchListener {
     private var isMoving = false
+    private var touchDownX = 0f
+    private var touchDownY = 0f
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            touchDownX = event.x
+            touchDownY = event.y
+        }
         super.onTouch(v, event)
-        if (event.action == MotionEvent.ACTION_UP && isMoving) {
+        // GestureDetector stops sending onScroll after recognizing a long press. Observe the raw
+        // movement too, so a held finger turning into a swipe releases the temporary speed.
+        if (event.actionMasked == MotionEvent.ACTION_MOVE && hasMovedBeyondHoldThreshold(event)) {
+            playerUi.endTemporarySpeed()
+        }
+        val touchEnded = event.actionMasked == MotionEvent.ACTION_UP ||
+            event.actionMasked == MotionEvent.ACTION_CANCEL
+        if (touchEnded || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+            playerUi.endTemporarySpeed()
+        }
+        if (touchEnded && isMoving) {
             isMoving = false
             onScrollEnd(event)
         }
-        return when (event.action) {
+        return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 v.parent?.requestDisallowInterceptTouchEvent(playerUi.isFullscreen)
                 true
             }
 
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 v.parent?.requestDisallowInterceptTouchEvent(false)
                 false
             }
 
             else -> true
         }
+    }
+
+    private fun hasMovedBeyondHoldThreshold(event: MotionEvent): Boolean = abs(event.x - touchDownX) > MOVEMENT_THRESHOLD ||
+        abs(event.y - touchDownY) > MOVEMENT_THRESHOLD
+
+    override fun onLongPress(e: MotionEvent) {
+        if (!isMoving && !isDoubleTapping && !playerUi.isSomePopupMenuVisible) {
+            playerUi.startTemporarySpeed()
+        }
+    }
+
+    override fun onDoubleTap(e: MotionEvent): Boolean {
+        playerUi.endTemporarySpeed()
+        return super.onDoubleTap(e)
     }
 
     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -194,6 +224,7 @@ class MainPlayerGestureListener(
         }
 
         isMoving = true
+        playerUi.endTemporarySpeed()
 
         // -- Brightness and Volume control --
         if (getDisplayHalfPortion(initialEvent) == DisplayPortion.RIGHT_HALF) {

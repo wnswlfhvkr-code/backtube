@@ -15,7 +15,6 @@ import androidx.preference.Preference;
 
 import org.schabi.newpipe.DownloaderImpl;
 import org.schabi.newpipe.R;
-import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.util.Localization;
 import org.schabi.newpipe.util.image.ImageStrategy;
@@ -103,9 +102,7 @@ public class ContentSettingsFragment extends BasePreferenceFragment {
         super.onDestroy();
 
         final Context context = requireContext();
-        NewPipe.setupLocalization(
-            Localization.getPreferredLocalization(context),
-            Localization.getPreferredContentCountry(context));
+        Localization.synchronizeExtractorLocalization(context);
         PlayerHelper.resetFormat();
     }
 }

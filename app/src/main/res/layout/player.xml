@@ -804,6 +804,23 @@
 
     </RelativeLayout>
 
+    <TextView
+        android:id="@+id/temporarySpeedIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/background_oval_black_transparent"
+        android:clickable="false"
+        android:focusable="false"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:text="@string/temporary_double_speed"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
     <View
         android:id="@+id/closingOverlay"
         android:layout_width="match_parent"

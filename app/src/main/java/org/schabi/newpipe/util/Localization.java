@@ -417,12 +417,46 @@ public final class Localization {
         final SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
         final String defaultKey = context.getString(R.string.default_localization_key);
         final String languageCode = sp.getString(context.getString(prefKey), defaultKey);
+        final String savedAppLanguage = sp.getString(context.getString(R.string.app_language_key),
+                defaultKey);
+        final Locale configuredAppLocale = AppCompatDelegate.getApplicationLocales().get(0);
+        final Locale resourceLocale = androidx.core.os.ConfigurationCompat.getLocales(
+                context.getResources().getConfiguration()).get(0);
 
-        if (languageCode.equals(defaultKey)) {
-            return Locale.getDefault();
-        } else {
-            return Locale.forLanguageTag(languageCode);
+        return resolvePreferredContentLocale(languageCode, defaultKey,
+                resolveAppLocale(configuredAppLocale, savedAppLanguage,
+                        defaultKey, resourceLocale));
+    }
+
+    static Locale resolveAppLocale(final Locale configuredAppLocale,
+                                   final String savedAppLanguage,
+                                   final String defaultKey,
+                                   final Locale resourceLocale) {
+        if (configuredAppLocale != null) {
+            return configuredAppLocale;
         }
+        if (!defaultKey.equals(savedAppLanguage)) {
+            return Locale.forLanguageTag(savedAppLanguage);
+        }
+        return resourceLocale;
+    }
+
+    // Refresh extractor requests when the app or content language changes during this process.
+    public static void synchronizeExtractorLocalization(@NonNull final Context context) {
+        final var preferred = getPreferredLocalization(context);
+        final var country = getPreferredContentCountry(context);
+        if (!preferred.equals(org.schabi.newpipe.extractor.NewPipe.getPreferredLocalization())
+                || !country.equals(
+                        org.schabi.newpipe.extractor.NewPipe.getPreferredContentCountry())) {
+            InfoCache.getInstance().clearCache();
+            org.schabi.newpipe.extractor.NewPipe.setupLocalization(preferred, country);
+        }
+    }
+
+    static Locale resolvePreferredContentLocale(final String languageCode,
+                                                final String defaultKey,
+                                                final Locale appLocale) {
+        return defaultKey.equals(languageCode) ? appLocale : Locale.forLanguageTag(languageCode);
     }
 
     private static double round(final double value, final int scale) {

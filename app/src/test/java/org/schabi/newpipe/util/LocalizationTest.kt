@@ -9,6 +9,46 @@ import org.junit.Test
 import org.ocpsoft.prettytime.PrettyTime
 
 class LocalizationTest {
+    @Test
+    fun `default content language follows app locale`() {
+        assertEquals(
+            Locale.KOREAN,
+            Localization.resolvePreferredContentLocale("system", "system", Locale.KOREAN)
+        )
+    }
+
+    @Test
+    fun `explicit content language overrides app locale`() {
+        assertEquals(
+            Locale.forLanguageTag("en-GB"),
+            Localization.resolvePreferredContentLocale("en-GB", "system", Locale.KOREAN)
+        )
+    }
+
+    @Test
+    fun `saved app language is used before activity migration`() {
+        assertEquals(
+            Locale.KOREAN,
+            Localization.resolveAppLocale(null, "ko", "system", Locale.ENGLISH)
+        )
+    }
+
+    @Test
+    fun `current app locale overrides an old saved value`() {
+        assertEquals(
+            Locale.JAPANESE,
+            Localization.resolveAppLocale(Locale.JAPANESE, "ko", "system", Locale.ENGLISH)
+        )
+    }
+
+    @Test
+    fun `system choice follows current resource locale`() {
+        assertEquals(
+            Locale.KOREAN,
+            Localization.resolveAppLocale(null, "system", "system", Locale.KOREAN)
+        )
+    }
+
     @Test(expected = NullPointerException::class)
     fun `relativeTime() must fail without initializing pretty time`() {
         Localization.relativeTime(OffsetDateTime.of(2021, 1, 6, 0, 0, 0, 0, ZoneOffset.UTC))

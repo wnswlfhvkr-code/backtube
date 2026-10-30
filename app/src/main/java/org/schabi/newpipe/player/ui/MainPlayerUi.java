@@ -42,6 +42,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.ui.SubtitleView;
 import com.google.android.exoplayer2.video.VideoSize;
 
@@ -59,6 +60,7 @@ import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.event.PlayerServiceEventListener;
 import org.schabi.newpipe.player.gesture.BasePlayerGestureListener;
 import org.schabi.newpipe.player.gesture.MainPlayerGestureListener;
+import org.schabi.newpipe.player.gesture.TemporaryPlaybackSpeedController;
 import org.schabi.newpipe.player.helper.PlaybackParameterDialog;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.mediaitem.MediaItemTag;
@@ -97,6 +99,31 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
     private StreamSegmentAdapter segmentAdapter;
     private boolean isQueueVisible = false;
     private boolean areSegmentsVisible = false;
+    private final TemporaryPlaybackSpeedController temporarySpeed =
+            new TemporaryPlaybackSpeedController(new TemporaryPlaybackSpeedController.Playback() {
+                @Override
+                public Object engine() {
+                    return player.getExoPlayer();
+                }
+
+                @Override
+                public boolean isPlayable() {
+                    return player.videoPlayerSelected() && !player.isListeningMode()
+                            && player.isPlaying();
+                }
+
+                @Override
+                public PlaybackParameters parameters() {
+                    return player.getPlaybackParameters();
+                }
+
+                @Override
+                public void setParameters(final PlaybackParameters value) {
+                    player.getExoPlayer().setPlaybackParameters(value);
+                    binding.playbackSpeed.setText(PlayerHelper.formatSpeed(value.speed));
+                }
+            }, visible -> binding.temporarySpeedIndicator.setVisibility(
+                    visible ? View.VISIBLE : View.GONE));
 
     // fullscreen player
     private ItemTouchHelper itemTouchHelper;
@@ -243,6 +270,7 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
 
     @Override
     public void destroy() {
+        endTemporarySpeed();
         super.destroy();
 
         // Exit from fullscreen when user closes the player via notification
@@ -255,6 +283,7 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
 
     @Override
     public void destroyPlayer() {
+        endTemporarySpeed();
         super.destroyPlayer();
 
         if (playQueueAdapter != null) {
@@ -265,6 +294,7 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
 
     @Override
     public void smoothStopForImmediateReusing() {
+        endTemporarySpeed();
         super.smoothStopForImmediateReusing();
         // Android TV will handle back button in case controls will be visible
         // (one more additional unneeded click while the player is hidden)
@@ -276,6 +306,14 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
         // restore last resize mode
         setResizeMode(PlayerHelper.retrieveResizeModeFromPrefs(player));
         binding.getRoot().setLayoutParams(new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+    }
+
+    public boolean startTemporarySpeed() {
+        return temporarySpeed.begin();
+    }
+
+    public void endTemporarySpeed() {
+        temporarySpeed.end();
     }
 
     @Override
@@ -386,6 +424,7 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
      * next lines of code will enable audio-only playback only if needed
      */
     private void onFragmentStopped() {
+        endTemporarySpeed();
         if (player.isPlaying() || player.isLoading()) {
             switch (getMinimizeOnExitAction(context)) {
                 case MINIMIZE_ON_EXIT_MODE_BACKGROUND:
@@ -433,7 +472,38 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
     }
 
     @Override
+    public void onPrepared() {
+        endTemporarySpeed();
+        super.onPrepared();
+    }
+
+    @Override
+    public void onListeningModeChanged() {
+        endTemporarySpeed();
+        super.onListeningModeChanged();
+    }
+
+    @Override
+    public void onBlocked() {
+        endTemporarySpeed();
+        super.onBlocked();
+    }
+
+    @Override
+    public void onPaused() {
+        endTemporarySpeed();
+        super.onPaused();
+    }
+
+    @Override
+    public void onPausedSeek() {
+        endTemporarySpeed();
+        super.onPausedSeek();
+    }
+
+    @Override
     public void onCompleted() {
+        endTemporarySpeed();
         super.onCompleted();
         if (isFullscreen) {
             toggleFullscreen();
