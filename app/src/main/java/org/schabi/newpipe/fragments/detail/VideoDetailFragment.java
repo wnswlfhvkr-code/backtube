@@ -1380,6 +1380,10 @@ public final class VideoDetailFragment
     }
 
     private void tryAddVideoPlayerView() {
+        if (lastPanelError != null && isPlayerAvailable()
+                && !isActivePlayerForShownDetail()) {
+            return;
+        }
         if (isPlayerAvailable() && getView() != null) {
             // Setup the surface view height, so that it fits the video correctly; this is done also
             // here, and not only in the Handler, to avoid a choppy fullscreen rotation animation.
@@ -1389,7 +1393,8 @@ public final class VideoDetailFragment
         // do all the null checks in the posted lambda, too, since the player, the binding and the
         // view could be set or unset before the lambda gets executed on the next main thread cycle
         new Handler(Looper.getMainLooper()).post(() -> {
-            if (!isPlayerAvailable() || getView() == null) {
+            if (!isPlayerAvailable() || getView() == null
+                    || (lastPanelError != null && !isActivePlayerForShownDetail())) {
                 return;
             }
 
@@ -1414,6 +1419,29 @@ public final class VideoDetailFragment
         if (player != null) {
             player.UIs().get(VideoPlayerUi.class).ifPresent(VideoPlayerUi::removeViewFromParent);
         }
+    }
+
+    private boolean isActivePlayerForShownDetail() {
+        if (!isPlayerAvailable() || player.getPlayQueue() == null
+                || player.getPlayQueue().getItem() == null) {
+            return true; // No active item identity to compare yet.
+        }
+        final PlayQueueItem item = player.getPlayQueue().getItem();
+        return item.getServiceId() == serviceId && (Objects.equals(item.getUrl(), url)
+                || (selectionPending && isSelectedItem(item.getServiceId(), item.getUrl())));
+    }
+
+    private void detachUnrelatedPlayerView() {
+        if (binding == null || !isPlayerAvailable() || isActivePlayerForShownDetail()) {
+            return;
+        }
+        // The previous item may keep playing in the service and notification. Only remove its
+        // video surface from this detail view, where it would be misidentified as the failed item.
+        player.UIs().get(MainPlayerUi.class).ifPresent(ui -> {
+            if (ui.getBinding().getRoot().getParent() == binding.playerPlaceholder) {
+                ui.removeViewFromParent();
+            }
+        });
     }
 
     private void makeDefaultHeightForVideoPlaceholder() {
@@ -1487,6 +1515,16 @@ public final class VideoDetailFragment
 
     private void showContent() {
         binding.detailContentRootHiding.setVisibility(View.VISIBLE);
+        if (isPlayerAvailable() && player.videoPlayerSelected()
+                && isActivePlayerForShownDetail()) {
+            // A failed selection may have detached the previous video's surface without
+            // stopping playback. Reopen that surface when its own detail is shown again.
+            player.UIs().get(MainPlayerUi.class).ifPresent(ui -> {
+                if (ui.getBinding().getRoot().getParent() == null) {
+                    tryAddVideoPlayerView();
+                }
+            });
+        }
     }
 
     protected void setInitialData(final int newServiceId,
@@ -1521,6 +1559,7 @@ public final class VideoDetailFragment
     @Override
     public void handleError() {
         super.handleError();
+        detachUnrelatedPlayerView();
         setErrorImage(R.drawable.not_available_monkey);
 
         if (binding.relatedItemsLayout != null) { // hide related streams for tablets
