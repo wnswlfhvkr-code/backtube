@@ -511,6 +511,103 @@ public class PlaybackNavigationTest {
     }
 
     @Test
+    public void swipeStartingInDetailBodyDoesNotEnterFullscreen() throws Exception {
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        final Rect title = bounds(R.id.detail_video_title_view);
+        assertTrue("detail title is not below the video",
+                title.top > bounds(R.id.playerVideoGestureSurface).top);
+
+        touch(title.centerX(), title.centerY(), title.centerX(), title.centerY() - 140);
+
+        onMain(() -> {
+            assertFalse(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            assertEquals(Configuration.ORIENTATION_PORTRAIT,
+                    activity.getResources().getConfiguration().orientation);
+            assertEquals("navigation-B", player.getVideoUrl());
+            assertEquals(BottomSheetBehavior.STATE_EXPANDED, sheetState());
+        });
+    }
+
+    @Test
+    public void downwardVideoSurfaceSwipeStillCollapsesTheMiniPlayer() throws Exception {
+        onMain(() -> player.UIs().get(MainPlayerUi.class).orElseThrow().hideControls(0, 0));
+        final Rect video = bounds(R.id.playerVideoGestureSurface);
+        touch(video.centerX(), video.top + 40, video.centerX(), video.bottom - 40);
+
+        await(() -> sheetState() == BottomSheetBehavior.STATE_COLLAPSED);
+        onMain(() -> {
+            assertEquals("navigation-B", player.getVideoUrl());
+            assertTrue(player.isPlaying());
+        });
+    }
+
+    @Test
+    public void portraitVideoSurfaceSwipeOpensLandscapeFullscreenWithoutChangingPlayback()
+            throws Exception {
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        final PlayQueue queue = player.getPlayQueue();
+        final long[] position = new long[1];
+        onMain(() -> {
+            position[0] = player.getExoPlayer().getCurrentPosition();
+            player.UIs().get(MainPlayerUi.class).orElseThrow().hideControls(0, 0);
+        });
+        final Rect video = bounds(R.id.playerVideoGestureSurface);
+        assertTrue("video surface too short for an upward swipe", video.height() > 250);
+
+        touch(video.centerX(), video.bottom - 40, video.centerX(), video.top + 40);
+
+        await(() -> player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+        await(() -> refreshActivity(Configuration.ORIENTATION_LANDSCAPE));
+        onMain(() -> {
+            assertEquals(BottomSheetBehavior.STATE_EXPANDED, sheetState());
+            assertSame(queue, player.getPlayQueue());
+            assertEquals("navigation-B", player.getVideoUrl());
+            assertTrue(player.isPlaying());
+            assertTrue(player.getExoPlayer().getCurrentPosition() >= position[0]);
+        });
+    }
+
+    @Test
+    public void fullscreenTwoFingerDownReturnsToPortraitMiniPlayerWithSamePlayback()
+            throws Exception {
+        final MainActivity portraitActivity = activity;
+        onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+        await(() -> refreshActivity(Configuration.ORIENTATION_LANDSCAPE)
+                && activity != portraitActivity);
+        await(() -> player.getFragmentListener().isPresent()
+                && player.UIs().get(MainPlayerUi.class).isPresent());
+        onMain(() -> {
+            final MainPlayerUi ui = player.UIs().get(MainPlayerUi.class).orElseThrow();
+            if (!ui.isFullscreen()) {
+                ui.toggleFullscreen();
+            }
+            ui.hideControls(0, 0);
+            assertTrue("fullscreen did not open before the gesture", ui.isFullscreen());
+        });
+        final PlayQueue queue = player.getPlayQueue();
+        final long[] position = new long[1];
+        onMain(() -> position[0] = player.getExoPlayer().getCurrentPosition());
+        final Rect video = bounds(R.id.playerVideoGestureSurface);
+        assertTrue("video surface too short for a downward swipe", video.height() > 250);
+
+        twoFingerSwipeDown(video);
+
+        await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
+        await(() -> sheetState() == BottomSheetBehavior.STATE_COLLAPSED);
+        await(() -> player.UIs().get(MainPlayerUi.class)
+                .map(currentUi -> !currentUi.isFullscreen()).orElse(false));
+        onMain(() -> {
+            assertFalse(player.UIs().get(MainPlayerUi.class).orElseThrow().isFullscreen());
+            assertSame(queue, player.getPlayQueue());
+            assertEquals("navigation-B", player.getVideoUrl());
+            assertTrue(player.isPlaying());
+            assertTrue(player.getExoPlayer().getCurrentPosition() >= position[0]);
+        });
+    }
+
+    @Test
     public void miniPlayerDescriptionTracksTheNextPlayPauseAction() throws Exception {
         onMain(() -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
         await(() -> refreshActivity(Configuration.ORIENTATION_PORTRAIT));
@@ -865,6 +962,62 @@ public class PlaybackNavigationTest {
             SystemClock.sleep(25);
         }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+    }
+
+    private static void twoFingerSwipeDown(final Rect video) {
+        final long start = SystemClock.uptimeMillis();
+        final float firstX = video.centerX() - 60f;
+        final float secondX = video.centerX() + 60f;
+        final float startY = video.top + video.height() * 0.2f;
+        final float endY = video.top + video.height() * 0.8f;
+        sendSinglePointer(start, start, MotionEvent.ACTION_DOWN, firstX, startY);
+        sendTwoPointers(start, start + 25, MotionEvent.ACTION_POINTER_DOWN
+                | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT), firstX, secondX,
+                startY, startY);
+        for (int index = 1; index <= 8; index++) {
+            final float y = startY + (endY - startY) * index / 8f;
+            sendTwoPointers(start, start + 25L + index * 25L, MotionEvent.ACTION_MOVE,
+                    firstX, secondX, y, y);
+        }
+        sendTwoPointers(start, start + 250, MotionEvent.ACTION_POINTER_UP
+                | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT), firstX, secondX,
+                endY, endY);
+        sendSinglePointer(start, start + 275, MotionEvent.ACTION_UP, firstX, endY);
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+    }
+
+    private static void sendSinglePointer(final long downTime, final long eventTime,
+                                          final int action, final float x, final float y) {
+        final MotionEvent event = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(event);
+        event.recycle();
+    }
+
+    private static void sendTwoPointers(final long downTime, final long eventTime,
+                                        final int action, final float firstX, final float secondX,
+                                        final float firstY, final float secondY) {
+        final MotionEvent.PointerProperties first = new MotionEvent.PointerProperties();
+        first.id = 0;
+        first.toolType = MotionEvent.TOOL_TYPE_FINGER;
+        final MotionEvent.PointerProperties second = new MotionEvent.PointerProperties();
+        second.id = 1;
+        second.toolType = MotionEvent.TOOL_TYPE_FINGER;
+        final MotionEvent.PointerCoords firstPosition = new MotionEvent.PointerCoords();
+        firstPosition.x = firstX;
+        firstPosition.y = firstY;
+        firstPosition.pressure = 1f;
+        firstPosition.size = 1f;
+        final MotionEvent.PointerCoords secondPosition = new MotionEvent.PointerCoords();
+        secondPosition.x = secondX;
+        secondPosition.y = secondY;
+        secondPosition.pressure = 1f;
+        secondPosition.size = 1f;
+        final MotionEvent event = MotionEvent.obtain(downTime, eventTime, action, 2,
+                new MotionEvent.PointerProperties[]{first, second},
+                new MotionEvent.PointerCoords[]{firstPosition, secondPosition},
+                0, 0, 1f, 1f, 0, 0, 0, 0);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(event);
+        event.recycle();
     }
 
     private static void await(final BooleanSupplier check) throws Exception {

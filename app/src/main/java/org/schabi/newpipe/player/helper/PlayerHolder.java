@@ -287,6 +287,13 @@ public final class PlayerHolder {
                 }
 
                 @Override
+                public void onFullscreenSwipe(final boolean enterFullscreen) {
+                    if (listener != null) {
+                        listener.onFullscreenSwipe(enterFullscreen);
+                    }
+                }
+
+                @Override
                 public void onScreenRotationButtonClicked() {
                     if (listener != null) {
                         listener.onScreenRotationButtonClicked();

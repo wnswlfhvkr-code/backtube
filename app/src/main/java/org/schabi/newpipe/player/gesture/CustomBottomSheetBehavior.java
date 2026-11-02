@@ -58,6 +58,12 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
             return !protectedGesture && intercepted;
         }
 
+        // A second finger on the video belongs to its fullscreen gesture. Letting the sheet
+        // intercept the first downward MOVE cancels the player before it can recognize it.
+        if (startedOnPlayerVideo && event.getPointerCount() > 1) {
+            return false;
+        }
+
         if ((startedOnPlaybackButton || startedOnPlayerVideo)
                 && !downwardDrag.move(event.getX(), event.getY())) {
             return false;
@@ -68,9 +74,7 @@ public class CustomBottomSheetBehavior extends BottomSheetBehavior<FrameLayout> 
             return false;
         }
 
-        // The interception listens for the child view with the id "fragment_player_holder",
-        // so the following two-finger gesture will be triggered only for the player view on
-        // portrait and for the top controls (visible) on landscape.
+        // Keep the previous sheet behavior for two-pointer touches outside the video surface.
         setSkipCollapsed(event.getPointerCount() == 2);
         if (event.getPointerCount() == 2) {
             return super.onInterceptTouchEvent(parent, child, event);

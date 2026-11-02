@@ -169,7 +169,7 @@ public class PlayerUiLifetimeDeviceTest {
     }
 
     @Test
-    public void inlineVideoDownLetsSheetSeeFirstDragMove() {
+    public void inlineVideoKeepsInitialMoveUntilDownwardIntentGoesToSheet() {
         onMain(() -> {
             final AtomicInteger blockedParentRequests = new AtomicInteger();
             final FrameLayout sheet = new FrameLayout(context) {
@@ -184,11 +184,11 @@ public class PlayerUiLifetimeDeviceTest {
             sheet.addView(binding.getRoot());
             final long time = SystemClock.uptimeMillis();
             dispatchSingle(time, time, MotionEvent.ACTION_DOWN, 100f, 100f);
-            assertEquals(0, blockedParentRequests.get());
+            assertEquals(1, blockedParentRequests.get());
             dispatchSingle(time, time + 10, MotionEvent.ACTION_MOVE, 100f, 102f);
-            assertEquals(0, blockedParentRequests.get());
+            assertEquals(2, blockedParentRequests.get());
             dispatchSingle(time, time + 20, MotionEvent.ACTION_MOVE, 100f, 120f);
-            assertEquals(0, blockedParentRequests.get());
+            assertEquals(2, blockedParentRequests.get());
             dispatchSingle(time, time + 40, MotionEvent.ACTION_UP, 100f, 120f);
         });
     }
@@ -210,6 +210,8 @@ public class PlayerUiLifetimeDeviceTest {
                             (proxy, method, args) -> {
                                 if ("onFullscreenStateChanged".equals(method.getName())) {
                                     fullscreenEvents.incrementAndGet();
+                                } else if ("onFullscreenSwipe".equals(method.getName())) {
+                                    oldUi.toggleFullscreen();
                                 }
                                 return null;
                             });

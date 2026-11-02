@@ -2209,6 +2209,35 @@ public final class VideoDetailFragment
     }
 
     @Override
+    public void onFullscreenSwipe(final boolean enterFullscreen) {
+        if (activity == null || binding == null || bottomSheetBehavior == null
+                || !isPlayerAndPlayerServiceAvailable()) {
+            return;
+        }
+        final MainPlayerUi playerUi = player.UIs().get(MainPlayerUi.class).orElse(null);
+        if (playerUi == null) {
+            return;
+        }
+        if (enterFullscreen) {
+            if (bottomSheetState != BottomSheetBehavior.STATE_EXPANDED
+                    || DeviceUtils.isLandscape(activity) || playerUi.isFullscreen()) {
+                return;
+            }
+            playerUi.toggleFullscreen();
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        } else {
+            if (!DeviceUtils.isLandscape(activity) || !playerUi.isFullscreen()) {
+                return;
+            }
+            playerUi.toggleFullscreen();
+            // Save the mini-player state before rotation recreates the fragment.
+            updateBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED);
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        }
+    }
+
+    @Override
     public void onScreenRotationButtonClicked() {
         // On Android TV screen rotation is not supported
         // In tablet user experience will be better if screen will not be rotated

@@ -51,9 +51,8 @@ class MainPlayerGestureListener(
                 doubleTapInThisTouch = false
                 fullscreenSwipe.down(event.x, event.y, playerUi.isFullscreen)
                 super.onTouch(v, event)
-                // The sheet needs the first MOVE to catch even a short downward flick.
-                // Its behavior leaves upward video swipes with this listener.
-                v.parent?.requestDisallowInterceptTouchEvent(playerUi.isFullscreen)
+                // Keep the first movement on the video so its direction can be decided here.
+                v.parent?.requestDisallowInterceptTouchEvent(true)
                 true
             }
 
@@ -96,7 +95,7 @@ class MainPlayerGestureListener(
                             event.getY(1)
                         ) == FullscreenSwipeDetector.Result.EXIT && playerUi.isFullscreen
                     ) {
-                        playerUi.toggleFullscreen()
+                        player.fragmentListener.ifPresent { it.onFullscreenSwipe(false) }
                     }
                     return true
                 }
@@ -112,7 +111,7 @@ class MainPlayerGestureListener(
                 if (result == FullscreenSwipeDetector.Result.ENTER && !playerUi.isFullscreen) {
                     playerUi.endTemporarySpeed()
                     cancelGestureDetector(v, event)
-                    playerUi.toggleFullscreen()
+                    player.fragmentListener.ifPresent { it.onFullscreenSwipe(true) }
                     return true
                 }
                 if (result == FullscreenSwipeDetector.Result.GIVE_TO_PARENT) {
@@ -121,9 +120,7 @@ class MainPlayerGestureListener(
                 if (!fullscreenSwipe.transitioned()) {
                     super.onTouch(v, event)
                 }
-                v.parent?.requestDisallowInterceptTouchEvent(
-                    playerUi.isFullscreen && !parentMayIntercept
-                )
+                v.parent?.requestDisallowInterceptTouchEvent(!parentMayIntercept)
                 true
             }
 

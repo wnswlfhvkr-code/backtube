@@ -7,6 +7,8 @@ public interface PlayerServiceEventListener extends PlayerEventListener {
 
     void onFullscreenStateChanged(boolean fullscreen);
 
+    void onFullscreenSwipe(boolean enterFullscreen);
+
     void onScreenRotationButtonClicked();
 
     void onMoreOptionsLongClicked();
