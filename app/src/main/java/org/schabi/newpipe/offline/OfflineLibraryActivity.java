@@ -14,10 +14,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.OpenableColumns;
+import android.text.InputType;
 import android.view.View;
 import android.view.Menu;
 import android.view.MotionEvent;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -67,6 +69,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
     private boolean importUiReady;
     private boolean pendingCapacityError;
     private static final String CAPACITY_DIALOG = "offline_capacity_dialog";
+    private static final String STORAGE_LIMIT_DIALOG = "offline_storage_limit_dialog";
     private RecyclerView rows;
     private OfflineShelfAdapter adapter;
     private ItemTouchHelper touchHelper;
@@ -190,6 +193,8 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         summary.setId(R.id.offline_storage_summary);
         summary.setPadding(0, dp(8), 0, dp(8));
         actions.addView(summary);
+        button(actions, R.string.offline_storage_limit, this::showStorageLimitSetting)
+                .setId(R.id.offline_storage_limit_button);
         final TextView orderHint = new TextView(this);
         orderHint.setText(R.string.offline_order_hint);
         actions.addView(orderHint);
@@ -412,9 +417,8 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             }
             try (AssetFileDescriptor source = application.getContentResolver()
                     .openAssetFileDescriptor(uri, "r")) {
-                if (source != null && source.getLength() > OfflineStore.DEFAULT_LIMIT
-                        - target.store().usedBytes()) {
-                    throw new OfflineStore.StorageFullException();
+                if (source != null) {
+                    target.store().checkImportSize(source.getLength());
                 }
             }
             return target.importUri(uri, title, origin == null ? "" : origin, serviceId, mime);
@@ -496,8 +500,7 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
             playbackRequest++;
         }
         updateSelectionControls();
-        summary.setText(getString(R.string.offline_summary,
-                library.store().usedBytes() / 1_000_000.0));
+        renderStorageSummary();
         empty.setVisibility(entries.isEmpty() ? View.VISIBLE : View.GONE);
         final StringBuilder signature = new StringBuilder();
         for (final OfflineStore.Entry entry : entries) {
@@ -509,6 +512,68 @@ public final class OfflineLibraryActivity extends AppCompatActivity {
         if (!signature.toString().equals(rendered) || adapter.getItemCount() != entries.size()) {
             rendered = signature.toString();
             adapter.setEntries(entries);
+        }
+    }
+
+    private void renderStorageSummary() {
+        summary.setText(getString(R.string.offline_summary,
+                library.store().usedBytes() / (double) OfflineStore.BYTES_PER_MB,
+                library.storageLimitMb()));
+    }
+
+    private void showStorageLimitSetting() {
+        if (library != null && !getSupportFragmentManager().isStateSaved()
+                && getSupportFragmentManager().findFragmentByTag(STORAGE_LIMIT_DIALOG) == null) {
+            new StorageLimitDialog().showNow(getSupportFragmentManager(), STORAGE_LIMIT_DIALOG);
+        }
+    }
+
+    /** Changes only the quota; existing files remain available above a lowered limit. */
+    public static final class StorageLimitDialog extends DialogFragment {
+        @NonNull
+        @Override public Dialog onCreateDialog(@Nullable final Bundle savedInstanceState) {
+            final OfflineLibraryActivity shelf = (OfflineLibraryActivity) requireActivity();
+            final EditText input = new EditText(requireContext());
+            input.setId(R.id.offline_storage_limit_input);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setSingleLine(true);
+            input.setHint(R.string.offline_storage_limit_unit);
+            input.setSelectAllOnFocus(true);
+            final LinearLayout content = new LinearLayout(requireContext());
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(shelf.dp(24), shelf.dp(12), shelf.dp(24), shelf.dp(8));
+            final TextView explanation = new TextView(requireContext());
+            explanation.setText(R.string.offline_storage_limit_explanation);
+            content.addView(explanation);
+            content.addView(input);
+            if (shelf.library != null) {
+                input.setText(Integer.toString(shelf.library.storageLimitMb()));
+            }
+            final AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.offline_storage_limit)
+                    .setView(content)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.offline_storage_limit_save, null)
+                    .create();
+            dialog.setOnShowListener(ignored ->
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                        final int megabytes;
+                        try {
+                            megabytes = Integer.parseInt(input.getText().toString());
+                            if (megabytes <= 0) {
+                                throw new NumberFormatException();
+                            }
+                        } catch (final NumberFormatException invalid) {
+                            input.setError(getString(R.string.offline_storage_limit_invalid));
+                            return;
+                        }
+                        if (shelf.library != null) {
+                            shelf.library.setStorageLimitMb(megabytes);
+                            shelf.renderStorageSummary();
+                        }
+                        dismiss();
+                    }));
+            return dialog;
         }
     }
 

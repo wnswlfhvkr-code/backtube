@@ -21,8 +21,10 @@ import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.annotation.StringRes;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -305,6 +307,55 @@ public class OfflineLibraryAccessTest {
             assertTrue(shelf.findViewById(R.id.offline_storage_summary).isShown());
             return null;
         });
+    }
+
+    @Test
+    public void storageLimitCanBeEditedAndReopenedWithoutDeletingSavedMedia() throws Exception {
+        final int originalLimitMb = library.storageLimitMb();
+        try {
+            final OfflineLibraryActivity shelf = (OfflineLibraryActivity)
+                    InstrumentationRegistry.getInstrumentation().startActivitySync(
+                            new Intent(context, OfflineLibraryActivity.class)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            await(() -> shelf.hasWindowFocus());
+            main(() -> {
+                shelf.findViewById(R.id.offline_manage).performClick();
+                final AlertDialog dialog = openStorageLimitDialog(shelf);
+                final EditText input = dialog.findViewById(R.id.offline_storage_limit_input);
+                input.setText("0");
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+                assertTrue(dialog.isShowing());
+                assertEquals(originalLimitMb, library.storageLimitMb());
+
+                input.setText("2000");
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+                assertEquals(2_000_000_000L, library.store().limitBytes());
+                final TextView visibleSummary = shelf.findViewById(R.id.offline_storage_summary);
+                assertEquals(shelf.getString(R.string.offline_summary,
+                        library.store().usedBytes() / 1_000_000.0, 2000),
+                        visibleSummary.getText().toString());
+                assertEquals(OfflineStore.State.READY, library.store().get(saved.id).state);
+                return null;
+            });
+            await(() -> shelf.hasWindowFocus());
+            main(() -> {
+                final AlertDialog reopened = openStorageLimitDialog(shelf);
+                final EditText input = reopened.findViewById(R.id.offline_storage_limit_input);
+                assertEquals("2000", input.getText().toString());
+                reopened.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+                return null;
+            });
+        } finally {
+            library.setStorageLimitMb(originalLimitMb);
+        }
+    }
+
+    private static AlertDialog openStorageLimitDialog(final OfflineLibraryActivity shelf) {
+        shelf.findViewById(R.id.offline_storage_limit_button).performClick();
+        return (AlertDialog) shelf.getSupportFragmentManager().getFragments().stream()
+                .filter(OfflineLibraryActivity.StorageLimitDialog.class::isInstance)
+                .map(OfflineLibraryActivity.StorageLimitDialog.class::cast)
+                .findFirst().orElseThrow(AssertionError::new).requireDialog();
     }
 
     @Test

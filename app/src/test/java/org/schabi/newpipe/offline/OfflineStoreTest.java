@@ -37,6 +37,40 @@ public class OfflineStoreTest {
                 "content://test/recording", "audio/wav");
     }
 
+    @Test public void raisedLimitAllowsMoreOfflineDataImmediately() throws Exception {
+        final OfflineStore.Entry existing = create();
+        store.copy(existing.id, new ByteArrayInputStream(new byte[90]));
+        assertThrows(OfflineStore.StorageFullException.class,
+                () -> store.beginDownload("Download", "", 0, "audio/wav", 20));
+
+        store.setLimitBytes(120);
+        assertEquals(120, store.limitBytes());
+        store.checkImportSize(30);
+        assertThrows(OfflineStore.StorageFullException.class, () -> store.checkImportSize(31));
+
+        final OfflineStore.Entry download =
+                store.beginDownload("Download", "", 0, "audio/wav", 20);
+        store.checkGrowth(download.id, 30);
+        assertThrows(OfflineStore.StorageFullException.class,
+                () -> store.checkGrowth(download.id, 31));
+    }
+
+    @Test public void loweringLimitKeepsSavedDataAndBlocksNewWrites() throws Exception {
+        final OfflineStore.Entry existing = create();
+        store.copy(existing.id, new ByteArrayInputStream(new byte[90]));
+        final OfflineStore.Entry queued = create();
+
+        store.setLimitBytes(80);
+
+        assertEquals(OfflineStore.State.READY, store.get(existing.id).state);
+        assertEquals(90, store.file(existing).length());
+        assertThrows(OfflineStore.StorageFullException.class, this::create);
+        assertThrows(OfflineStore.StorageFullException.class,
+                () -> store.copy(queued.id, new ByteArrayInputStream(new byte[1])));
+        assertEquals(90, store.usedBytes());
+        assertEquals(store.file(existing), store.retain(existing.id));
+    }
+
     @Test public void manualOrderSurvivesReopenAndNewSavesAppend() throws Exception {
         final OfflineStore.Entry first = create();
         final OfflineStore.Entry second = create();

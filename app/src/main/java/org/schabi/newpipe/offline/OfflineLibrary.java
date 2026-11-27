@@ -1,6 +1,7 @@
 package org.schabi.newpipe.offline;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.Uri;
 
 import androidx.annotation.Nullable;
@@ -34,8 +35,11 @@ import java.util.concurrent.Executors;
 
 /** Application-owned local copy jobs. Never opens HTTP or invokes a service extractor. */
 public final class OfflineLibrary {
+    private static final String STORAGE_PREFERENCES = "offline_storage";
+    private static final String STORAGE_LIMIT_MB = "limit_mb";
     private static OfflineLibrary instance;
     private final OfflineStore store;
+    private final SharedPreferences storagePreferences;
     private final ExecutorService copier = Executors.newSingleThreadExecutor();
     private final Set<String> jobs = ConcurrentHashMap.newKeySet();
     private final Set<String> capacityFailures = ConcurrentHashMap.newKeySet();
@@ -43,8 +47,11 @@ public final class OfflineLibrary {
 
     private OfflineLibrary(final Context context) throws IOException {
         this.context = context.getApplicationContext();
-        store = new OfflineStore(new File(context.getFilesDir(), "offline"),
-                OfflineStore.DEFAULT_LIMIT);
+        storagePreferences = this.context.getSharedPreferences(STORAGE_PREFERENCES,
+                Context.MODE_PRIVATE);
+        final int limitMb = storagePreferences.getInt(STORAGE_LIMIT_MB, 0);
+        store = new OfflineStore(new File(this.context.getFilesDir(), "offline"),
+                limitMb > 0 ? limitMb * OfflineStore.BYTES_PER_MB : OfflineStore.DEFAULT_LIMIT);
     }
 
     public static synchronized OfflineLibrary get(final Context context) throws IOException {
@@ -56,6 +63,15 @@ public final class OfflineLibrary {
 
     public OfflineStore store() {
         return store;
+    }
+
+    int storageLimitMb() {
+        return (int) (store.limitBytes() / OfflineStore.BYTES_PER_MB);
+    }
+
+    synchronized void setStorageLimitMb(final int megabytes) {
+        store.setLimitBytes(megabytes * OfflineStore.BYTES_PER_MB);
+        storagePreferences.edit().putInt(STORAGE_LIMIT_MB, megabytes).apply();
     }
 
     /** A saved queue needs a surface even when an audio item comes before its video.
