@@ -19,7 +19,7 @@
     <string name="offline_save">임시저장</string>
     <string name="offline_import">미디어 파일 가져오기</string>
     <string name="offline_delete_all">전체 삭제</string>
-    <string name="offline_summary">%1$.1f / 500 MB · 직접 삭제할 때까지 보관</string>
+    <string name="offline_summary">%1$.1f / %2$d MB · 직접 삭제할 때까지 보관</string>
     <string name="offline_empty">곡 화면의 임시저장, 완료된 다운로드 메뉴 또는 미디어 파일 가져오기로 저장하세요.</string>
     <string name="offline_ready">오프라인 재생 가능</string>
     <string name="offline_copying">저장 중…</string>
@@ -44,7 +44,7 @@
     <string name="offline_downloading">다운로드·처리 중…</string>
     <string name="offline_network_wait">다운로드 순서 대기</string>
     <string name="offline_recovery_wait">다운로드 복구 대기 · 복구할 수 없으면 원본 콘텐츠에서 다시 저장</string>
-    <string name="offline_storage_full">저장 공간이 부족합니다(보관함 최대 500 MB). 불필요한 저장본을 삭제하거나 기기 공간을 확보한 뒤 다시 시도하세요. 기존 저장본은 유지됩니다.</string>
+    <string name="offline_storage_full">임시저장 한도에 도달했거나 기기 공간이 부족합니다. 저장 관리·설정에서 한도를 높이거나 불필요한 파일을 정리한 뒤 다시 시도하세요. 기존 저장본은 유지됩니다.</string>
     <string name="offline_saved_complete">임시저장 완료</string>
     <string name="offline_open_list">저장 목록 열기</string>
     <string name="offline_current_item">현재 곡</string>
@@ -57,4 +57,9 @@
     <string name="offline_clear_selection">선택 해제</string>
     <string name="offline_select_item">저장본 선택</string>
     <string name="offline_deselect_item">저장본 선택 해제</string>
+    <string name="offline_storage_limit">임시저장 용량 한도</string>
+    <string name="offline_storage_limit_unit">한도 입력(MB)</string>
+    <string name="offline_storage_limit_explanation">MB 단위로 입력하세요. 예: 2 GB는 2000 MB. 한도를 낮춰도 기존 저장본은 삭제되지 않습니다.</string>
+    <string name="offline_storage_limit_save">한도 저장</string>
+    <string name="offline_storage_limit_invalid">1 이상의 정수를 MB 단위로 입력하세요.</string>
 </resources>

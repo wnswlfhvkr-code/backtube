@@ -20,7 +20,8 @@ import java.util.UUID;
 
 /** Durable, local-only copies. The source file is never modified or deleted. */
 public final class OfflineStore {
-    public static final long DEFAULT_LIMIT = 500_000_000L;
+    static final long BYTES_PER_MB = 1_000_000L;
+    public static final long DEFAULT_LIMIT = 500 * BYTES_PER_MB;
     public static final String LOCAL_PREFIX = "backtube-offline:";
 
     public static boolean isLocalUrl(final String url) {
@@ -73,7 +74,7 @@ public final class OfflineStore {
     }
 
     private final File directory;
-    private final long limit;
+    private long limit;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final Map<String, Integer> readers = new LinkedHashMap<>();
     private final Set<String> downloadClaims = new HashSet<>();
@@ -143,6 +144,23 @@ public final class OfflineStore {
         }
         restoreOrder();
         refresh();
+    }
+
+    synchronized void setLimitBytes(final long bytes) {
+        if (bytes <= 0) {
+            throw new IllegalArgumentException("Offline storage limit must be positive");
+        }
+        limit = bytes;
+    }
+
+    synchronized long limitBytes() {
+        return limit;
+    }
+
+    synchronized void checkImportSize(final long bytes) throws StorageFullException {
+        if (bytes > 0 && bytes > limit - usedBytes()) {
+            throw new StorageFullException();
+        }
     }
 
     public synchronized Entry beginDownload(final String title, final String origin,
@@ -232,8 +250,11 @@ public final class OfflineStore {
         if (entry.state == State.READY) {
             return;
         }
-        if (entry.state != State.DOWNLOADING || size <= 0 || usedBytes() > limit) {
-            throw new IOException("Incomplete or oversized download");
+        if (entry.state != State.DOWNLOADING || size <= 0) {
+            throw new IOException("Incomplete download");
+        }
+        if (usedBytes() > limit) {
+            throw new StorageFullException();
         }
         save(entry.changed(State.READY, size, 0));
         downloadClaims.remove(id);
@@ -294,6 +315,9 @@ public final class OfflineStore {
                 final Entry entry = require(id);
                 if (entry.state != State.IMPORTING || entry.bytes == 0) {
                     throw new IOException("Copy incomplete or empty");
+                }
+                if (usedBytes() > limit) {
+                    throw new StorageFullException();
                 }
                 if (!part(id).renameTo(file(entry))) {
                     throw new IOException("Cannot finish offline copy");

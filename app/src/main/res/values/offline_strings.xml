@@ -19,7 +19,7 @@
     <string name="offline_save">Save offline</string>
     <string name="offline_import">Import media file</string>
     <string name="offline_delete_all">Delete all</string>
-    <string name="offline_summary">%1$.1f / 500 MB · Kept until you delete them</string>
+    <string name="offline_summary">%1$.1f / %2$d MB · Kept until you delete them</string>
     <string name="offline_empty">Use Save offline on a track, add a completed download, or import a media file.</string>
     <string name="offline_ready">Available offline</string>
     <string name="offline_copying">Saving local copy…</string>
@@ -44,7 +44,7 @@
     <string name="offline_downloading">Downloading / processing…</string>
     <string name="offline_network_wait">Waiting in download queue</string>
     <string name="offline_recovery_wait">Reconnecting download · Reopen the content if recovery is unavailable</string>
-    <string name="offline_storage_full">Offline storage is full (500 MB limit), or the device has no free space. Delete unwanted saved items, then retry. Existing saves are kept.</string>
+    <string name="offline_storage_full">The temporary saves limit or device storage is full. Change the limit in Manage saves and settings, delete unwanted items, or free up device space. Existing saves are kept.</string>
     <string name="offline_saved_complete">Saved offline</string>
     <string name="offline_open_list">Open saved list</string>
     <string name="offline_current_item">Current track</string>
@@ -57,4 +57,9 @@
     <string name="offline_clear_selection">Clear selection</string>
     <string name="offline_select_item">Select saved copy</string>
     <string name="offline_deselect_item">Deselect saved copy</string>
+    <string name="offline_storage_limit">Temporary saves limit</string>
+    <string name="offline_storage_limit_unit">Limit in MB</string>
+    <string name="offline_storage_limit_explanation">Enter a limit in MB (for example, 2000 for 2 GB). Lowering the limit does not delete existing saves.</string>
+    <string name="offline_storage_limit_save">Save limit</string>
+    <string name="offline_storage_limit_invalid">Enter a positive whole number in MB.</string>
 </resources>
